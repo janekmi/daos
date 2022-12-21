@@ -27,6 +27,14 @@ struct dtx_share_peer {
 	struct dtx_memberships	*dsp_mbs;
 };
 
+/** XXX */
+struct dtx_local_oid_record {
+	/** XXX */
+	struct vos_container *dor_cont;
+	/** XXX */
+	daos_unit_oid_t dor_oid;
+};
+
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -44,7 +52,7 @@ struct dtx_handle {
 			struct dtx_memberships	*dth_mbs;
 		};
 	};
-	/** The container handle */
+	/** The container or pool (local transactions only) handle */
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
@@ -92,7 +100,11 @@ struct dtx_handle {
 					 /* Need validation on leader before commit/committable. */
 					 dth_need_validation:1,
 					 /* Ignore other uncommitted DTXs. */
-					 dth_ignore_uncommitted:1;
+					 dth_ignore_uncommitted:1,
+					 /* Local transaction */
+					 dth_local:1,
+					 /* Flag to commit the local transaction */
+					 dth_local_complete:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -134,6 +146,13 @@ struct dtx_handle {
 	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
+
+	/** XXX */
+	uint16_t			 dth_local_oid_cnt;
+	/** XXX */
+	uint16_t			 dth_local_oid_cap;
+	/** XXX */
+	struct dtx_local_oid_record	*dth_local_oid_array;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
@@ -213,6 +232,8 @@ enum dtx_flags {
 	DTX_PREPARED		= (1 << 7),
 	/** Do not keep committed entry. */
 	DTX_DROP_CMT		= (1 << 8),
+	/** Local transaction */
+	DTX_LOCAL		= (1 << 9),
 };
 
 void
@@ -316,6 +337,13 @@ static inline bool
 dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
+}
+
+/** Return true if it's a real dtx (valid and not a local tx) */
+static inline bool
+dtx_is_real_handle(const struct dtx_handle *dth)
+{
+	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid) && !dth->dth_local;
 }
 
 struct dtx_scan_args {

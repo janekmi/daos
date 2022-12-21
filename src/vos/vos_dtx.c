@@ -1429,7 +1429,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_real_handle(dth)) {
 		dtx_set_committed(tx_id);
 		return 0;
 	}
@@ -2856,7 +2856,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	int			 rc;
 
 	if (!dtx_is_valid_handle(dth) ||
-	    (!dth->dth_active && dth->dth_ent == NULL))
+	    (!dth->dth_active && dth->dth_ent == NULL) || dth->dth_local)
 		return;
 
 	dth->dth_active = 0;
@@ -2939,7 +2939,7 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	dae = dth->dth_ent;
 	if (dae == NULL) {
-		if (!dth->dth_active)
+		if (!dth->dth_active && !dth->dth_local)
 			return;
 	} else {
 		/* 'prepared'/'preparing' DTX can be either committed or aborted, not cleanup. */
@@ -3224,4 +3224,46 @@ cmt:
 	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
 
 	return 0;
+}
+
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh) {
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	int		      rc;
+
+	if (dth == NULL || !dth->dth_local) {
+		return 0;
+	}
+
+	/**
+	 * RDB is intended as the main user of local transactions. RDB is known
+	 * to engage over 32 OIDs per transaction. Hence, the initial value is
+	 * hoped to accommodate all of them.
+	 */
+	dth->dth_local_oid_cap = (1 << 6);
+	dth->dth_local_oid_cnt = 0;
+	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
+	if (dth->dth_local_oid_array == NULL)
+		return -DER_NOMEM;
+
+	pool = vos_hdl2pool(poh);
+	umm  = vos_pool2umm(pool);
+
+	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
+	if (rc != 0) {
+		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
+		goto error;
+	}
+
+	return 0;
+
+error:
+	D_FREE(dth->dth_local_oid_array);
+	return rc;
+}
+
+void
+vos_dtx_local_end(struct dtx_handle *dth) {
+	vos_tx_end(NULL, dth, NULL, NULL, true, NULL, 0);
 }
