@@ -2633,7 +2633,7 @@ local_transaction(void **state)
 	struct io_test_args *arg = *state;
 	int                  rc  = 0;
 	int                  passed_rc;
-	daos_key_t           dkey[2];
+	daos_key_t           dkey[4];
 	daos_key_t           akey;
 	daos_iod_t           iod;
 	d_sg_list_t          sgl;
@@ -2643,7 +2643,7 @@ local_transaction(void **state)
 	daos_epoch_t         epoch = start_epoch;
 	struct dtx_handle   *dth;
 	const char          *first = "Hello";
-	char                 dkey_buf[2][UPDATE_DKEY_SIZE];
+	char                 dkey_buf[4][UPDATE_DKEY_SIZE];
 	char                 akey_buf[UPDATE_AKEY_SIZE];
 	daos_unit_oid_t      oid;
 	int                  i;
@@ -2659,7 +2659,7 @@ local_transaction(void **state)
 
 	/* Set up dkey and akey */
 	oid = gen_oid(arg->otype);
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < 4; i++) {
 		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
 		set_iov(&dkey[i], &dkey_buf[i][0],
 			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
@@ -2685,7 +2685,54 @@ local_transaction(void **state)
 	// fflush(stdout);
 	/* XXX */
 
-	for (i = 0; i < 2; i++) {
+	/* add simple update - fetch sequnece to fill the pool with some data */
+	if(1)
+	{
+		rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[2], 1, &iod,
+				       NULL, &sgl);
+		assert_rc_equal(rc, 0);
+		/* prepare fetch buffer with random data */
+		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+		iod.iod_size = sizeof(buf);
+		memset(buf, 'x', sizeof(buf));
+		/* set expected fetch result */
+		memcpy(buf2, first, strlen(first));
+
+		printf("size=" DF_U64 "\n", iod.iod_size);
+		printf("dkey[2] buf  = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[2] buf2 = %.*s\n", (int)strlen(first), buf2);
+		rc =
+		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[2], 1, &iod, &fetch_sgl);
+		assert_rc_equal(rc, 0);
+
+		printf("size=" DF_U64 "\n", iod.iod_size);
+		printf("dkey[2] buf  = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[2] buf2 = %.*s\n", (int)strlen(first), buf2);
+		fflush(stdout);
+		assert_int_equal(iod.iod_size, (int)strlen(first));
+		assert_int_equal(fetch_sgl.sg_iovs[0].iov_len, (int)strlen(first));
+		assert_memory_equal(buf, buf2, (int)strlen(first));
+
+		/* prepare fetch buffer with random data */
+		iod.iod_size = sizeof(buf);
+		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+		memset(buf, 'x', sizeof(buf));
+		/* set expected fetch result */
+		memset(buf2, 'x', sizeof(buf2));
+		rc =
+		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[3], 1, &iod, &fetch_sgl);
+		assert_rc_equal(rc, 0);
+		printf("size=" DF_U64 "\n", iod.iod_size);
+		printf("dkey[3] buf = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[3] buf2 = %.*s\n", (int)strlen(first), buf2);
+		fflush(stdout);
+		assert_int_equal(iod.iod_size,0);
+		assert_int_equal(fetch_sgl.sg_iovs[0].iov_len,0);
+		assert_memory_equal(buf, buf2, sizeof(buf));
+
+	}
+
+	for (i = 1; i < 2; i++) {
 		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
 		assert_rc_equal(rc, 0);
 
