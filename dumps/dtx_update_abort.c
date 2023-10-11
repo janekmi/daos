@@ -5,58 +5,26 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
                 /** Use unique API so new UUID is generated even on same thread */
                 daos_dti_gen_unique
         vos_dtx_rsrvd_init
-        vos_dtx_attach
-                vos_dtx_alloc
-                        lrua_allocx
-                                lrua_find_free
-                        dbtree_upsert
-                                btr_verify_key
-                                btr_tx_begin
-                                        umem_has_tx(btr_umm(tcx))
-                                                /* umm->umm_ops->mo_tx_add != NULL */
-                                        /* btr_has_tx(tcx) == false */
-                                btr_upsert
-                                        /* probe_opc != BTR_PROBE_BYPASS */
-                                        btr_probe_key
-                                                btr_hkey_gen
-                                                        /* !btr_is_direct_key(tcx) */
-                                                        /* !btr_is_int_key(tcx) */
-                                                        dtx_hkey_gen /* btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey); */
-                                                                memcpy
-                                                btr_probe
-                                                        btr_probe_valid
-                                                        btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
-                                                        /* btr_root_empty(tcx) == true */
-                                        /* rc == 1 */
-                                        case PROBE_RC_NONE:
-                                                btr_insert(tcx, key, val, val_out);
-                                                        btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
-                                                                dtx_hkey_gen /* btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey); */
-                                                                        memcpy
-                                                        btr_rec_alloc(tcx, key, val, rec, val_out);
-                                                                dtx_act_ent_alloc /* btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec, val_out); */
-                                                        /* rc == 0 */
-                                                        btr_root_start(tcx, rec);
-                                                                btr_node_alloc(tcx, &nd_off);
-                                                                        vmem_alloc /* umem_zalloc(btr_umm(tcx), btr_node_size(tcx)); */
-                                                                                return (uint64_t)((flags & UMEM_FLAG_ZERO) ? calloc(1, size) : malloc(size));
-                                                                /* root is also leaf, records are stored in root */
-                                                                btr_node_set(tcx, nd_off, BTR_NODE_ROOT | BTR_NODE_LEAF);
-                                                                rec_dst = btr_node_rec_at(tcx, nd_off, 0);
-                                                                btr_rec_copy(tcx, rec_dst, rec, 1);
-                                                                        memcpy(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
-                                                                /* !btr_has_tx(tcx) */
-                                                                btr_context_set_depth(tcx, root->tr_depth);
-                                                                btr_trace_set(tcx, 0, nd_off, 0);
-                                        tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
-                                btr_tx_end
-                                        /* !btr_has_tx(tcx) */
-                        /* rc == 0 */
-                        dae->dae_start_time = daos_gettime_coarse();
-                        d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
-                        dth->dth_ent = dae;
+        vos_dtx_attach(dth, persistent=false, exist=false) /* Generate DTX entry for the given DTX, and attach it to the DTX handle. */
+                /* dtx_is_valid_handle(dth) == true */
+                /* dth->dth_ent == NULL; Pointer to the DTX entry in DRAM */
+                /* exist == false */
+                /* persist == false */
+                rc = vos_dtx_alloc(dbd, dth);
+                        /* struct vos_dtx_act_ent *dae; */
+                        cont = vos_hdl2cont(dth->dth_coh); /* VOS container (DRAM) */
+                        /* struct lru_array *vc_dtx_array; Array for active DTX records */
+                        rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
+	                /* struct dtx_id dae_xid; The DTX identifier. */
+                        d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
+	                d_iov_set(&riov, dae, sizeof(*dae));
+                        /* Update the value of the provided key, or insert it as a new key if there is no match.*/
+	                /* daos_handle_t vc_dtx_active_hdl; The handle for active DTX table (dbtree_create_inplace_ex) */
+                        /** the B+ tree for active DTXs. (DRAM) */
+                        dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key=&kiov, value=&riov, NULL);
+                        dth->dth_ent = dae; /* Pointer to the DTX entry in DRAM. */
                 /* rc == 0 */
-                /* !persistent */
+                /* persistent == false */
                 dth->dth_pinned = 1;
         *dthp = dth; 
 io_test_obj_update
