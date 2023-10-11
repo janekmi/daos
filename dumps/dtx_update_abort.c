@@ -60,36 +60,59 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
                 dth->dth_pinned = 1;
         *dthp = dth; 
 io_test_obj_update
+        /* Prepare IO sink buffers for the specified arrays of the given object.*/
         vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey, 1, iod, iod_csums, 0, &ioh, dth);
                 /* dtx_is_real_handle(dth) == true */
                 epoch = dth->dth_epoch;
-                vos_check_akeys(iod_nr, iods);
-                vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums, flags, NULL, dedup_th, dth, &ioc);
-                        vos_ilog_fetch_init(&ioc->ic_dkey_info);
-                                memset(info, 0, sizeof(*info));
-                                ilog_fetch_init(&info->ii_entries);
+                vos_check_akeys(iod_nr, iods); /* check iods[i].iod_name; akey for this iod */
+                /* create a VOS I/O context */
+                vos_ioc_create(coh, oid, read_only=false, epoch, iod_nr, iods, iods_csums, flags, NULL, dedup_th, dth, &ioc);
+                        /* Initialize incarnation log information (just a DRAM-backed cache for the ilog search results?) */
+                        vos_ilog_fetch_init(&ioc->ic_dkey_info); 
                         vos_ilog_fetch_init(&ioc->ic_akey_info);
                         vos_ioc_reserve_init(ioc, dth);
+                                for (i = 0; i < ioc->ic_iod_nr; i++) {
+		                        daos_iod_t *iod = &ioc->ic_iods[i];
+		                        total_acts += iod->iod_nr;
+                                /* struct umem_rsrvd_act *ic_rsrvd_scm; reserved SCM extents */
+                                /* Allocate array of structures for reserved actions */
                                 umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, total_acts);
                                         D_ALLOC(buf, size);
                         /* dtx_is_valid_handle(dth) */
-                        vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr, dth, cont->vc_pool->vp_sysdb);
+                        /* Allocate a timestamp set */
+                        vos_ts_set_allocate(ts_set = &ioc->ic_ts_set, vos_flags, cflags, iod_nr, dth, cont->vc_pool->vp_sysdb);
                                 /* dtx_is_valid_handle(dth) */
+                                /* dth->dth_local == false */
+                                tx_id = &dth->dth_xid;
+                                size = VOS_TS_TYPE_AKEY + akey_nr;
+	                        array_size = size * sizeof((*ts_set)->ts_entries[0]);
+                                D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
                                 /* tx_id != NULL */
                                 uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
                                 (*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
                                 vos_ts_set_append_cflags(*ts_set, cflags);
                                         /* vos_ts_in_tx(ts_set) */
                         /* rc == 0 */
-                        bioc = vos_data_ioctxt(cont->vc_pool);
+                        bioc = vos_data_ioctxt(vp = cont->vc_pool);
                                 struct bio_meta_context *mc = vos_pool2mc(vp);
                                 /* mc == NULL */
-                        ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), iod_nr, read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
+                                /* Use dummy I/O context when data blob doesn't exist */
+                                return vp->vp_dummy_ioctxt;
+                        ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), sgl_cnt = iod_nr, read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
+                                D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
+                                return biod;
                         /* ioc->ic_biod != NULL */
-                        dcs_csum_info_list_init(&ioc->ic_csum_list, iod_nr);
+                        dcs_csum_info_list_init(list = &ioc->ic_csum_list, nr = iod_nr);
+                                daos_size_t initial_size = (sizeof(struct dcs_csum_info) + 8) * nr;
+                                list->dcl_buf_size = initial_size;
+                                memset(list, 0, sizeof(*list));
+                                D_ALLOC(list->dcl_csum_infos, list->dcl_buf_size);
                         for (i = 0; i < iod_nr; i++) {
-                                bsgl = bio_iod_sgl(ioc->ic_biod, i);
-                                bio_sgl_init(bsgl, iov_nr);
+                                bsgl = bio_iod_sgl(biod = ioc->ic_biod, i);
+                                        return &biod->bd_sgls[idx];
+                                bio_sgl_init(sgl = bsgl, nr = iov_nr);
+                                        sgl->... = ...;
+                                        D_ALLOC_ARRAY(sgl->bs_iovs, nr);
                         *ioc_pp = ioc;
                 vos_space_hold(vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr, iods, iods_csums, &ioc->ic_space_held[0]);
                         vos_space_query(pool, &vps, false);
