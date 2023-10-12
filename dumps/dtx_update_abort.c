@@ -256,8 +256,12 @@ io_test_obj_update
                         /* biod->bd_rsrvd.brd_rg_cnt == 0 */
                         return 0;
         /* rc == 0 */
-        bsgl = vos_iod_sgl_at(ioh, 0);
+        struct bio_sglist *bsgl = vos_iod_sgl_at(ioh, idx = 0);
+                struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+                /* idx <= ioc->ic_iod_nr; number DAOS IO descriptors */
+                /* ioc->ic_dedup_verify == 0 */
                 bio_iod_sgl(ioc->ic_biod, idx);
+                        return bsgl = &biod->bd_sgls[idx]; /* SG lists involved in this io descriptor */
         bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
                 iterate_biov(biod, copy_one, &arg);
                         for (i = 0; i < biod->bd_sgl_cnt; i++) {
