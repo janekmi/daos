@@ -83,20 +83,35 @@ io_test_obj_update
                                         sgl->... = ...;
                                         D_ALLOC_ARRAY(sgl->bs_iovs, nr);
                         *ioc_pp = ioc;
-                vos_space_hold(vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr, iods, iods_csums, &ioc->ic_space_held[0]);
-                        vos_space_query(pool, &vps, false);
-                                umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
-                                        switch (ph_p->up_store.store_type) {
-                                        case DAOS_MD_PMEM:
-                                                pmemobj_ctl_get(pop, "stats.heap.curr_allocated", curr_allocated);
+                /* daos_size_t ic_space_held[DAOS_MEDIA_MAX]; */
+                vos_space_hold(pool = vos_cont2pool(ioc->ic_cont), flags, dkey, iod_nr, iods, iods_csums, &ioc->ic_space_held[0]);
+                        /* struct vos_pool_space vps; */
+                        vos_space_query(pool, &vps, slow = false);
+                                SCM_TOTAL(vps) = df->pd_scm_sz;
+                                SCM_SYS(vps) = POOL_SCM_SYS(pool);
+                                /* Obtain the usage statistics for the pmem object */
+                                /* daos_size_t scm_used; */
+                                umempobj_get_heapusage(ph_p = pool->vp_umm.umm_pool, curr_allocated = &scm_used);
+                                        /* ph_p->up_store.store_type == DAOS_MD_PMEM */
+                                        pmemobj_ctl_get(pop, "stats.heap.curr_allocated", curr_allocated);
                                 /* SCM_TOTAL(vps) >= scm_used */
                                 SCM_FREE(vps) = SCM_TOTAL(vps) - scm_used;
                                 /* NVMe isn't configured for this VOS pool */
                                 /* pool->vp_vea_info == NULL */
+                                NVME_TOTAL(vps) = 0;
+                                NVME_FREE(vps) = 0;
+                                NVME_SYS(vps) = 0;
+                        /*
+                        * Estimate how much space will be consumed by an update request. This
+                        * conservative estimation always assumes new object, dkey, akey will be
+                        * created for the update.
+                        */
+                        /* daos_size_t space_est[DAOS_MEDIA_MAX] = { 0, 0 }; */
                         estimate_space(pool, dkey, iod_nr, iods, iods_csums, &space_est[0]);
+                                /* struct umem_instance	*umm = vos_pool2umm(pool); */
                                 scm += estimate_space_key(umm, dkey); /* DKey */
                                         size = vos_krec_size(&rbund);
-                                        /* Add ample space assuming one tree node is added.  We could refine this later */
+                                        /* Add ample space assuming one tree node is added. We could refine this later */
                                         size += 1024
                                 for (i = 0; i < iod_nr; i++) {
                                         scm += estimate_space_key(umm, &iod->iod_name); /* AKey */
@@ -106,12 +121,19 @@ io_test_obj_update
                                                 policy_io_size /* vos_policies[pool->vp_policy_desc.policy](pool, type, size); */
                                         /* media == DAOS_MEDIA_SCM */
                                         scm += vos_recx2irec_size(size, csums);
-                                        /* Assume one more SV tree node created */
+                                        /* Assume one more SV (single value?) tree node created */
                                         scm += 256;
+                        scm_left = SCM_FREE(&vps);
                         /* scm_left >= SCM_SYS(&vps) */
+                        scm_left -= SCM_SYS(&vps);
                         /* scm_left >= POOL_SCM_HELD(pool) */
+                        scm_left -= POOL_SCM_HELD(pool);
                         /* scm_left >= space_est[DAOS_MEDIA_SCM] */ 
-                        /* pool->vp_vea_info == NULL */
+                        /* pool->vp_vea_info == NULL; In-memory free space tracking for NVMe device */
+                        /* Note: The same would be done for DAOS_MEDIA_NVME. */
+                        space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];
+                        /** Held space by in-flight updates. In bytes */
+	                POOL_SCM_HELD(pool)		+= space_hld[DAOS_MEDIA_SCM];
                 /* rc == 0 */
                 rc = dkey_update_begin(ioc);
                         for (i = 0; i < ioc->ic_iod_nr; i++) {
