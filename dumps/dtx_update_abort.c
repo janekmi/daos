@@ -264,28 +264,59 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         return bsgl = &biod->bd_sgls[idx]; /* SG lists involved in this io descriptor */
         /* Note: bsgl is not used further in the test! */
         /* Helper function to copy data between SG lists of io descriptor and user specified DRAM SG lists.*/
-        bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
+        bio_iod_copy(biod = vos_ioh2desc(ioh), sgl, nr_sgl = 1);
+                /* biod->bd_buffer_prep == 1 */
+                /* biod->bd_sgl_cnt == nr_sgl */
+                struct bio_copy_args arg = { 0 };
+                arg.ca_sgls = sgls; /* DRAM sg lists to be copied to/from */
+                arg.ca_sgl_cnt = nr_sgl;
                 iterate_biov(biod, copy_one, &arg);
                         for (i = 0; i < biod->bd_sgl_cnt; i++) {
+                                struct bio_sglist *bsgl = &biod->bd_sgls[i];
                                 /* data != NULL */
                                 /* cb_fn == copy_one */
+                                struct bio_copy_args *arg = data;
+				arg->ca_sgl_idx = i; /* Current sgl index */
+				arg->ca_iov_idx = 0; /* Current IOV index inside of current sgl */
+				arg->ca_iov_off = 0; /* Current offset inside of current IOV */
                                 /* bsgl->bs_nr_out == 1 */
                                 for (j = 0; j < bsgl->bs_nr_out; j++) {
+                                        struct bio_iov *biov = &bsgl->bs_iovs[j];
                                         copy_one /* cb_fn(biod, biov, data); */
+                                                struct bio_copy_args *arg = data;
+                                                /* bio_iov2req_len(biov) != 0 */
+                                                	/* size_t bi_data_len; Data length in bytes */
+                                                        /* size_t bi_prefix_len; bytes before */
+	                                                /* size_t bi_suffix_len; bytes after */
+                                                        biov->bi_data_len - (biov->bi_prefix_len + biov->bi_suffix_len)
+                                                d_sg_list_t *sgl = &arg->ca_sgls[arg->ca_sgl_idx];
                                                 while (arg->ca_iov_idx < sgl->sg_nr) {
-                                                        /* buf_len > arg->ca_iov_off */
+                                                        d_iov_t *iov = &sgl->sg_iovs[arg->ca_iov_idx];
+                                                        /* biod->bd_type == BIO_IOD_TYPE_UPDATE (0) */
+                                                        buf_len = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ? iov->iov_len : iov->iov_buf_len;
+                                                        /* buf_len > arg->ca_iov_off */ /* Current offset inside of current IOV */
                                                         /* iov->iov_buf != NULL */
                                                         nob = min(size, buf_len - arg->ca_iov_off); /* 64 */
                                                         /* addr != NULL */
-                                                        bio_memcpy(biod, media, addr, iov->iov_buf + arg->ca_iov_off, nob);
+                                                        bio_memcpy(biod, media, media_addr = addr, addr = iov->iov_buf + arg->ca_iov_off, n = nob);
+                                                                struct umem_instance *umem = biod->bd_umem;
                                                                 /* biod->bd_type == BIO_IOD_TYPE_UPDATE && media == DAOS_MEDIA_SCM */
                                                                 /* !(DAOS_ON_VALGRIND && umem_tx_inprogress(umem)) */
-                                                                umem_atomic_copy(umem, media_addr, addr, n, UMEM_RESERVED_MEM);
+                                                                umem_atomic_copy(umem, media_addr, addr, len = n, hint = UMEM_RESERVED_MEM);
                                                                         pmem_atomic_copy /* umm->umm_ops->mo_atomic_copy(umm, dest, src, len, hint); */
                                                                                 pmemobj_memcpy_persist(pop, dest, src, len);
+                                                        addr += nob;
+                                                        arg->ca_iov_off += nob;
                                                         /* biod->bd_type != BIO_IOD_TYPE_FETCH */
                                                         /* consumed an iov, move to the next */
                                                         /* arg->ca_iov_off == iov->iov_len */
+                                                        arg->ca_iov_off = 0;
+                                                        arg->ca_iov_idx++;
+                                                        /* arg->ca_size_tot == 0 */ /* Total size to be copied */
+                                                        size -= nob;
+                                                        /* size == 0 */
+                                        /* rc == 0 */
+        /* rc == 0 */
         bio_iod_post(vos_ioh2desc(ioh), rc);
                 /* No more actions for direct accessed SCM IOVs */
                 /* biod->bd_rsrvd.brd_rg_cnt == 0 */
