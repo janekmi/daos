@@ -185,24 +185,76 @@ io_test_obj_update
                                 /* rc == 0 */
                 /* rc == 0 */
                 *ioh = vos_ioc2ioh(ioc);
-        bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
+        /* Prepare all the SG lists of an io descriptor. */
+        /* struct vos_io_context { ... struct bio_desc *ic_biod;} BIO descriptor, has ic_iod_nr SGLs */
+        /* BIO_CHK_TYPE_IO - For IO request; CHK stands for chunk as in bio_chunk_type */
+        bio_iod_prep(biod = vos_ioh2desc(ioh), type = BIO_CHK_TYPE_IO, bulk_ctxt = NULL, bulk_perm = 0);
                 iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
-                        /* biod->bd_buffer_prep == NULL */
+                        /* biod->bd_buffer_prep == 0; XXX */
+                        void  *arg = NULL;
+                        biod->bd_chk_type = type;
+                        biod->bd_rdma = (bulk_ctxt != NULL) || (type == BIO_CHK_TYPE_REBUILD); /* 0 */
+                        /* bulk_ctxt == NULL */
                         iod_map_iovs(biod, arg);
                                 /* NVMe context IS allocated */
                                 /* biod->bd_ctxt->bic_xs_ctxt != NULL */
                                 bdb = iod_dma_buf(biod);
+                                        /* struct bio_desc; I/O descriptor */
+                                        /* struct bio_io_context *bd_ctxt; Per VOS instance I/O context */
+                                        /* struct bio_xs_context *bic_xs_ctxt; Per-xstream NVMe context */
+                                        /* struct bio_dma_buffer *bxc_dma_buf; Per-xstream DMA buffer, used as SPDK dma I/O buffer or as temporary RDMA buffer for ZC fetch/update over NVMe devices. */
+                                        return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
                                 iod_fifo_in(biod, bdb);
+                                        /* bdb != NULL */
+                                        /* bdb->bdb_queued_iods == 0 */
+                                        return; /* No prior waiters */
+                                /* arg == NULL */
                                 iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
+                                        /* struct bio_desc {
+                                                ...
+                                                // SG lists involved in this io descriptor
+                                                unsigned int bd_sgl_cnt; 
+                                                struct bio_sglist bd_sgls[0];
+                                        };
+                                        */
                                         for (i = 0; i < biod->bd_sgl_cnt; i++) {
+                                                struct bio_sglist *bsgl = &biod->bd_sgls[i];
                                                 /* data == NULL */
                                                 /* bsgl->bs_nr_out == 1 */
+                                                /*
+                                                struct bio_sglist {
+                                                        struct bio_iov	*bs_iovs;
+                                                        unsigned int	 bs_nr;
+                                                        unsigned int	 bs_nr_out;
+                                                };
+                                                */
                                                 for (j = 0; j < bsgl->bs_nr_out; j++) {
+                                                        struct bio_iov *biov = &bsgl->bs_iovs[j];
+                                                        /* Convert offset of @biov into memory pointer */
                                                         dma_map_one /* cb_fn(biod, biov, data); */
+                                                                /* biov->bi_data_len == 64; Data length in bytes */
+                                                                /* bio_addr_is_hole(&biov->bi_addr); The address is NOT a hole */
                                                                 /* direct_scm_access(biod, biov) ==  true */
+                                                                        /*
+                                                                        * Direct access SCM when:
+                                                                        *
+                                                                        * - It's inline I/O, or;
+                                                                        * - Direct SCM RDMA enabled, or;
+                                                                        * - It's deduped SCM extent;
+                                                                        */
+                                                                umem = biod->bd_umem;
                                                                 bio_iov_set_raw_buf(biov, umem_off2ptr(umem, bio_iov2raw_off(biov)));
+                                                                        /* For SCM, it's direct memory address of 'ba_off'; */
+                                                                        biov->bi_buf = val;
                                 iod_fifo_out(biod, bdb);
+                                        /* biod->bd_in_fifo == 0*/
+                                        return;
                         /* rc == 0 */
+                        /* struct bio_rsrvd_dma bd_rsrvd; DMA buffers reserved by this io descriptor */
+                        /* unsigned int brd_rg_cnt; Total number of reserved regions */
+                        /* All direct SCM access, no DMA buffer prepared */
+                        /* biod->bd_rsrvd.brd_rg_cnt == 0 */
+                        return 0;
         /* rc == 0 */
         bsgl = vos_iod_sgl_at(ioh, 0);
                 bio_iod_sgl(ioc->ic_biod, idx);
