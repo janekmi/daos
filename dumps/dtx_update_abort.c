@@ -288,6 +288,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                                                                 bio_iov_set_raw_buf(biov, val = umem_off2ptr(umem, bio_iov2raw_off(biov)));
                                                                         /* For SCM, it's direct memory address of 'ba_off'; */
                                                                         biov->bi_buf = val;
+                                biod->bd_buffer_prep = 1;
                                 iod_fifo_out(biod, bdb);
                                         /* biod->bd_in_fifo == 0*/
                                         return;
@@ -356,17 +357,29 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                                                         /* size == 0 */
                                         /* rc == 0 */
         /* rc == 0 */
-        bio_iod_post(vos_ioh2desc(ioh), rc);
+        bio_iod_post(biod = vos_ioh2desc(ioh), err = rc);
+                biod->bd_dma_issued = 0;
+                biod->bd_inflights = 0; /* In-flight SPDK DMA transfers */
+                biod->bd_result = err;
+                /* biod->bd_buffer_prep == 1 */
                 /* No more actions for direct accessed SCM IOVs */
                 /* biod->bd_rsrvd.brd_rg_cnt == 0 */
+                /*
+                * Release all the DMA chunks held by @biod, once the use count of any
+                * chunk drops to zero, put it back to free list.
+                */
                 iod_release_buffer(biod);
+                        struct bio_rsrvd_dma *rsrvd_dma = &biod->bd_rsrvd;
                         /* Release bulk handles */
                         bulk_iod_release(biod);
-                                /* biod->bd_bulk_hdls == NULL */
+                                /* biod->bd_bulk_hdls == NULL */ /* Cached bulk handles being used by this IOD */
                         /* No reserved DMA regions */
-                        /* rsrvd_dma->brd_rg_cnt == 0 */
+                        /* rsrvd_dma->brd_rg_cnt == 0 */ /* Total number of reserved regions */
+                        biod->bd_buffer_prep = 0;
                 /* !biod->bd_dma_issued && biod->bd_type == BIO_IOD_TYPE_UPDATE */
                 iod_dma_completion(biod, biod->bd_result);
+                        /* biod->bd_completion == NULL */
+                        /* biod->bd_dma_done == ABT_EVENTUAL_NULL */
         /* rc == 0 && (arg->ta_flags & TF_ZERO_COPY) */
         vos_update_end(ioh, 0, dkey, rc, NULL, dth);
                 vos_dedup_verify_fini(ioh);
