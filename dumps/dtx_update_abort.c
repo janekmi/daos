@@ -137,24 +137,51 @@ io_test_obj_update
                 /* rc == 0 */
                 rc = dkey_update_begin(ioc);
                         for (i = 0; i < ioc->ic_iod_nr; i++) {
-                                iod_set_cursor(ioc, i);
+                                iod_set_cursor(ioc, sgl_at = i);
+                                        /** cursor of SGL & IOV in BIO descriptor */
+                                        ioc->ic_sgl_at = sgl_at;
+	                                ioc->ic_iov_at = 0;
                                 rc = akey_update_begin(ioc);
                                         for (i = 0; i < iod->iod_nr; i++) {
                                                 /* iod->iod_type == DAOS_IOD_SINGLE */
+                                                size = iod->iod_size;
+                                                media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont), iod->iod_type, size, VOS_IOS_GENERIC);
+                                                /* media == DAOS_MEDIA_SCM */
+                                                /* Reserve single value record on specified media */
                                                 rc = vos_reserve_single(ioc, media, size);
-                                                        reserve_space(ioc, DAOS_MEDIA_SCM, scm_size, &off);
+                                                        struct dcs_csum_info *value_csum = vos_csum_at(iod_csums = ioc->ic_iod_csums, ioc->ic_sgl_at);
+                                                                /* iod_csums == NULL */
+                                                        /* value_csum == NULL */
+                                                        /* media == DAOS_MEDIA_SCM */
+                                                        scm_size = vos_recx2irec_size(size, value_csum);
+                                                        /* uint64_t off = 0; */
+                                                        reserve_space(ioc, media = DAOS_MEDIA_SCM, size = scm_size, &off);
                                                                 /* media == DAOS_MEDIA_SCM */
-                                                                vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size);
-                                                                        umem_reserve(vos_cont2umm(cont), rsrvd_scm, size);
+	                                                        /* struct umem_rsrvd_act *ic_rsrvd_scm; reserved SCM extents */
+                                                                umem_off_t umoff = vos_reserve_scm(ioc->ic_cont, rsrvd_scm = ioc->ic_rsrvd_scm, size);
+                                                                        umem_reserve(vos_cont2umm(cont), rsrvd_act = rsrvd_scm, size);
+                                                                                act = rsrvd_act->rs_actv + act_size * rsrvd_act->rs_actv_at;
                                                                                 /* umm->umm_ops->mo_reserve != NULL */
                                                                                 pmem_reserve /* umm->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);*/
                                                                                         pmemobj_reserve(pop, (struct pobj_action *)act, size, type_num)
                                                                 /* !UMOFF_IS_NULL(umoff) */
+                                                                ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
+                                                                ioc->ic_umoffs_cnt++;
+                                                                *off = umoff;
                                                         /* rc != NULL */
-                                                        vos_irec_init_csum(irec, value_csum);
+                                                        umoff = ioc->ic_umoffs[ioc->ic_umoffs_cnt - 1];
+                                                        /* struct vos_irec_df *irec; Persisted VOS single value & epoch record, it is referenced by btr_record::rec_off of btree VOS_BTR_SINGV. */ 
+                                                	irec = (struct vos_irec_df *)umem_off2ptr(vos_ioc2umm(ioc), umoff);
+                                                        vos_irec_init_csum(irec, csum = value_csum);
+                                                                /* csum == NULL */
+                                                                irec->ir_cs_size = 0; /** key checksum size (in bytes) */
+                                                                irec->ir_cs_type = 0; /** key checksum type */
+                                                        /* struct bio_iov biov; */
                                                         memset(&biov, 0, sizeof(biov));
                                                         /* media == DAOS_MEDIA_SCM */
-                                                        bio_addr_set(&biov.bi_addr, media, off);
+                                                        bio_addr_set(addr = &biov.bi_addr, type = media, off);
+                                                        	addr->ba_type = type; /* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
+	                                                        addr->ba_off = umem_off2offset(off); /* Byte offset within PMDK pmemobj pool for SCM; */
                                                 /* rc == 0 */
                                 /* rc == 0 */
                 /* rc == 0 */
