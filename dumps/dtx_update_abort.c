@@ -1,6 +1,6 @@
 // -f VOS510
 // vts_dtx_abort_visibility
-vts_dtx_begin // a test-specific dtx_begin() altenative
+vts_dtx_begin(oid = &args->oid, coh = args->ctx.tc_co_hdl, epoch = ++epoch, dkey_hash, &dth); // a test-specific dtx_begin() altenative
         vts_init_dte
                 /** Use unique API so new UUID is generated even on same thread */
                 daos_dti_gen_unique
@@ -27,7 +27,7 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
                 /* persistent == false */
                 dth->dth_pinned = 1;
         *dthp = dth; 
-io_test_obj_update
+io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
         /* Prepare IO sink buffers for the specified arrays of the given object.*/
         vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey, 1, iod, iod_csums, 0, &ioh, dth);
                 /* dtx_is_real_handle(dth) == true */
@@ -262,6 +262,8 @@ io_test_obj_update
                 /* ioc->ic_dedup_verify == 0 */
                 bio_iod_sgl(ioc->ic_biod, idx);
                         return bsgl = &biod->bd_sgls[idx]; /* SG lists involved in this io descriptor */
+        /* Note: bsgl is not used further in the test! */
+        /* Helper function to copy data between SG lists of io descriptor and user specified DRAM SG lists.*/
         bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
                 iterate_biov(biod, copy_one, &arg);
                         for (i = 0; i < biod->bd_sgl_cnt; i++) {
