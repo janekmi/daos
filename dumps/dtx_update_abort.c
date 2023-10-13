@@ -237,13 +237,51 @@ io_test_obj_update
                                 vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh, ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
                                         daos_dti_copy(dest_id, src_id);
                 /* err == 0 */
-                vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
-                        umem_tx_begin(umm, vos_txd_get(is_sysdb));
+                struct umem_instance *umem = vos_ioc2umm(ioc);
+                /* bool vp_sysdb; this pool is for sysdb */
+                vos_tx_begin(dth, umem, is_sysdb = ioc->ic_cont->vc_pool->vp_sysdb);
+                        /* dth != NULL */
+                        /* dth->dth_local_tx_started == 0 */
+                        rc = umem_tx_begin(umm, txd = vos_txd_get(is_sysdb));
+                                vos_txd_get(bool standalone)
+                                        /* standalone == false */
+                                        /* struct umem_tx_stage_data vtl_txd; PMDK transaction stage callback data */
+                                        /* struct umem_tx_stage_data; data structure to store all pmem transaction stage callbacks.
+                                        See pmemobj_tx_begin and pmemobj_tx_end of PMDK for the details. */
+                                        return &vos_tls_get(standalone)->vtl_txd;
                                 pmem_tx_begin /* umm->umm_ops->mo_tx_begin(umm, txd); */
+                                        PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
                                         /* txd != NULL */
-                                        pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, pmem_stage_callback, txd, TX_PARAM_NONE);
+                                        rc = pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, pmem_stage_callback, txd, TX_PARAM_NONE);
                         /* rc == 0 */
                         dth->dth_local_tx_started = 1; /* !!! */
+                        vos_dth_set(dth, standalone = false);
+                                struct vos_tls *tls = vos_tls_get(standalone);
+                                /* dth != NULL */
+                                /** struct dtx_handle *vtl_dth; XXX: The DTX handle.
+                                 *
+                                 *	 Transferring DTX handle via TLS can avoid much changing
+                                *	 of existing functions' interfaces, and avoid the corner
+                                *	 cases that someone may miss to set the DTX handle when
+                                *	 operate related tree.
+                                *
+                                *	 But honestly, it is some hack to pass the DTX handle via
+                                *	 the TLS. It requires that there is no CPU yield during the
+                                *	 processing. Otherwise, the vtl_dth may be changed by other
+                                *	 ULTs. The user needs to guarantee that by itself.
+                                */
+                                /* tls->vtl_dth == NULL */
+                                /* dth->dth_share_tbd_count == 0 */
+                                tls->vtl_dth = dth;
+                /* err == 0 */
+                dtx_is_valid_handle(dth)
+                        /* dth != NULL */
+                        /* struct dtx_id dth_xid; The identifier of the DTX. */
+                        daos_is_zero_dti(dti = &dth->dth_xid)
+                                /* dti->dti_hlc != 0 */
+                                return dti->dti_hlc == 0;
+                        return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
+                /* dth->dth_local == 0 */
                 /* dth->dth_dti_cos_count == 0 */
                 vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb), ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
                         /* create == true */
