@@ -382,41 +382,117 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         /* biod->bd_dma_done == ABT_EVENTUAL_NULL */
         /* rc == 0 && (arg->ta_flags & TF_ZERO_COPY) */
         vos_update_end(ioh, 0, dkey, rc, NULL, dth);
+                struct vos_io_context *ioc = vos_ioh2ioc(ioh); /** I/O context */
                 vos_dedup_verify_fini(ioh);
-                        /* ioc->ic_dedup_bsgls == NULL */
-                vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
-                        /* vos_ts_in_tx(ts_set) */
+                        /* ioc->ic_dedup_bsgls == NULL */ /** duped SG lists for dedup verify */
+                /* struct vos_container *ic_cont; VOS container (DRAM) */
+	        /* uint32_t *vc_ts_idx; Index for timestamp lookup */
+                vos_ts_set_add(ts_set = ioc->ic_ts_set, idx = ioc->ic_cont->vc_ts_idx, rec = NULL, rec_size = 0);
+                        uint64_t hash = 0;
+                        /* vos_ts_in_tx(ts_set) == true */
+                                /* ts_set != NULL */
+                                /* ts_set->ts_in_tx == true */
                         /* idx != NULL */
-                        vos_ts_lookup(ts_set, idx, false, &entry)
+                        /* Lookup an entry in the timestamp cache and save it to the set. */
+                        vos_ts_lookup(ts_set, idx, reset = false, entryp = &entry)
+                                /* ts_set->ts_init_count == 0; Number of initialized entries */
+                                /* VOS_TS_TYPE_AKEY == 3 */
+                                type = MIN(ts_set->ts_init_count, VOS_TS_TYPE_AKEY);
+                                /* type == 0 */
                                 vos_ts_lookup_internal(ts_set, type, idx, entryp);
-                                        lrua_lookup(info->ti_array, idx, &entry);
-                                                lrua_lookupx_(array, *idx, (uint64_t)idx, entryp);
-                                                        entry = lrua_lookup_idx(array, idx, key, true);
-                                                        /* entry == NULL */
-                /* ts_set->ts_etype <= VOS_TS_TYPE_CONT */
-                /* idx != NULL */
-                entry = vos_ts_alloc(ts_set, idx, hash);
-                        /* vos_ts_in_tx(ts_set) */
-                        ts_table = vos_ts_table_get(false);
-                        vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
-                                /* ts_set->ts_init_count == 0 */
-                                *info = &ts_table->tt_type_info[0];
-                        hash_idx = vos_ts_get_hash_idx(info, hash, hash_offset);
-                        vos_ts_evict_lru(ts_table, &new_entry, idx, hash_idx, info->ti_type);
-                                lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
-                                        lrua_allocx_(array, idx, (uint64_t)idx, entryp);
-                                                lrua_find_free(array, &new_entry, idx, key);
-                                                        sub_find_free(array, sub, entryp, idx, key)
-                                                                /** Remove from free list */
-                                                                lrua_remove_entry(array, sub, &sub->ls_free, entry, tree_idx);
-                                                                /** Insert at tail (mru) */
-                                                                lrua_insert(sub, &sub->ls_lru, entry, tree_idx, true);
-                                /* neg_entry == NULL */
-                                /** Use global timestamps for the type to initialize it */
-                                vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl, ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
-                                        daos_dti_copy(dest_id, src_id);
-                                vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh, ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
-                                        daos_dti_copy(dest_id, src_id);
+                                        struct vos_ts_table *ts_table = vos_ts_table_get(false);
+                                                /* struct vos_tls; VOS thread local storage structure */
+	                                        /* struct vos_ts_table *vtl_ts_table; Timestamp table for xstream */
+                                                return vos_tls_get(standalone)->vtl_ts_table;
+                                        /* struct vos_ts_info tt_type_info[VOS_TS_TYPE_COUNT]; Timestamp table pointers for a type */
+                                        struct vos_ts_info *info = &ts_table->tt_type_info[type];
+	                                /* struct lru_array *ti_array; The LRU array */
+                                        found = lrua_lookup(info->ti_array, idx, &entry);
+                                        /* found == false */
+                                        /* entry == NULL */
+                        /* ts_set->ts_etype == 0; type of next entry */
+                        /* idx != NULL */
+                        /*  Allocate a new entry in the set. */
+                        entry = vos_ts_alloc(ts_set, idx, hash);
+                                uint64_t hash_offset = 0;
+                                struct vos_ts_info *info = NULL;
+                                struct vos_ts_set_entry set_entry = {0};
+                                struct vos_ts_entry *new_entry;
+                                /* vos_ts_in_tx(ts_set) == true */
+                                        /* ts_set != NULL */
+                                        /* ts_set->ts_in_tx == true */
+                                struct vos_ts_table *ts_table = vos_ts_table_get(false);
+                                vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
+                                        /* ts_set->ts_init_count == 0; Number of initialized entries */
+                                        /** struct vos_ts_info tt_type_info[VOS_TS_TYPE_COUNT]; Timestamp table pointers for a type */
+                                        *info = &ts_table->tt_type_info[0];
+                                /* Internal function to calculate index of negative entry */
+                                hash_idx = vos_ts_get_hash_idx(info, hash, parent_idx = hash_offset);
+                                        /** uint32_t ti_cache_mask; Mask for negative entry cache */
+                                        return (hash + (parent_idx * 17)) & info->ti_cache_mask;
+	                        /* uint32_t ti_type; Type identifier */
+                                vos_ts_evict_lru(ts_table, entryp = &new_entry, idx, hash_idx, type = info->ti_type);
+                                        struct vos_ts_entry *entry;
+                                        struct vos_ts_entry *neg_entry = NULL;
+                                        /* Allocate a new entry lru array. This will modify idx. */
+                                        /* If called within a transaction and the value needs to persist, the old value should be logged before calling this function. */
+                                        /* struct lru_array *ti_array; The LRU array */
+                                        rc = lrua_alloc(ts_table->tt_type_info[type].ti_array, idx, &entry);
+                                        /* rc == 0 */
+                                        /* info->ti_cache_mask == 0; Mask for negative entry cache */
+                                        /* struct vos_ts_entry *te_negative; Corresponding negative entry, if applicable */
+                                        entry->te_negative = neg_entry;
+                                        /* neg_entry == NULL */
+                                        /* Use global timestamps for the type to initialize it */
+                                        /* struct vos_ts_pair te_ts; The timestamps for the entry */
+                                        /* daos_epoch_t	tp_ts_rl; Low read time or read time for the object/key */
+                                        /* daos_epoch_t	tp_ts_rh; High read time or read time for the object/key */
+                                        /* struct dtx_id tp_tx_rl; Low read tx */
+                                        /* struct dtx_id tp_tx_rh; High read tx */
+                                        /* daos_epoch_t tt_ts_rl; Global read low timestamp for type */
+                                        /* daos_epoch_t tt_ts_rh; Global read high timestamp for type */
+                                        /* struct dtx_id tt_tx_rl; Transaction id associated with global read low timestamp */
+                                        /* struct dtx_id tt_tx_rh; Transaction id associated with global read high timestamp */
+                                        /* struct dtx_id; DAOS two-phase commit transaction identifier, generated by client, globally unique. */
+                                        vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl, ts_table->tt_ts_rl, &ts_table->tt_tx_rl);
+                                        /* vos_ts_copy(dest_epc, dest_id, src_epc, src_id) */
+                                                *dest_epc = src_epc;
+                                                daos_dti_copy(des = dest_id, src = src_id);
+                                                        /* src != NULL */
+                                                        *des = *src;
+                                        vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh, ts_table->tt_ts_rh, &ts_table->tt_tx_rh);
+                                                /* XXX */
+                                        /* struct vos_wts_cache	te_w_cache; Write timestamps for epoch bound check */
+                                        /* struct vos_wts_cache	tt_w_cache; Global write timestamps */
+                                        entry->te_w_cache = ts_table->tt_w_cache;
+                                        /* Set the lower bounds for the entry */
+                                        entry->te_record_ptr = idx;
+                                        *entryp = entry;
+                                /** struct vos_ts_entry	*se_entry; Pointer to the entry at this level */
+                                set_entry.se_entry = new_entry;
+                                /* No need to save allocation hash for non-negative entry */
+                                /* struct vos_ts_set_entry ts_entries[0]; timestamp entries */
+                                /* uint32_t ts_init_count; Number of initialized entries */
+                                ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
+                                return new_entry;
+                        /* entry != NULL */
+                        /* uint32_t ti_type; Type identifier */
+                        uint32_t expected_type = entry->te_info->ti_type;
+                        /* uint32_t ts_etype; type of next entry */
+                        D_ASSERT(expected_type == ts_set->ts_etype);
+                        /* uint32_t ts_init_count; Number of initialized entries */
+                        D_ASSERT(ts_set->ts_init_count >= 1);
+                        struct vos_ts_set_entry	*se = &ts_set->ts_entries[ts_set->ts_init_count - 1];
+                        /* uint32_t se_etype; The expected type of this entry. */
+                        se->se_etype = ts_set->ts_etype;
+                        /* se->se_etype == ts_set->ts_max_type == 0 */
+                        /* expected_type == 0 */
+                        /* expected_type != VOS_TS_TYPE_AKEY (3) */
+                                ts_set->ts_etype = expected_type + 1;
+                        /* struct vos_ts_entry *se_entry; Pointer to the entry at this level */
+                        se->se_entry = entry;
+                        /* uint32_t *se_create_idx; pointer to newly created index */
+                        se->se_create_idx = NULL;
                 /* err == 0 */
                 vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
                         umem_tx_begin(umm, vos_txd_get(is_sysdb));
