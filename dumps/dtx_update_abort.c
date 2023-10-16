@@ -5,13 +5,15 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
                 /** Use unique API so new UUID is generated even on same thread */
                 daos_dti_gen_unique
         vos_dtx_rsrvd_init
-        vos_dtx_attach(dth, persistent=false, exist=false) /* Generate DTX entry for the given DTX, and attach it to the DTX handle. */
+        /* Generate DTX entry for the given DTX, and attach it to the DTX handle. */
+        vos_dtx_attach(dth, persistent=false, exist=false)
+                struct vos_dtx_blob_df	*dbd = NULL;
                 /* dtx_is_valid_handle(dth) == true */
                 /* dth->dth_ent == NULL; Pointer to the DTX entry in DRAM */
                 /* exist == false */
                 /* persist == false */
                 rc = vos_dtx_alloc(dbd, dth);
-                        /* struct vos_dtx_act_ent *dae; */
+                        struct vos_dtx_act_ent *dae = NULL;
                         cont = vos_hdl2cont(dth->dth_coh); /* VOS container (DRAM) */
                         /* struct lru_array *vc_dtx_array; Array for active DTX records */
                         rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
@@ -29,12 +31,13 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
         *dthp = dth; 
 io_test_obj_update
         /* Prepare IO sink buffers for the specified arrays of the given object.*/
-        vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey, 1, iod, iod_csums, 0, &ioh, dth);
+        vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags = 0, dkey, iod_nr = 1, iod, iod_csums, 0, &ioh, dth);
                 /* dtx_is_real_handle(dth) == true */
                 epoch = dth->dth_epoch;
                 vos_check_akeys(iod_nr, iods); /* check iods[i].iod_name; akey for this iod */
                 /* create a VOS I/O context */
-                vos_ioc_create(coh, oid, read_only=false, epoch, iod_nr, iods, iods_csums, flags, NULL, dedup_th, dth, &ioc);
+                vos_ioc_create(coh, oid, read_only = false, epoch, iod_nr, iods, iods_csums, vos_flags = flags, NULL, dedup_th, dth, &ioc);
+                        uint64_t cflags = 0;
                         /* Initialize incarnation log information (just a DRAM-backed cache for the ilog search results?) */
                         vos_ilog_fetch_init(&ioc->ic_dkey_info); 
                         vos_ilog_fetch_init(&ioc->ic_akey_info);
@@ -42,32 +45,60 @@ io_test_obj_update
                                 for (i = 0; i < ioc->ic_iod_nr; i++) {
 		                        daos_iod_t *iod = &ioc->ic_iods[i];
 		                        total_acts += iod->iod_nr;
+                                /* umem_off_t *ic_umoffs; reserved offsets for SCM update */
+                                D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
+                                /* vos_ioc2umm(ioc)->umm_ops->mo_reserve != NULL */
                                 /* struct umem_rsrvd_act *ic_rsrvd_scm; reserved SCM extents */
                                 /* Allocate array of structures for reserved actions */
                                 umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, total_acts);
                                         D_ALLOC(buf, size);
+                                /* ioc->ic_rsrvd_scm != NULL */
+                                /* dtx_is_valid_handle(dth) == true */
                         /* dtx_is_valid_handle(dth) */
                         /* Allocate a timestamp set */
-                        vos_ts_set_allocate(ts_set = &ioc->ic_ts_set, vos_flags, cflags, iod_nr, dth, cont->vc_pool->vp_sysdb);
+                        /* struct vos_ts_set; Structure looking up and caching operation flags */
+                        vos_ts_set_allocate(ts_set = &ioc->ic_ts_set, flags = vos_flags, cflags, akey_nr = iod_nr, dth, cont->vc_pool->vp_sysdb);
                                 /* dtx_is_valid_handle(dth) */
                                 /* dth->dth_local == false */
                                 tx_id = &dth->dth_xid;
                                 size = VOS_TS_TYPE_AKEY + akey_nr;
 	                        array_size = size * sizeof((*ts_set)->ts_entries[0]);
                                 D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
+                                /* uint64_t ts_flags; Operation flags */
+                                (*ts_set)->ts_flags = flags;
+                                /* uint32_t ts_set_size; size of the set */
+                                (*ts_set)->ts_set_size = size;
                                 /* tx_id != NULL */
+                                /* bool ts_in_tx; true if inside a transaction */
+                                (*ts_set)->ts_in_tx = true;
+                                /* struct dtx_id ts_tx_id; Transaction that owns the set */
+                                /* uuid_t dti_uuid; The uuid of the transaction */
                                 uuid_copy((*ts_set)->ts_tx_id.dti_uuid, tx_id->dti_uuid);
+                                /* uint64_t dti_hlc; The HLC timestamp (not epoch) of the transaction */
                                 (*ts_set)->ts_tx_id.dti_hlc = tx_id->dti_hlc;
-                                vos_ts_set_append_cflags(*ts_set, cflags);
-                                        /* vos_ts_in_tx(ts_set) */
+                                vos_ts_set_append_cflags(*ts_set, flags = cflags);
+                                        /* vos_ts_in_tx(ts_set) == true */
+                                        /* uint16_t ts_cflags; The Check/update flags for the set */
+                                        ts_set->ts_cflags |= flags;
                         /* rc == 0 */
+                        /* struct bio_io_context; Per VOS instance I/O context */
                         bioc = vos_data_ioctxt(vp = cont->vc_pool);
+                                /* struct bio_meta_context; In-memory Meta context, exported as opaque data structure */
                                 struct bio_meta_context *mc = vos_pool2mc(vp);
+                                        /* struct vos_pool; VOS pool (DRAM) */
+                                        /* struct umem_instance	vp_umm; memory class instance of the pool */
+                                        /* void *stor_priv; private data passing between layers */
+                                        return (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
                                 /* mc == NULL */
                                 /* Use dummy I/O context when data blob doesn't exist */
                                 return vp->vp_dummy_ioctxt;
                         ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), sgl_cnt = iod_nr, read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
                                 D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
+                                /* In-flight SPDK DMA transfers (among other struct fields) */
+                                biod->bd_ctxt = ctxt;
+                                biod->bd_type = type;
+                                /* SG lists involved in this io descriptor */
+                                biod->bd_sgl_cnt = sgl_cnt;
                                 return biod;
                         /* ioc->ic_biod != NULL */
                         dcs_csum_info_list_init(list = &ioc->ic_csum_list, nr = iod_nr);
@@ -76,6 +107,7 @@ io_test_obj_update
                                 memset(list, 0, sizeof(*list));
                                 D_ALLOC(list->dcl_csum_infos, list->dcl_buf_size);
                         for (i = 0; i < iod_nr; i++) {
+                                /* daos_size_t iod_nr; Number of entries in dfs_rgs */
                                 int iov_nr = iods[i].iod_nr;
                                 bsgl = bio_iod_sgl(biod = ioc->ic_biod, i);
                                         return &biod->bd_sgls[idx];
@@ -142,6 +174,7 @@ io_test_obj_update
                                         ioc->ic_sgl_at = sgl_at;
 	                                ioc->ic_iov_at = 0;
                                 rc = akey_update_begin(ioc);
+                                        daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
                                         for (i = 0; i < iod->iod_nr; i++) {
                                                 /* iod->iod_type == DAOS_IOD_SINGLE */
                                                 size = iod->iod_size;
@@ -179,9 +212,16 @@ io_test_obj_update
                                                         /* struct bio_iov biov; */
                                                         memset(&biov, 0, sizeof(biov));
                                                         /* media == DAOS_MEDIA_SCM */
+                                                        /* Get the record payload offset */
+                                                        char *payload_addr = vos_irec2data(irec);
+                                                        off = umoff + (payload_addr - (char *)irec);
                                                         bio_addr_set(addr = &biov.bi_addr, type = media, off);
                                                         	addr->ba_type = type; /* DAOS_MEDIA_SCM or DAOS_MEDIA_NVME */
 	                                                        addr->ba_off = umem_off2offset(off); /* Byte offset within PMDK pmemobj pool for SCM; */
+                                                        iod_reserve(ioc, &biov);
+                                                                bsgl = bio_iod_sgl(biod = ioc->ic_biod, idx = ioc->ic_sgl_at);
+                                                                        return &biod->bd_sgls[idx];
+                                                                
                                                 /* rc == 0 */
                                 /* rc == 0 */
                 /* rc == 0 */
@@ -193,6 +233,7 @@ io_test_obj_update
                 iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
                         /* biod->bd_buffer_prep == 0; XXX */
                         void  *arg = NULL;
+                        /* In-flight SPDK DMA transfers (among other struct fields) */
                         biod->bd_chk_type = type;
                         biod->bd_rdma = (bulk_ctxt != NULL) || (type == BIO_CHK_TYPE_REBUILD); /* 0 */
                         /* bulk_ctxt == NULL */
@@ -244,7 +285,7 @@ io_test_obj_update
                                                                         * - It's deduped SCM extent;
                                                                         */
                                                                 umem = biod->bd_umem;
-                                                                bio_iov_set_raw_buf(biov, umem_off2ptr(umem, bio_iov2raw_off(biov)));
+                                                                bio_iov_set_raw_buf(biov, val = umem_off2ptr(umem, bio_iov2raw_off(biov)));
                                                                         /* For SCM, it's direct memory address of 'ba_off'; */
                                                                         biov->bi_buf = val;
                                 iod_fifo_out(biod, bdb);
