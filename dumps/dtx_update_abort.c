@@ -303,7 +303,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         return bsgl = &biod->bd_sgls[idx]; /* SG lists involved in this io descriptor */
         /* Note: bsgl is not used further in the test! */
         /* Helper function to copy data between SG lists of io descriptor and user specified DRAM SG lists.*/
-        bio_iod_copy(biod = vos_ioh2desc(ioh), sgl, nr_sgl = 1);
+        bio_iod_copy(biod = vos_ioh2desc(ioh), sgls = sgl, nr_sgl = 1);
                 /* biod->bd_buffer_prep == 1 */
                 /* biod->bd_sgl_cnt == nr_sgl */
                 struct bio_copy_args arg = { 0 };
@@ -341,7 +341,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                                                                 struct umem_instance *umem = biod->bd_umem;
                                                                 /* biod->bd_type == BIO_IOD_TYPE_UPDATE && media == DAOS_MEDIA_SCM */
                                                                 /* !(DAOS_ON_VALGRIND && umem_tx_inprogress(umem)) */
-                                                                umem_atomic_copy(umem, media_addr, addr, len = n, hint = UMEM_RESERVED_MEM);
+                                                                umem_atomic_copy(umem, dest = media_addr, src = addr, len = n, hint = UMEM_RESERVED_MEM);
                                                                         pmem_atomic_copy /* umm->umm_ops->mo_atomic_copy(umm, dest, src, len, hint); */
                                                                                 pmemobj_memcpy_persist(pop, dest, src, len);
                                                         addr += nob;
