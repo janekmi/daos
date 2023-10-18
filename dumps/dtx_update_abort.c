@@ -385,6 +385,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                 struct vos_io_context *ioc = vos_ioh2ioc(ioh); /** I/O context */
                 vos_dedup_verify_fini(ioh);
                         /* ioc->ic_dedup_bsgls == NULL */ /** duped SG lists for dedup verify */
+                /* cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx; */
                 /* struct vos_container *ic_cont; VOS container (DRAM) */
 	        /* uint32_t *vc_ts_idx; Index for timestamp lookup */
                 vos_ts_set_add(ts_set = ioc->ic_ts_set, idx = ioc->ic_cont->vc_ts_idx, rec = NULL, rec_size = 0);
