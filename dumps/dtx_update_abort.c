@@ -359,16 +359,19 @@ io_test_obj_update
                 err = dkey_update(ioc, pm_ver, dkey, (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX));
                         rc = obj_tree_init(obj);
                                 /* daos_handle_is_valid(obj->obj_toh) == true */
-			/* struct vos_object	*obj = ioc->ic_obj; 
+			struct vos_object	*obj = ioc->ic_obj;
+			struct vos_krec_df	*krec;
+			daos_handle_t ak_toh;
+			/*
+			 * daos_handle_t obj_toh; dkey tree open handle of the object (volatile)
 			 * VOS_BTR_DKEY - distribution key tree
-			 * daos_key_t *dkey
 			 * SUBTR_CREATE	< may create the subtree
 			 * DAOS_INTENT_UPDATE - write/insert
-			 * struct vos_krec_df	*krec;
-			 * daos_handle_t ak_toh
-			 * struct vos_io_context *ioc
 			 */
-                        rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh, ioc->ic_ts_set);
+                        rc = key_tree_prepare(obj, toh = obj->obj_toh, tclass = VOS_BTR_DKEY, key = dkey, flags = SUBTR_CREATE, intent = DAOS_INTENT_UPDATE, &krec, sub_toh = &ak_toh, ts_set = ioc->ic_ts_set);
+                                struct vos_rec_bundle rbund;
+                                d_iov_t riov;
+                                created = false;
                                 /** reset the saved hash */
 				vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
 				/* krecp != NULL */
@@ -388,102 +391,83 @@ io_test_obj_update
 				*   create the root for the subtree, or just return it if it's already
 				*   there.
 				*/
+                                /* Search the provided \a key and fetch its value (and key if the matched key
+                                 * is different with the input key). This function can support advanced range
+                                 * search operation based on \a opc.
+                                 */
                                 rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key, NULL, &riov);
-					tcx = btr_hdl2tcx(toh);
-                                        rc = btr_verify_key(tcx, key);
-                                        /* rc == 0 */
-                                        rc = btr_probe_key(tcx, opc, intent, key);
-                                                btr_hkey_gen(tcx, key, hkey);
-							btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey);
-                                        /* rc == PROBE_RC_OK */
-					/** fetch the record of the specified trace level */
-                                        rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-						return btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
-					/**
-					 * Fetch key and value of the record, key is optional, both key and value
-					 * are output parameters
-					 */
-                                        btr_rec_fetch(tcx, rec, key_out, val_out);
-                                                ktr_rec_fetch /* btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, key, val); */
                                 /* rc == 0 */
+                                /* struct vos_krec_df *rb_krec; Returned durable address of the btree record */
 				krec = rbund.rb_krec;
+                                /* struct ilog_df kr_ilog; Incarnation log for key */
 				ilog = &krec->kr_ilog;
 				/** fall through to cache re-cache entry */
                                 /* ilog != NULL && (flags & SUBTR_CREATE) */
                                 vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
                                         /* !DAOS_ON_VALGRIND */
-                                tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf, (int)key->iov_len);
+                                /* Check if the timestamps associated with the ilog are in cache.  If so, add them to the set. */
+                                /* void *iov_buf; buffer address */
+                                /* size_t iov_len; data length */
+                                tmprc = vos_ilog_ts_add(ts_set, ilog, record = key->iov_buf, rec_size = (int)key->iov_len);
                                         /* vos_ts_in_tx(ts_set) == true */
                                         /* ilog != NULL */
-                                        idx = ilog_ts_idx_get(ilog);
+                                        idx = ilog_ts_idx_get(root = ilog);
+                                                return &root->lr_ts_idx;
                                         vos_ts_set_add(ts_set, idx, record, rec_size);
-                                        	hash = vos_hash_get(rec, rec_size, false);
+                                        	hash = vos_hash_get(buf = rec, len = rec_size, false);
 							return d_hash_murmur64(buf, len, BTR_MUR_SEED);
 						/* idx != NULL */
-						/** Allocate a new entry in the set.   Lookup should be called first and this
-						 * should only be called if it returns false.
-						 *
-						 * \param[in]	ts_set	The timestamp set
-						 * \param[in]	idx	Address of the entry index.
-						 * \param[in]	hash	Hash to identify the item
-						 *
-						 * \return	Returns a pointer to the entry or NULL if ts_set is not
-						 *		allocated or we detected a duplicate akey.
-						*/
+						/* Allocate a new entry in the set. */
 						entry = vos_ts_alloc(ts_set, idx, hash);
+                                                        struct vos_ts_set_entry	 set_entry = {0};
+                                                        struct vos_ts_entry *new_entry;
+                                                        ts_table = vos_ts_table_get(false);
+                                                                /* struct vos_ts_table *vtl_ts_table; Timestamp table for xstream */
+                                                                return vos_tls_get(standalone)->vtl_ts_table;
+                                                        /* Use the parent entry to get the type info and hash offset for the current object/key. */
+                                                        vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 							/** By combining the parent entry offset, we avoid using the same
 							 *  index for every key with the same value.
 							 */
 							hash_idx = vos_ts_get_hash_idx(info, hash, hash_offset);
+                                                        /* Internal function to evict LRU and initialize an entry */
+                                                        /* uint32_t ti_type; Type identifier */
 							vos_ts_evict_lru(ts_table, &new_entry, idx, hash_idx, info->ti_type);
+                                                        /* struct vos_ts_entry *se_entry; Pointer to the entry at this level */
+                                                        set_entry.se_entry = new_entry;
 							/** No need to save allocation hash for non-negative entry */
+                                                        /* struct vos_ts_set_entry ts_entries[0]; timestamp entries */
+                                                        /* uint32_t ts_init_count; Number of initialized entries */
 							ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
                                 /* tmprc == 0 */
                                 /* sub_toh != NULL */
+                                /* created == false */
                                 rc = tree_open_create(obj, tclass, flags, krec, created, sub_toh);
+                                        struct umem_attr *uma = vos_obj2uma(obj);
+                                        struct vos_pool *pool = vos_obj2pool(obj);
+                                        /* struct vos_container *obj_cont; backref to container */
+                                        daos_handle_t coh = vos_cont2hdl(obj->obj_cont);
+                                        struct evt_desc_cbs cbs; /* Callbacks and parameters for evtree descriptor */
 					vos_evt_desc_cbs_init(&cbs, pool, coh);
                                         /* !(flags & SUBTR_EVT) */
-					/**
-					 * Open a btree from the root address.
-					 *
-					 * \param root		[IN]	Address of the tree root.
-					 * \param uma		[IN]	Memory class attributes.
-					 * \param coh		[IN]	The container open handle.
-					 * \param priv		[IN]	Private data for tree opener
-					 * \param toh		[OUT]	Returned tree open handle.
-					 */
-                                        dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
-						/**
-						 * Create a btree context (in volatile memory).
-						 *
-						 * \param root_off	umem offset of root.
-						 * \param tree_class	Tree class ID.
-						 * \param tree_feats	Tree features (the same tree class may have different
-						 *			features for different library versions).
-						* \param tree_order	Tree order.
-						* \param uma		Memory class attributes.
-						* \param coh		The container open handle.
-						* \param priv		Private information from user
-						* \param tcxp		Returned context.
-						*/
-                                                rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, coh, priv, &tcx);
-							/**
-							 * Initialize a tree instance from a registered tree class.
-							 */
-                                                        rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, &tcx->tc_tins);
-                                                                /**
-								 * Instantiate a memory class \a umm by attributes in \a uma
-								 *
-								 * \param uma [IN]	Memory attributes to instantiate the memory class.
-								 * \param umm [OUT]	The instantiated memory class.
-								 */
+					/* Open a btree from the root address. */
+                                        /* struct btr_root kr_btr; btree root under the key */
+                                        dbtree_open_inplace_ex(root = &krec->kr_btr, uma, coh, priv = pool, sub_toh);
+                                                struct btr_context *tcx;
+						/* Create a btree context (in volatile memory). */
+                                                /* XXX The comment above is misleading. Note use of PMDK below. */
+                                                rc = btr_context_create(root_off = BTR_ROOT_NULL, root, tree_class = -1, tree_feats = -1, tree_order = -1, uma, coh, priv, &tcx);
+							/* Initialize a tree instance from a registered tree class. */
+                                                        rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, tins = &tcx->tc_tins);
+                                                                /* Instantiate a memory class \a umm by attributes in \a uma */
 								rc = umem_class_init(uma, &tins->ti_umm);
 									/** Workout the necessary offsets and base address for the pool */
                                                                         set_offsets(umm);
-                                                                                switch (umm->umm_id) {
-                                                                                case UMEM_CLASS_PMEM:
-                                                                                        root_oid = pmemobj_root(pop, 0);
-                                                                                        root = pmemobj_direct(root_oid);
+                                                                                /* umm->umm_id == UMEM_CLASS_PMEM */
+                                                                                root_oid = pmemobj_root(pop, 0);
+                                                                                root = pmemobj_direct(root_oid);
+                                                                                umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
+                                                                                umm->umm_base = (uint64_t)root - root_oid.off;
                                                                 /* tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT */
                                                                 *tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
                                                         /* rc == 0 */
