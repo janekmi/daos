@@ -511,47 +511,131 @@ io_test_obj_update
                 err = dkey_update(ioc, pm_ver, dkey, (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX));
                         rc = obj_tree_init(obj);
                                 /* daos_handle_is_valid(obj->obj_toh) == true */
-                        rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh, ioc->ic_ts_set);
+                        struct vos_object	*obj = ioc->ic_obj;
+                        /* Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off of btree VOS_BTR_DKEY/VOS_BTR_AKEY. */
+                        struct vos_krec_df	*krec;
+                        daos_handle_t ak_toh;
+                        /*
+                         * daos_handle_t obj_toh; dkey tree open handle of the object (volatile)
+                         * VOS_BTR_DKEY - distribution key tree
+                         * SUBTR_CREATE	< may create the subtree
+                         * DAOS_INTENT_UPDATE - write/insert
+                         */
+			 /* Load the subtree roots embedded in the parent tree record. */
+                        rc = key_tree_prepare(obj, toh = obj->obj_toh, tclass = VOS_BTR_DKEY, key = dkey, flags = SUBTR_CREATE, intent = DAOS_INTENT_UPDATE, &krec, sub_toh = &ak_toh, ts_set = ioc->ic_ts_set);
+                                /* Data structure which carries the value buffers, checksums and memory IDs to the multi-nested btree. */
+				struct vos_rec_bundle rbund;
+                                d_iov_t riov;
+				created = false;
+				/** reset the saved hash */
+                                vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
                                 /* krecp != NULL */
                                 *krecp = NULL;
+                                /**
+                                 * store a bundle of parameters into a iovec, which is going to be passed
+                                 * into dbtree operations as a compound value (data buffer address, or ZC
+                                 * buffer umoff, checksum etc).
+                                 */
+                                tree_rec_bundle2iov(&rbund, &riov);
+                                /* NB: In order to avoid complexities of passing parameters to the
+                                * multi-nested tree, tree operations are not nested, instead:
+                                *
+                                * - In the case of fetch, we load the subtree root stored in the
+                                *   parent tree leaf.
+                                * - In the case of update/insert, we call dbtree_update() which may
+                                *   create the root for the subtree, or just return it if it's already
+                                *   there.
+                                */
+                                /* Search the provided \a key and fetch its value (and key if the matched key
+                                 * is different with the input key). This function can support advanced range
+                                 * search operation based on \a opc.
+                                 */
                                 rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key, NULL, &riov);
-                                        rc = btr_verify_key(tcx, key);
-                                        /* rc == 0 */
-                                        rc = btr_probe_key(tcx, opc, intent, key);
-                                                /* XXX */
-                                        /* rc == PROBE_RC_OK */
-                                        rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-                                        btr_rec_fetch(tcx, rec, key_out, val_out);
-                                                ktr_rec_fetch /* btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, key, val); */
                                 /* rc == 0 */
+                                /* struct vos_krec_df *rb_krec; Returned durable address of the btree record */
+                                krec = rbund.rb_krec;
+                                /* struct ilog_df kr_ilog; Incarnation log for key */
+                                ilog = &krec->kr_ilog;
+                                /** fall through to cache re-cache entry */
                                 /* ilog != NULL && (flags & SUBTR_CREATE) */
                                 vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
                                         /* !DAOS_ON_VALGRIND */
-                                tmprc = vos_ilog_ts_add(ts_set, ilog, key->iov_buf, (int)key->iov_len);
+                                /* Check if the timestamps associated with the ilog are in cache.  If so, add them to the set. */
+                                /* void *iov_buf; buffer address */
+                                /* size_t iov_len; data length */
+                                tmprc = vos_ilog_ts_add(ts_set, ilog, record = key->iov_buf, rec_size = (int)key->iov_len);
                                         /* vos_ts_in_tx(ts_set) == true */
                                         /* ilog != NULL */
-                                        idx = ilog_ts_idx_get(ilog);
+                                        idx = ilog_ts_idx_get(root = ilog);
+                                                return &root->lr_ts_idx;
                                         vos_ts_set_add(ts_set, idx, record, rec_size);
-                                               /* XXX */ 
+                                                hash = vos_hash_get(buf = rec, len = rec_size, false);
+                                                        return d_hash_murmur64(buf, len, BTR_MUR_SEED);
+                                                /* idx != NULL */
+                                                /* Allocate a new entry in the set. */
+                                                entry = vos_ts_alloc(ts_set, idx, hash);
+                                                        struct vos_ts_set_entry	 set_entry = {0};
+                                                        struct vos_ts_entry *new_entry;
+                                                        ts_table = vos_ts_table_get(false);
+                                                                /* struct vos_ts_table *vtl_ts_table; Timestamp table for xstream */
+                                                                return vos_tls_get(standalone)->vtl_ts_table;
+                                                        /* Use the parent entry to get the type info and hash offset for the current object/key. */
+                                                        vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
+                                                        /** By combining the parent entry offset, we avoid using the same
+                                                         *  index for every key with the same value.
+                                                         */
+                                                        hash_idx = vos_ts_get_hash_idx(info, hash, hash_offset);
+                                                        /* Internal function to evict LRU and initialize an entry */
+                                                        /* uint32_t ti_type; Type identifier */
+                                                        vos_ts_evict_lru(ts_table, &new_entry, idx, hash_idx, info->ti_type);
+                                                        /* struct vos_ts_entry *se_entry; Pointer to the entry at this level */
+                                                        set_entry.se_entry = new_entry;
+                                                        /** No need to save allocation hash for non-negative entry */
+                                                        /* struct vos_ts_set_entry ts_entries[0]; timestamp entries */
+                                                        /* uint32_t ts_init_count; Number of initialized entries */
+                                                        ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
                                 /* tmprc == 0 */
                                 /* sub_toh != NULL */
+				/* created == false */
                                 rc = tree_open_create(obj, tclass, flags, krec, created, sub_toh);
+                                        struct umem_attr *uma = vos_obj2uma(obj);
+                                        struct vos_pool *pool = vos_obj2pool(obj);
+                                        /* struct vos_container *obj_cont; backref to container */
+                                        daos_handle_t coh = vos_cont2hdl(obj->obj_cont);
+                                        struct evt_desc_cbs cbs; /* Callbacks and parameters for evtree descriptor */
+                                        vos_evt_desc_cbs_init(&cbs, pool, coh);
                                         /* !(flags & SUBTR_EVT) */
-                                        dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
-                                                rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, coh, priv, &tcx);
+                                        /* Open a btree from the root address. */
+                                        /* struct btr_root kr_btr; btree root under the key */
+                                        dbtree_open_inplace_ex(root = &krec->kr_btr, uma, coh, priv = pool, sub_toh);
+                                                struct btr_context *tcx;
+                                                /* Create a btree context (in volatile memory). */
+                                                /* XXX The comment above is misleading. Note use of PMDK below. */
+                                                rc = btr_context_create(root_off = BTR_ROOT_NULL, root, tree_class = -1, tree_feats = -1, tree_order = -1, uma, coh, priv, &tcx);
+                                                        /**
+                                                         * Initialize a tree instance from a registered tree class.
+                                                         */
                                                         rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma, coh, priv, &tcx->tc_tins);
+                                                                /* Instantiate a memory class \a umm by attributes in \a uma */
                                                                 rc = umem_class_init(uma, &tins->ti_umm);
+                                                                        /** Workout the necessary offsets and base address for the pool */
                                                                         set_offsets(umm);
-                                                                                switch (umm->umm_id) {
-                                                                                case UMEM_CLASS_PMEM:
-                                                                                        root_oid = pmemobj_root(pop, 0);
-                                                                                        root = pmemobj_direct(root_oid);
+                                                                                /* umm->umm_id == UMEM_CLASS_PMEM */
+                                                                                root_oid = pmemobj_root(pop, 0);
+                                                                                root = pmemobj_direct(root_oid);
+                                                                                umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
+                                                                                umm->umm_base = (uint64_t)root - root_oid.off;
                                                                 /* tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT */
                                                                 *tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
                                                         /* rc == 0 */
                                                         btr_context_set_depth(tcx, depth);
+                                                        /** create handle for the tree context */
+                                                        *toh = btr_tcx2hdl(tcx);
                                                 /* rc == 0 */
                                 /* rc == 0 */
+                                /* For updates, we need to be able to modify the epoch range */
+                                /* krecp != NULL */
+                                *krecp = krec;
                         /* rc == 0 */
                         /* ioc->ic_ts_set != NULL */
                         rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr, ioc->ic_bound, &obj->obj_ilog_info, &ioc->ic_dkey_info, update_cond, ioc->ic_ts_set);
