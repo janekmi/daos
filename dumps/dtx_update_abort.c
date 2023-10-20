@@ -15,11 +15,11 @@ vts_dtx_begin // a test-specific dtx_begin() altenative
                         cont = vos_hdl2cont(dth->dth_coh); /* VOS container (DRAM) */
                         /* struct lru_array *vc_dtx_array; Array for active DTX records */
                         rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
-	                /* struct dtx_id dae_xid; The DTX identifier. */
+                        /* struct dtx_id dae_xid; The DTX identifier. */
                         d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
-	                d_iov_set(&riov, dae, sizeof(*dae));
+                        d_iov_set(&riov, dae, sizeof(*dae));
                         /* Update the value of the provided key, or insert it as a new key if there is no match.*/
-	                /* daos_handle_t vc_dtx_active_hdl; The handle for active DTX table (dbtree_create_inplace_ex) */
+                        /* daos_handle_t vc_dtx_active_hdl; The handle for active DTX table (dbtree_create_inplace_ex) */
                         /** the B+ tree for active DTXs. (DRAM) */
                         dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key=&kiov, value=&riov, NULL);
                         dth->dth_ent = dae; /* Pointer to the DTX entry in DRAM. */
@@ -350,7 +350,7 @@ io_test_obj_update
                                 bool has_cond = cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT;
                                 /* has_cond == false */
                                 /* Checking and updating incarnation log in range 0-1398cddef0840001 */
-				/* Do a fetch first.  The log may already exist */
+                                /* Do a fetch first.  The log may already exist */
                                 /* Read (or refresh) the incarnation log into \p entries.  Internally, this will be a noop if the arguments are the same and nothing has changed since the last invocation. */
                                 rc = vos_ilog_fetch(umm = vos_cont2umm(cont), coh = vos_cont2hdl(cont), intent = DAOS_INTENT_UPDATE, ilog, epoch = epr->epr_hi, bound, has_cond, punched = NULL, parent, info);
                                         daos_epoch_range_t epr;
@@ -511,23 +511,23 @@ io_test_obj_update
                 err = dkey_update(ioc, pm_ver, dkey, (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX));
                         rc = obj_tree_init(obj);
                                 /* daos_handle_is_valid(obj->obj_toh) == true */
-                        struct vos_object	*obj = ioc->ic_obj;
+                        struct vos_object *obj = ioc->ic_obj;
                         /* Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off of btree VOS_BTR_DKEY/VOS_BTR_AKEY. */
-                        struct vos_krec_df	*krec;
+                        struct vos_krec_df *krec;
                         daos_handle_t ak_toh;
                         /*
                          * daos_handle_t obj_toh; dkey tree open handle of the object (volatile)
                          * VOS_BTR_DKEY - distribution key tree
-                         * SUBTR_CREATE	< may create the subtree
+                         * SUBTR_CREATE < may create the subtree
                          * DAOS_INTENT_UPDATE - write/insert
                          */
-			 /* Load the subtree roots embedded in the parent tree record. */
+                         /* Load the subtree roots embedded in the parent tree record. */
                         rc = key_tree_prepare(obj, toh = obj->obj_toh, tclass = VOS_BTR_DKEY, key = dkey, flags = SUBTR_CREATE, intent = DAOS_INTENT_UPDATE, &krec, sub_toh = &ak_toh, ts_set = ioc->ic_ts_set);
                                 /* Data structure which carries the value buffers, checksums and memory IDs to the multi-nested btree. */
-				struct vos_rec_bundle rbund;
+                                struct vos_rec_bundle rbund;
                                 d_iov_t riov;
-				created = false;
-				/** reset the saved hash */
+                                created = false;
+                                /** reset the saved hash */
                                 vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
                                 /* krecp != NULL */
                                 *krecp = NULL;
@@ -574,7 +574,7 @@ io_test_obj_update
                                                 /* idx != NULL */
                                                 /* Allocate a new entry in the set. */
                                                 entry = vos_ts_alloc(ts_set, idx, hash);
-                                                        struct vos_ts_set_entry	 set_entry = {0};
+                                                        struct vos_ts_set_entry  set_entry = {0};
                                                         struct vos_ts_entry *new_entry;
                                                         ts_table = vos_ts_table_get(false);
                                                                 /* struct vos_ts_table *vtl_ts_table; Timestamp table for xstream */
@@ -596,7 +596,7 @@ io_test_obj_update
                                                         ts_set->ts_entries[ts_set->ts_init_count++] = set_entry;
                                 /* tmprc == 0 */
                                 /* sub_toh != NULL */
-				/* created == false */
+                                /* created == false */
                                 rc = tree_open_create(obj, tclass, flags, krec, created, sub_toh);
                                         struct umem_attr *uma = vos_obj2uma(obj);
                                         struct vos_pool *pool = vos_obj2pool(obj);
