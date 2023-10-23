@@ -381,7 +381,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         /* biod->bd_completion == NULL */
                         /* biod->bd_dma_done == ABT_EVENTUAL_NULL */
         /* rc == 0 && (arg->ta_flags & TF_ZERO_COPY) */
-        vos_update_end(ioh, 0, dkey, rc, NULL, dth);
+        vos_update_end(ioh, pm_ver = 0, dkey, rc, NULL, dth);
                 struct vos_io_context *ioc = vos_ioh2ioc(ioh); /** I/O context */
                 vos_dedup_verify_fini(ioh);
                         /* ioc->ic_dedup_bsgls == NULL */ /** duped SG lists for dedup verify */
@@ -660,7 +660,7 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         obj->obj_sync_epoch = obj->obj_df->vo_sync;
                         /* obj != &obj_local */
                 /* err == 0 */
-                err = dkey_update(ioc, pm_ver, dkey, (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX));
+                err = dkey_update(ioc, pm_ver, dkey, minor_epc = (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX));
                         rc = obj_tree_init(obj);
                                 /* daos_handle_is_valid(obj->obj_toh) == true */
                         rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh, ioc->ic_ts_set);
@@ -675,6 +675,10 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                                         rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
                                         btr_rec_fetch(tcx, rec, key_out, val_out);
                                                 ktr_rec_fetch /* btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, key, val); */
+                                                        struct vos_krec_df *krec = vos_rec2krec(tins, rec);
+                                                        struct vos_rec_bundle *rbund = iov2rec_bundle(val_iov);
+                                                        rbund->rb_krec = krec;
+                                                        /* key_iov == NULL */
                                 /* rc == 0 */
                                 /* ilog != NULL && (flags & SUBTR_CREATE) */
                                 vos_ilog_ts_ignore(vos_obj2umm(obj), &krec->kr_ilog);
@@ -717,91 +721,168 @@ io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, verbose = true)
                         for (i = 0; i < ioc->ic_iod_nr; i++) {
                                 iod_set_cursor(ioc, i);
                                 rc = akey_update(ioc, pm_ver, ak_toh, minor_epc);
+                                        struct vos_object *obj = ioc->ic_obj;
+                                        /* Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off of btree VOS_BTR_DKEY/VOS_BTR_AKEY. */
+                                        struct vos_krec_df *krec = NULL;
+                                        daos_handle_t toh = DAOS_HDL_INVAL;
                                         rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY, &iod->iod_name, flags, DAOS_INTENT_UPDATE, &krec, &toh, ioc->ic_ts_set);
-                                                rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key, NULL, &riov);
-                                                        rc = btr_probe_key(tcx, opc, intent, key);
-                                                        /* rc == PROBE_RC_OK */
-                                                        btr_rec_fetch(tcx, rec, key_out, val_out);
                                                 /* XXX */
                                         /* rc == 1 */
                                         /* ioc->ic_ts_set != NULL */
                                         rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr, ioc->ic_bound, &ioc->ic_dkey_info, &ioc->ic_akey_info, update_cond, ioc->ic_ts_set);
-                                                /* parent != NULL */
-                                                /** Do a fetch first.  The log may already exist */
-                                                rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont), DAOS_INTENT_UPDATE, ilog, epr->epr_hi, bound, has_cond, NULL, parent, info);
-                                                /* rc == 0 */
+                                                /* XXX */
                                         /* rc == 0 */
                                         /* iod->iod_type == DAOS_IOD_SINGLE */
-                                        rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc, minor_epc);
+                                        uint64_t gsize = iod->iod_size;
+                                        /* ioc->ic_ec == 0; Operation on EC object */
+                                        rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc, minor_epc);                                                
+                                                struct vos_svt_key key; /* Single value key */
+                                                /* daos_epoch_range_t ic_epr; Epoch range*/
+                                                epoch = ioc->ic_epr.epr_hi;
+                                                struct dcs_csum_inifo csum;
+                                                ci_set_null(&csum);
+                                                        ci_set(csum_buf, NULL, 0, 0, 0, 0, 0);
+                                                d_iov_t kiov, riov;
+                                                d_iov_set(&kiov, &key, sizeof(key));
+                                                key.sk_epoch = epoch; /** Epoch of entry */
+                                                key.sk_minor_epc = minor_epc; /** Minor epoch of entry */
+                                                umem_off_t umoff = iod_update_umoff(ioc);
+                                                        /* umem_off_t *ic_umoffs; reserved offsets for SCM update */
+                                                        umoff = ioc->ic_umoffs[ioc->ic_umoffs_at];
+                                                        ioc->ic_umoffs_at++;
+                                                        return umoff;
+                                                /* ioc->ic_iov_at == 0 */
                                                 biov = iod_update_biov(ioc);
-                                                        bsgl = bio_iod_sgl(ioc->ic_biod, ioc->ic_sgl_at);
-                                                rc = dbtree_update(toh, &kiov, &riov);
+                                                        /* struct bio_desc *ic_biod; BIO descriptor */
+	                                                /* unsigned int	ic_sgl_at; cursor of SGL in BIO descriptor */
+                                                        bsgl = bio_iod_sgl(biod = ioc->ic_biod, idx = ioc->ic_sgl_at);
+	                                                        /* struct bio_sglist bd_sgls[0]; SG lists involved in this io descriptor */
+                                                                return &biod->bd_sgls[idx];
+	                                                /* unsigned int ic_iov_at; cursor of SGL & IOV in BIO descriptor */
+                                                        biov = &bsgl->bs_iovs[ioc->ic_iov_at];
+                                                        ioc->ic_iov_at++;
+                                                        return biov;
+                                                struct vos_rec_bundle rbund;
+                                                tree_rec_bundle2iov(&rbund, iov = &riov);
+                                                        memset(rbund, 0, sizeof(*rbund));
+                                                        d_iov_set(iov, rbund, sizeof(*rbund));
+                                                struct dcs_csum_info *value_csum = vos_csum_at(iod_csums = ioc->ic_iod_csums, ioc->ic_sgl_at);
+                                                        /* iod_csums == NULL */
+                                                        return NULL;
+                                                /* value_csum == NULL */
+                                                rbund.rb_csum = &csum; /* checksum buffer for the daos key */
+                                                rbund.rb_biov = biov; /* Single value record IOV. */
+                                                rbund.rb_rsize = rsize; /* input record size */
+                                                rbund.rb_gsize = gsize; /* global record size, needed for EC singv record */
+                                                rbund.rb_off = umoff; /* Optional, externally allocated buffer umoff */
+                                                rbund.rb_ver = pm_ver; /* pool map version */
+                                                /* Update value of the provided key. */
+                                                rc = dbtree_update(toh, key = &kiov, value = &riov);
                                                         rc = btr_tx_begin(tcx);
-                                                                /* btr_has_tx(tcx) */
-                                                                umem_tx_begin /* umem_tx_begin(btr_umm(tcx), NULL); */
-                                                                        pmem_tx_begin /* umm->umm_ops->mo_tx_begin(umm, txd); */
-                                                                                /* txd == NULL */
-                                                                                pmemobj_tx_begin(pop, NULL, TX_PARAM_NONE);
+                                                                ... pmemobj_tx_begin(pop, NULL, TX_PARAM_NONE);
                                                         rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val, NULL);
-                                                                /* probe_opc != BTR_PROBE_BYPASS */
-                                                                rc = btr_probe_key(tcx, probe_opc, intent, key);
-                                                                        /* XXX */
-                                                                /* rc == 1 */
-                                                                switch (rc) {
-                                                                case PROBE_RC_NONE:
-                                                                        rc = btr_insert(tcx, key, val, val_out);
-                                                                                /* tcx->tc_depth != 0 */
-                                                                                rc = btr_node_insert_rec(tcx, trace, rec);
-                                                                                        /* btr_root_resize_needed(tcx) == true */
-                                                                                        rc = btr_root_resize(tcx, trace, &node_alloc);
-                                                                                                /* btr_has_tx(tcx) == true */
-                                                                                                rc = btr_root_tx_add(tcx);
-                                                                                                        /* !UMOFF_IS_NULL(tins->ti_root_off) */
-                                                                                                        rc = umem_tx_add_ptr(btr_umm(tcx), tcx->tc_tins.ti_root, sizeof(struct btr_root));
-                                                                                                                pmem_tx_add_ptr /* umm->umm_ops->mo_tx_add_ptr(umm, ptr, size); */
-                                                                                                                        rc = pmemobj_tx_add_range_direct(ptr, size);
-                                                                                                rc = btr_node_alloc(tcx, &nd_off);
-                                                                                                        /* btr_ops(tcx)->to_node_alloc != NULL */
-                                                                                                        svt_node_alloc /* nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins, btr_node_size(tcx)); */ 
-                                                                                                                pmem_tx_alloc /* umem_zalloc(&tins->ti_umm, size); */
-                                                                                                                        pmemobj_tx_xalloc(size, type_num, pflags)
-                                                                                                /* rc == 0 */
-                                                                                                memcpy(btr_off2ptr(tcx, nd_off), nd, old_size);
-                                                                                                btr_node_free(tcx, old_node);
-                                                                                                        pmem_tx_free /* rc = umem_free(btr_umm(tcx), nd_off); */
-                                                                                                        /* !UMOFF_IS_NULL(umoff) */
-                                                                                                        rc = pmemobj_tx_free(umem_off2id(umm, umoff));
-                                                                                        /* rc == 0 */
-                                                                                        /* !btr_node_is_full(tcx, trace->tr_node) */
-                                                                                         rc = btr_node_insert_rec_only(tcx, trace, rec);
-                                                                                                /* nd->tn_keyn > 0 */
-                                                                                                rc = btr_check_availability(tcx, &alb);
-                                                                                                        /* btr_ops(tcx)->to_check_availability != NULL */
-                                                                                                        /* btr_node_is_leaf(tcx, alb->nd_off) == true */
-                                                                                                        rec = btr_node_rec_at(tcx, alb->nd_off, alb->at);
-                                                                                                        svt_check_availability /* rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec, alb->intent); */
-                                                                                                                vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc, intent, DTX_RT_SVT, true);
-                                                                                                                        /* type == DTX_RT_SVT */
-                                                                                                                        /* intent == DAOS_INTENT_CHECK (5) */
-                                                                                                                        /* XXX */
-                                                                                                        /* rc == ALB_AVAILABLE_CLEAN (1) */
-                                                                                                /* rc == PROBE_RC_OK (2) */
-                                                                                                rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
-                                                                                                /* reuse == false */
-                                                                                                /* trace->tr_at == nd->tn_keyn */
-                                                                                                btr_rec_copy(tcx, rec_a, rec, 1);
-                                                                                                        memcpy(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
-                                                                                        /* rc == 0 */
+                                                                ... svt_rec_alloc(key_iov, val_iov, rec, val_out)
+                                                                        struct vos_svt_key *skey = key_iov->iov_buf;
+                                                                        struct vos_rec_bundle *rbund = val_iov->iov_buf;
+                                                                        return svt_rec_alloc_common(tins, rec, skey, rbund);
+                                                                                /* Persisted VOS single value & epoch record, it is referenced by btr_record::rec_off of btree VOS_BTR_SINGV. */
+                                                                                struct vos_irec_df *irec;
+                                                                                /* Single value is always pre-allocated so rbund->rb_off should be pointer to it. */
+                                                                                D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
+                                                                                rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund), UMEM_XADD_NO_SNAPSHOT);
+                                                                                        /* Size of metadata without user payload */
+                                                                                        vos_irec_msize(rbund)
+                                                                                                uint64_t size = 0;
+                                                                                                /* rbund->rb_csum != NULL */
+                                                                                                size = vos_size_round(rbund->rb_csum->cs_len) /* size round up */
+                                                                                                return size + sizeof(struct vos_irec_df);
+                                                                                        pmem_tx_xadd /* return umm->umm_ops->mo_tx_xadd(umm, umoff, offset = 0, size, flags); */
+                                                                                                /* umem_off2id(); Convert an offset to an id */
+                                                                                                pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size, pflags);
+                                                                                /**
+                                                                                 * It could either be memory ID for the child node, or body of this
+                                                                                 * record. The record body could be any of various things:
+                                                                                 *
+                                                                                 * - the value address of KV record.
+                                                                                 * - a structure includes both the variable-length key and value.
+                                                                                 * - a complex data structure under this record, e.g. a sub-tree.
+                                                                                 */
+                                                                                rec->rec_off = rbund->rb_off;
+                                                                                rbund->rb_off = UMOFF_NULL; /* taken over by btree */
+                                                                                irec = vos_rec2irec(tins, rec);
+                                                                                        return (struct vos_irec_df *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+                                                                                /* The caller has started local transaction. */
+                                                                                /* Register the record (to be modified) to the DTX entry. */
+                                                                                /* uint32_t ir_dtx; The DTX entry in SCM. */
+                                                                                rc = vos_dtx_register_record(&tins->ti_umm, record = rec->rec_off, type = DTX_RT_SVT, tx_id = &irec->ir_dtx);
+                                                                                        struct dtx_handle *dth = vos_dth_get(umm->umm_pool->up_store.store_standalone);
+                                                                                        /* dth != NULL */
+                                                                                        /* dtx_is_real_handle(dth) == false */
+                                                                                        /* void *dth_ent; Pointer to the DTX entry in DRAM. */
+                                                                                        dae = dth->dth_ent;
+                                                                                        /* There must has been vos_dtx_attach() before vos_dtx_register_record(). */
+                                                                                        D_ASSERT(dae != NULL);
+	                                                                                /* (dth->dth_solo) == false; Only one participator in the DTX. */
+                                                                                        /* (!dth->dth_active) == true; The DTX entry is in active table.*/
+                                                                                        cont = vos_hdl2cont(dth->dth_coh);
+                                                                                        /* cont != NULL */
+                                                                                        umm = vos_cont2umm(cont);
+                                                                                        /* struct vos_cont_df *vc_cont_df; Direct pointer to the VOS container */
+                                                                                        cont_df = cont->vc_cont_df;
+                                                                                        /* umem_off_t cd_dtx_active_tail; The active DTXs blob tail. */
+                                                                                        /* cont_df->cd_dtx_active_tail == 0 */
+                                                                                        /* umem_off_t cd_dtx_active_tail; The active DTXs blob tail. */
+                                                                                        struct vos_dtx_blob_df *dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
+                                                                                        /* dbd == NULL? <optimized out> */
+                                                                                        vos_dtx_extend_act_table(cont);
+                                                                                                /* XXX */
+                                                                                        dbd = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
+                                                                                        /* dbd->dbd_magic == DTX_ACT_BLOB_MAGIC */
+                                                                                        /* struct vos_dtx_act_ent_df dbd_active_data[0]; Append only DTX entries in the blob. */
+                                                                                        /* struct vos_dtx_act_ent_df; Active DTX entry on-disk layout in both SCM and DRAM. */
+	                                                                                /* int dbd_index; The next available slot for active DTX entry in the blob. */
+                                                                                        dae->dae_df_off = cont_df->cd_dtx_active_tail +
+                                                                                                offsetof(struct vos_dtx_blob_df, dbd_active_data) +
+                                                                                                sizeof(struct vos_dtx_act_ent_df) * dbd->dbd_index;
+                                                                                        dae->dae_dbd = dbd;
+                                                                                        dth->dth_active = 1;
+                                                                                        vos_dtx_append(dth, record, type);
+                                                                                                /* XXX */
+                                                                                        /* Incarnation log entry implies a share */
+                                                                                        /* #define DAE_LID(dae) ((dae)->dae_base.dae_lid) */
+                                                                                        /* uint32_t dae_lid; The allocated local id for the DTX entry */
+                                                                                        *tx_id = DAE_LID(dae);
+                                                                                        /* type == DTX_RT_SVT */
                                                                                 /* rc == 0 */
-                                                                tcx->tc_probe_rc = PROBE_RC_UNKNOWN; /* path changed */
+                                                                                rc = svt_rec_store(tins, rec, skey, rbund);
+                                                                                        /* struct vos_irec_df; Persisted VOS single value & epoch record, it is referenced by btr_record::rec_off of btree VOS_BTR_SINGV. */
+                                                                                        struct vos_irec_df *irec = vos_rec2irec(tins, rec);
+                                                                                        struct dtx_handle *dth = vos_dth_get(cont->vc_pool->vp_sysdb);
+                                                                                        struct dcs_csum_info *csum = rbund->rb_csum; /* checksum buffer for the daos key */
+                                                                                        struct bio_iov *biov = rbund->rb_biov;
+                                                                                        /* bio_iov2len(biov) == rbund->rb_rsize */
+                                                                                        irec->ir_cs_size = csum->cs_len; /** key checksum size (in bytes) */
+                                                                                        irec->ir_cs_type = csum->cs_type; /** key checksum type */
+                                                                                        irec->ir_size = bio_iov2len(biov); /** length of value */
+                                                                                        /**
+                                                                                         * global length of value, it is needed for single value of EC object
+                                                                                         * class that the data will be distributed to multiple data cells.
+                                                                                         */
+                                                                                        irec->ir_gsize = rbund->rb_gsize;
+                                                                                        irec->ir_ex_addr = biov->bi_addr; /** external payload address */
+                                                                                        irec->ir_ver = rbund->rb_ver; /** pool map version */
+                                                                                        irec->ir_minor_epc = skey->sk_minor_epc; /** Minor epoch of entry */
+                                                                                        /* irec->ir_size != 0 */
+                                                                                        /* at this point, it's assumed that enough was allocated for the irec to hold a checksum of length csum->cs_len */
+                                                                                        /* dtx_is_valid_handle(dth) == false */
+                                                                                        memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
+                                                                                                vos_irec2csum(irec)
+                                                                                                        /* char ir_body[0]; placeholder for the key checksum & internal value */
+                                                                                                        return irec->ir_cs_size == 0 ? NULL : &irec->ir_body[0];
+                                                                                /* rc == 0 */
                                                         btr_tx_end(tcx, rc);
-                                                                /* btr_has_tx(tcx) == true */
-                                                                rc = umem_tx_commit(btr_umm(tcx));
-                                                                        umem_tx_commit_ex(umm, NULL);
-                                                                                pmem_tx_commit /* umm->umm_ops->mo_tx_commit(umm, data); */
-                                                                                        pmemobj_tx_commit();
-                                                                                        rc = pmemobj_tx_end();
-                                        /* rc == 0 */
+                                                                ... pmemobj_tx_end();
+                                                /* rc == 0 */
                                         /* daos_handle_is_valid(toh) */
                                         key_tree_release(toh, is_array);
                                                 /* is_array == false */
