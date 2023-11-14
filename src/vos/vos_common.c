@@ -271,6 +271,15 @@ vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dthp)
 		goto error1;
 	}
 
+	/**
+	 * RDB is intended as the main user of local transactions. RDB is known
+	 * to engage over 32 OIDs per transaction. Hence, the initial value is
+	 * hoped to accommodate all of them.
+	 */
+	dth->dth_local_oid_cap = (1 << 6);
+	dth->dth_local_oid_cnt = 0;
+	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
+
 	pool = vos_hdl2pool(poh);
 	umm  = vos_pool2umm(pool);
 
@@ -288,6 +297,16 @@ error2:
 error1:
 	D_FREE(dth);
 	return rc;
+}
+
+static inline void
+vos_local_tx_abort(struct dtx_handle *dth) {
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		struct dtx_local_oid_record *record = &dth->dth_local_oid_array[i];
+		struct vos_container *cont = record->dor_cont;
+		struct daos_lru_cache *occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+		(void) vos_obj_evict_by_oid(occ, cont, record->dor_oid);
+	}
 }
 
 static inline int
@@ -347,6 +366,10 @@ commit:
 
 cancel:
 	if (dtx_is_valid_handle(dth)) {
+		if (dth->dth_local && err != 0) {
+			vos_local_tx_abort(dth);
+		}
+
 		dae = dth->dth_ent;
 		if (dae != NULL) {
 			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
@@ -454,6 +477,14 @@ vos_local_tx_end(struct dtx_handle *dth, int err)
 
 	/** We stored the pool handle in the dth_coh field in this case */
 	rc = vos_tx_end_internal(vos_hdl2pool(dth->dth_coh), dth, NULL, NULL, NULL, err);
+
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
+	}
+
+	dth->dth_local_oid_cnt = 0;
+	D_FREE(dth->dth_local_oid_array);
+	dth->dth_local_oid_cap = 0;
 
 	vos_dtx_rsrvd_fini(dth);
 	D_FREE(dth);

@@ -2288,6 +2288,33 @@ update_cancel(struct vos_io_context *ioc)
 			  true /* abort */);
 }
 
+static int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid) {
+	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
+		struct dtx_local_oid_record *oid_array;
+
+		D_ALLOC_ARRAY(oid_array, dth->dth_local_oid_cap << 1);
+		if (oid_array == NULL)
+			return -DER_NOMEM;
+
+		memcpy(&oid_array[0], &dth->dth_local_oid_array[0],
+			sizeof(*oid) * dth->dth_local_oid_cnt);
+
+		D_FREE(dth->dth_local_oid_array);
+		dth->dth_local_oid_array = oid_array;
+		dth->dth_local_oid_cap <<= 1;
+	}
+
+	struct dtx_local_oid_record *record =
+		&dth->dth_local_oid_array[dth->dth_local_oid_cnt];
+	record->dor_cont = cont;
+	vos_cont_addref(cont);
+	record->dor_oid = *oid;
+	dth->dth_local_oid_cnt++;
+
+	return 0;
+}
+
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
@@ -2354,6 +2381,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_set_check_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
 		err = -DER_TX_RESTART;
 		goto abort;
+	}
+
+	if (dtx_is_valid_handle(dth) && dth->dth_local) {
+		err = vos_insert_oid(dth, ioc->ic_cont, &ioc->ic_oid);
 	}
 
 abort:

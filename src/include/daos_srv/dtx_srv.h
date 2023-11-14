@@ -27,6 +27,14 @@ struct dtx_share_peer {
 	struct dtx_memberships	*dsp_mbs;
 };
 
+/** XXX */
+struct dtx_local_oid_record {
+	/** XXX */
+	struct vos_container *dor_cont;
+	/** XXX */
+	daos_unit_oid_t dor_oid;
+};
+
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -138,6 +146,13 @@ struct dtx_handle {
 	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
+
+	/** XXX */
+	uint16_t			 dth_local_oid_cnt;
+	/** XXX */
+	uint16_t			 dth_local_oid_cap;
+	/** XXX */
+	struct dtx_local_oid_record	*dth_local_oid_array;
 };
 
 /* Each sub transaction handle to manage each sub thandle */
