@@ -2731,9 +2731,10 @@ local_transaction(void **state)
 		assert_memory_equal(buf, buf2, sizeof(buf));
 	}
 
-	iod.iod_size  = strlen(first);
-	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 	for (i = 0; i < 2; i++) {
+		iod.iod_size  = strlen(first);
+		d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
+
 		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
 		assert_rc_equal(rc, 0);
 
