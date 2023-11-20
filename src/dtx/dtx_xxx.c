@@ -7,8 +7,8 @@
  * dtx: XXX
  */
 #include <daos_types.h>
-#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
+#include "dtx_internal.h"
 
 /** VOS reserves highest two minor epoch values for internal use so we must
  *  limit the number of dtx sub modifications to avoid conflict.
@@ -140,6 +140,7 @@ dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
 	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 }
 
+#ifndef XXX_NO_LEADER
 /**
  * Prepare the leader DTX handle in DRAM.
  *
@@ -213,6 +214,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 
 	return rc;
 }
+#endif /* XXX_NO_LEADER */
 
 /**
  * Prepare the DTX handle in DRAM.
@@ -267,4 +269,337 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 		*p_dth = dth;
 
 	return rc;
+}
+
+static void
+dtx_shares_fini(struct dtx_handle *dth)
+{
+	struct dtx_share_peer	*dsp;
+
+	if (!dth->dth_shares_inited)
+		return;
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		dtx_dsp_free(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		dtx_dsp_free(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		dtx_dsp_free(dsp);
+
+	while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
+				       struct dtx_share_peer,
+				       dsp_link)) != NULL)
+		dtx_dsp_free(dsp);
+
+	dth->dth_share_tbd_count = 0;
+}
+
+#ifndef XXX_NO_LEADER
+
+/**
+ * Stop the leader thandle.
+ *
+ * \param dlh		[IN]	The DTX handle on leader node.
+ * \param cont		[IN]	Per-thread container cache.
+ * \param result	[IN]	Operation result.
+ *
+ * \return			Zero on success, negative value if error.
+ */
+int
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result)
+{
+	struct ds_cont_child		*cont = coh->sch_cont;
+	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_entry		*dte;
+	struct dtx_memberships		*mbs;
+	size_t				 size;
+	uint32_t			 flags;
+	int				 status = -1;
+	int				 rc = 0;
+	bool				 aborted = false;
+	bool				 unpin = false;
+
+	D_ASSERT(cont != NULL);
+
+	dtx_shares_fini(dth);
+
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
+		goto out;
+
+	if (unlikely(coh->sch_closed)) {
+		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
+			DP_UUID(coh->sch_uuid));
+		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
+		    result == -DER_STALE || daos_crt_network_error(result))
+			result = -DER_IO;
+		goto abort;
+	}
+
+	/* For solo transaction, the validation has already been processed inside vos
+	 * when necessary. That is enough, do not need to revalid again.
+	 */
+	if (dth->dth_solo)
+		goto out;
+
+	if (dth->dth_need_validation) {
+		/* During waiting for bulk data transfer or other non-leaders, the DTX
+		 * status may be changes by others (such as DTX resync or DTX refresh)
+		 * by race. Let's check it before handling the case of 'result < 0' to
+		 * avoid aborting 'ready' one.
+		 */
+		status = vos_dtx_validation(dth);
+		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
+			     status == DTX_ST_COMMITTING))
+			D_GOTO(out, result = -DER_ALREADY);
+	}
+
+	if (result < 0)
+		goto abort;
+
+	switch (status) {
+	case -1:
+		break;
+	case DTX_ST_PREPARED:
+		if (likely(!dth->dth_aborted))
+			break;
+		/* Fall through */
+	case DTX_ST_INITED:
+	case DTX_ST_PREPARING:
+		aborted = true;
+		result = -DER_AGAIN;
+		goto out;
+	case DTX_ST_ABORTED:
+	case DTX_ST_ABORTING:
+		aborted = true;
+		result = -DER_INPROGRESS;
+		goto out;
+	default:
+		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
+	}
+
+	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
+		/* We do not know whether some other participants have
+		 * some active entry for this DTX, consider distributed
+		 * transaction case, the other participants may execute
+		 * different operations. Sync commit the DTX for safe.
+		 */
+		dth->dth_sync = 1;
+		goto sync;
+	}
+
+	/* For standalone modification, if leader modified nothing, then
+	 * non-leader(s) must be the same, unpin the DTX via dtx_abort().
+	 */
+	if (!dth->dth_active) {
+		unpin = true;
+		D_GOTO(abort, result = 0);
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
+		D_GOTO(abort, result = 0);
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
+		D_GOTO(abort, result = -DER_IO);
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+		dth->dth_sync = 1;
+
+	/* For synchronous DTX, do not add it into CoS cache, otherwise,
+	 * we may have no way to remove it from the cache.
+	 */
+	if (dth->dth_sync)
+		goto sync;
+
+	D_ASSERT(dth->dth_mbs != NULL);
+
+	size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
+	D_ALLOC(dte, size);
+	if (dte == NULL) {
+		dth->dth_sync = 1;
+		goto sync;
+	}
+
+	mbs = (struct dtx_memberships *)(dte + 1);
+	memcpy(mbs, dth->dth_mbs, size - sizeof(*dte));
+
+	dte->dte_xid = dth->dth_xid;
+	dte->dte_ver = dth->dth_ver;
+	dte->dte_refs = 1;
+	dte->dte_mbs = mbs;
+
+	/* Use the new created @dte instead of dth->dth_dte that will be
+	 * released after dtx_leader_end().
+	 */
+
+	if (!(mbs->dm_flags & DMF_SRDG_REP))
+		flags = DCF_EXP_CMT;
+	else if (dth->dth_modify_shared)
+		flags = DCF_SHARED;
+	else
+		flags = 0;
+	rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid,
+			 dth->dth_dkey_hash, dth->dth_epoch, flags);
+	dtx_entry_put(dte);
+	if (rc == 0) {
+		if (!DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE)) {
+			vos_dtx_mark_committable(dth);
+			if (cont->sc_dtx_committable_count >
+			    DTX_THRESHOLD_COUNT) {
+				struct dss_module_info	*dmi;
+
+				dmi = dss_get_module_info();
+				sched_req_wakeup(dmi->dmi_dtx_cmt_req);
+			}
+		}
+	} else {
+		dth->dth_sync = 1;
+	}
+
+sync:
+	if (dth->dth_sync) {
+		/*
+		 * TBD: We need to reserve some space to guarantee that the local commit can be
+		 *	done successfully. That is not only for sync commit, but also for async
+		 *	batched commit.
+		 */
+		vos_dtx_mark_committable(dth);
+		dte = &dth->dth_dte;
+		rc = dtx_commit(cont, &dte, NULL, 1);
+		if (rc != 0)
+			D_WARN(DF_UUID": Fail to sync commit DTX "DF_DTI": "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
+
+		/*
+		 * NOTE: The semantics of 'sync' commit does not guarantee that all
+		 *	 participants of the DTX can commit it on each local target
+		 *	 successfully, instead, we try to commit the DTX immediately
+		 *	 after all participants claiming 'prepared'. But even if we
+		 *	 failed to commit it, we will not rollback the commit since
+		 *	 the DTX has been marked as 'committable' and may has been
+		 *	 accessed by others. The subsequent dtx_cleanup logic will
+		 *	 handle (re-commit) current failed commit.
+		 */
+		D_GOTO(out, result = 0);
+	}
+
+abort:
+	/* If some remote participant ask retry. We do not make such participant
+	 * to locally retry for avoiding related forwarded RPC timeout, instead,
+	 * The leader will trigger retry globally without abort 'prepared' ones.
+	 */
+	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
+		/* 1. Drop partial modification for distributed transaction.
+		 * 2. Remove the pinned DTX entry.
+		 */
+		vos_dtx_cleanup(dth, true);
+		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+		aborted = true;
+	}
+
+out:
+	if (unlikely(result == -DER_ALREADY))
+		result = 0;
+
+	if (!daos_is_zero_dti(&dth->dth_xid)) {
+		if (result < 0) {
+			/* 1. Drop partial modification for distributed transaction.
+			 * 2. Remove the pinned DTX entry.
+			 */
+			if (!aborted)
+				vos_dtx_cleanup(dth, true);
+
+			/* For solo DTX, just let client retry for DER_AGAIN case. */
+			if (result == -DER_AGAIN && dth->dth_solo)
+				result = -DER_INPROGRESS;
+		}
+
+		vos_dtx_rsrvd_fini(dth);
+		vos_dtx_detach(dth);
+	}
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
+	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
+	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	 */
+	if (result == 0 && dth->dth_cos_done) {
+		int	i;
+
+		for (i = 0; i < dth->dth_dti_cos_count; i++)
+			dtx_del_cos(cont, &dth->dth_dti_cos[i],
+				    &dth->dth_leader_oid, dth->dth_dkey_hash);
+	}
+
+	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
+		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
+		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
+
+	D_FREE(dth->dth_oid_array);
+	D_FREE(dlh);
+
+	return result;
+}
+#endif /* XXX_NO_LEADER */
+
+int
+dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
+{
+	D_ASSERT(dth != NULL);
+
+	dtx_shares_fini(dth);
+
+	if (daos_is_zero_dti(&dth->dth_xid))
+		goto out;
+
+	if (result < 0) {
+		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
+			int	rc;
+
+			/* NOTE: For non-leader participant, even if we fail to make
+			 *	 related modification for some reason, we still need
+			 *	 to commit the piggyback DTXs those may have already
+			 *	 been committed on other participants.
+			 *	 For leader case, it is not important even if we fail
+			 *	 to commit them, because they are still in CoS cache,
+			 *	 and can be committed next time.
+			 */
+			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
+					    dth->dth_dti_cos_count, NULL);
+			if (rc < 0)
+				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
+					DP_UUID(cont->sc_uuid), rc);
+			else
+				dth->dth_cos_done = 1;
+		}
+
+		/* 1. Drop partial modification for distributed transaction.
+		 * 2. Remove the pinned DTX entry.
+		 */
+		vos_dtx_cleanup(dth, true);
+	}
+
+	D_DEBUG(DB_IO,
+		"Stop the DTX "DF_DTI" ver %u, dkey %lu: "DF_RC"\n",
+		DP_DTI(&dth->dth_xid), dth->dth_ver,
+		(unsigned long)dth->dth_dkey_hash, DP_RC(result));
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
+	vos_dtx_rsrvd_fini(dth);
+	vos_dtx_detach(dth);
+
+out:
+	D_FREE(dth->dth_oid_array);
+	D_FREE(dth);
+
+	return result;
 }
