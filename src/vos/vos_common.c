@@ -243,62 +243,6 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 	return rc;
 }
 
-int
-vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dthp)
-{
-	struct dtx_handle    *dth;
-	struct vos_pool      *pool;
-	struct umem_instance *umm;
-	int                   rc;
-
-	D_ASSERTF(daos_handle_is_valid(poh), "Invalid pool handle");
-	D_ASSERTF(dthp != NULL, "NULL output parameter");
-
-	D_ALLOC_PTR(dth);
-	if (dth == NULL)
-		return -DER_NOMEM;
-
-	/** Use field to store pool handle */
-	dth->dth_coh = poh;
-	/** Mark it as special local handle, skip dtx internals */
-	dth->dth_local = 1;
-	dth->dth_xid.dti_hlc = 1;
-
-	dth->dth_modification_cnt = 256;
-	rc = vos_dtx_rsrvd_init(dth);
-	if (rc != 0) {
-		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
-		goto error1;
-	}
-
-	/**
-	 * RDB is intended as the main user of local transactions. RDB is known
-	 * to engage over 32 OIDs per transaction. Hence, the initial value is
-	 * hoped to accommodate all of them.
-	 */
-	dth->dth_local_oid_cap = (1 << 6);
-	dth->dth_local_oid_cnt = 0;
-	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
-
-	pool = vos_hdl2pool(poh);
-	umm  = vos_pool2umm(pool);
-
-	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
-	if (rc != 0) {
-		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
-		goto error2;
-	}
-
-	*dthp = dth;
-	return 0;
-
-error2:
-	vos_dtx_rsrvd_fini(dth);
-error1:
-	D_FREE(dth);
-	return rc;
-}
-
 static inline void
 vos_local_tx_abort(struct dtx_handle *dth) {
 	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
@@ -475,31 +419,6 @@ vos_tx_end(struct vos_container *cont, struct vos_pool *pool, struct dtx_handle 
 	}
 
 	return vos_tx_end_internal(pool, dth, rsrvd_scmp, nvme_exts, biod, err);
-}
-
-int
-vos_local_tx_end(struct dtx_handle *dth, int err)
-{
-	int rc;
-
-	/** Indicate to local tx that we want to actually commit */
-	dth->dth_local_complete = 1;
-
-	/** We stored the pool handle in the dth_coh field in this case */
-	rc = vos_tx_end_internal(vos_hdl2pool(dth->dth_coh), dth, NULL, NULL, NULL, err);
-
-	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
-		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
-	}
-
-	dth->dth_local_oid_cnt = 0;
-	D_FREE(dth->dth_local_oid_array);
-	dth->dth_local_oid_cap = 0;
-
-	vos_dtx_rsrvd_fini(dth);
-	D_FREE(dth);
-
-	return rc;
 }
 
 /**

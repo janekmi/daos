@@ -2736,7 +2736,6 @@ local_transaction(void **state)
 		iod.iod_size  = strlen(first);
 		d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
-		// rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
 		rc = dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL,
 			NULL, 0, DTX_LOCAL, NULL, &dth);
 		assert_rc_equal(rc, 0);
@@ -2762,7 +2761,6 @@ local_transaction(void **state)
 			memcpy(buf2, first, strlen(first));
 		}
 
-		// rc = vos_local_tx_end(dth, passed_rc);
 		rc = dtx_end(dth, NULL, passed_rc);
 		assert_rc_equal(rc, passed_rc);
 
