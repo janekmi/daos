@@ -2744,12 +2744,12 @@ local_transaction(void **state)
 				       NULL, &sgl, dth);
 		assert_rc_equal(rc, 0);
 
-		// rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 1, &iod,
-		// 		       NULL, &sgl, dth);
-		// assert_rc_equal(rc, 0);
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 1, &iod,
+				       NULL, &sgl, dth);
+		assert_rc_equal(rc, 0);
 
-		// rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 0, NULL, dth);
-		// assert_rc_equal(rc, 0);
+		rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 0, NULL, dth);
+		assert_rc_equal(rc, 0);
 
 		if (i == 0) {
 			/** Abort first time */
