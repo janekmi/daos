@@ -11,6 +11,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <stdarg.h>
+#include <daos_srv/dtx_srv.h>
 #include "vts_io.h"
 #include "vts_array.h"
 
@@ -2641,7 +2642,7 @@ local_transaction(void **state)
 	char                 buf[32];
 	char                 buf2[32];
 	daos_epoch_t         epoch = start_epoch;
-	struct dtx_handle   *dth;
+	struct dtx_handle   *dth = NULL;
 	const char          *first = "Hello";
 	char                 dkey_buf[4][UPDATE_DKEY_SIZE];
 	char                 akey_buf[UPDATE_AKEY_SIZE];
@@ -2735,7 +2736,9 @@ local_transaction(void **state)
 		iod.iod_size  = strlen(first);
 		d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
-		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
+		// rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
+		rc = dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL,
+			NULL, 0, DTX_LOCAL, NULL, &dth);
 		assert_rc_equal(rc, 0);
 
 		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[0], 1, &iod,
@@ -2759,7 +2762,8 @@ local_transaction(void **state)
 			memcpy(buf2, first, strlen(first));
 		}
 
-		rc = vos_local_tx_end(dth, passed_rc);
+		// rc = vos_local_tx_end(dth, passed_rc);
+		rc = dtx_end(dth, NULL, passed_rc);
 		assert_rc_equal(rc, passed_rc);
 
 		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
@@ -3223,7 +3227,7 @@ static const struct CMUnitTest punch_model_tests_pmdk[] = {
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
-    {"VOS817: Local transaction test", local_transaction, NULL, NULL},
+    	{"VOS817: Local transaction test", local_transaction, NULL, NULL},
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
 	{ "VOS801: VOS punch model array read/write/punch int32_t",

@@ -52,7 +52,7 @@ struct dtx_handle {
 			struct dtx_memberships	*dth_mbs;
 		};
 	};
-	/** The container handle */
+	/** The container or pool (local transactions only) handle */
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
@@ -232,6 +232,8 @@ enum dtx_flags {
 	DTX_PREPARED		= (1 << 7),
 	/** Do not keep committed entry. */
 	DTX_DROP_CMT		= (1 << 8),
+	/** Local transaction */
+	DTX_LOCAL		= (1 << 9),
 };
 
 void

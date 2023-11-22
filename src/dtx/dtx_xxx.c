@@ -59,8 +59,10 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration, bool ignore_uncommitted,
-		bool resent, bool prepared, bool drop_cmt, struct dtx_handle *dth)
+		bool resent, bool prepared, bool drop_cmt, bool local, struct dtx_handle *dth)
 {
+	int                   rc;
+
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
 			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
@@ -70,10 +72,15 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dtx_shares_init(dth);
 
-	dth->dth_xid = *dti;
+	if (!local) {
+		dth->dth_xid = *dti;
+		dth->dth_leader_oid = *leader_oid;
+	} else {
+		dth->dth_xid.dti_hlc = 1;
+	}
+		
 	dth->dth_coh = coh;
 
-	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
@@ -94,6 +101,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
+	dth->dth_local = local ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -114,23 +122,39 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dth->dth_dkey_hash = 0;
 
-	if (daos_is_zero_dti(dti))
-		return 0;
+	if (!local) {
+		if (daos_is_zero_dti(dti))
+			return 0;
 
-	if (!dtx_epoch_chosen(epoch)) {
-		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags=%x\n",
-			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
-			epoch->oe_flags);
-		return -DER_INVAL;
+		if (!dtx_epoch_chosen(epoch)) {
+			D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
+				DF_U64" first="DF_U64" flags=%x\n",
+				DP_DTI(dti), epoch->oe_value, epoch->oe_first,
+				epoch->oe_flags);
+			return -DER_INVAL;
+		}
+		dth->dth_epoch = epoch->oe_value;
+		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 	}
-	dth->dth_epoch = epoch->oe_value;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
-	if (dth->dth_modification_cnt == 0)
-		return 0;
+	rc = vos_dtx_rsrvd_init(dth);
+	if (rc != 0) {
+		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 
-	return vos_dtx_rsrvd_init(dth);
+	if (local) {
+		rc = vos_dtx_local_begin(dth, coh);
+		if (rc) {
+			goto error;
+		}
+	}
+
+	return 0;
+
+error:
+	vos_dtx_rsrvd_fini(dth);
+	return rc;
 }
 
 void
@@ -198,7 +222,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false,
-			     (flags & DTX_DROP_CMT) ? true : false, dth);
+			     (flags & DTX_DROP_CMT) ? true : false, false, dth);
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
@@ -254,8 +278,9 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
-			     (flags & DTX_RESEND) ? true : false, false, false, dth);
-	if (rc == 0 && sub_modification_cnt > 0)
+			     (flags & DTX_RESEND) ? true : false, false, false,
+			     (flags & DTX_LOCAL) ? true : false, dth);
+	if (rc == 0 && sub_modification_cnt > 0 && !(flags & DTX_LOCAL))
 		rc = vos_dtx_attach(dth, false, false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
@@ -555,6 +580,9 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 {
 	D_ASSERT(dth != NULL);
 
+	if (dth->dth_local)
+		dth->dth_local_complete = 1;
+
 	dtx_shares_fini(dth);
 
 	if (daos_is_zero_dti(&dth->dth_xid))
@@ -585,6 +613,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		 * 2. Remove the pinned DTX entry.
 		 */
 		vos_dtx_cleanup(dth, true);
+	} else if (dth->dth_local) {
+		vos_dtx_local_end(dth);
 	}
 
 	D_DEBUG(DB_IO,

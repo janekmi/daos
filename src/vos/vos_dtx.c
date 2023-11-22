@@ -2933,13 +2933,14 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 {
 	struct vos_dtx_act_ent	*dae;
 	struct vos_container	*cont;
+	struct vos_pool		*pool;
 
 	if (!dtx_is_valid_handle(dth) || unlikely(dth->dth_already))
 		return;
 
 	dae = dth->dth_ent;
 	if (dae == NULL) {
-		if (!dth->dth_active)
+		if (!dth->dth_active && !dth->dth_local)
 			return;
 	} else {
 		/* 'prepared'/'preparing' DTX can be either committed or aborted, not cleanup. */
@@ -2950,9 +2951,15 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 	if (unpin)
 		dth->dth_pinned = 0;
 
-	cont = vos_hdl2cont(dth->dth_coh);
+	if (dth->dth_local) {
+		cont = NULL;
+		pool = vos_hdl2pool(dth->dth_coh);
+	} else {
+		cont = vos_hdl2cont(dth->dth_coh);
+		pool = cont->vc_pool;
+	}
 	/* This will abort the transaction and callback to vos_dtx_cleanup_internal(). */
-	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
+	vos_tx_end(cont, pool, dth, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
 }
 
 int
@@ -3224,4 +3231,47 @@ cmt:
 	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
 
 	return 0;
+}
+
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh) {
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	int		      rc;
+
+	if (dth == NULL || !dth->dth_local) {
+		return 0;
+	}
+
+	/**
+	 * RDB is intended as the main user of local transactions. RDB is known
+	 * to engage over 32 OIDs per transaction. Hence, the initial value is
+	 * hoped to accommodate all of them.
+	 */
+	dth->dth_local_oid_cap = (1 << 6);
+	dth->dth_local_oid_cnt = 0;
+	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
+	if (dth->dth_local_oid_array == NULL)
+		return -DER_NOMEM;
+
+	pool = vos_hdl2pool(poh);
+	umm  = vos_pool2umm(pool);
+
+	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
+	if (rc != 0) {
+		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
+		goto error;
+	}
+
+	return 0;
+
+error:
+	D_FREE(dth->dth_local_oid_array);
+	return rc;
+}
+
+void
+vos_dtx_local_end(struct dtx_handle *dth) {
+	struct vos_pool *pool = vos_hdl2pool(dth->dth_coh);
+	vos_tx_end(NULL, pool, dth, NULL, NULL, true, NULL, 0);
 }

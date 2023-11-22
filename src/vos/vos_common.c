@@ -443,11 +443,21 @@ cancel:
 			vos_dtx_cleanup_internal(dth);
 	}
 
+	if (dth->dth_local) {
+		for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+			vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
+		}
+
+		dth->dth_local_oid_cnt = 0;
+		D_FREE(dth->dth_local_oid_array);
+		dth->dth_local_oid_cap = 0;
+	}
+
 	return err;
 }
 
 int
-vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+vos_tx_end(struct vos_container *cont, struct vos_pool *pool, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts, bool started,
 	   struct bio_desc *biod, int err)
 {
@@ -464,7 +474,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
 	}
 
-	return vos_tx_end_internal(cont->vc_pool, dth, rsrvd_scmp, nvme_exts, biod, err);
+	return vos_tx_end_internal(pool, dth, rsrvd_scmp, nvme_exts, biod, err);
 }
 
 int

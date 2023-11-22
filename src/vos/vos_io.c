@@ -2416,7 +2416,7 @@ abort:
 	if (err == 0)
 		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 
-	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
+	err = vos_tx_end(ioc->ic_cont, ioc->ic_cont->vc_pool, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0)
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries, false);

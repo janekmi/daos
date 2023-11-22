@@ -1226,7 +1226,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
  * \return	err if non-zero, otherwise 0 or appropriate error
  */
 int
-vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+vos_tx_end(struct vos_container *cont, struct vos_pool *pool, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
 	   struct bio_desc *biod, int err);
 

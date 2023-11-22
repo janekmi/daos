@@ -538,7 +538,7 @@ reset:
 	if (rc == 0)
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
+	rc = vos_tx_end(cont, cont->vc_pool, dth, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
 			dth->dth_cos_done = 1;
