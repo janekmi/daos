@@ -1,0 +1,27 @@
+"""Build DTX tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
+
+    libraries = ['abt', 'bio', 'dtx', 'vos', 'gurt', 'daos_common_pmem', 'cmocka', 'pthread', 'uuid', 'cart']
+
+    tenv = denv.Clone()
+    tenv.Append(CPPPATH=[Dir('..').srcnode()])
+
+    tenv.require('argobots')
+
+    # Add runtime paths for daos libraries
+    tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    tenv.Append(OBJPREFIX="b_")
+
+    test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', '../../engine/tls.c']
+    dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
+    tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
+
+    tenv.Install('$PREFIX/bin/', [dtx_tests])
+
+
+if __name__ == "SCons.Script":
+    scons()
