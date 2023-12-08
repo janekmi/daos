@@ -222,6 +222,18 @@ int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
+ * XXX 
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * 
+ */
+void
+vos_dtx_local_end(struct dtx_handle *dth);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
