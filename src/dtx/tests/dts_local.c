@@ -15,6 +15,7 @@
 #include <daos/object.h>
 
 #include "vts_io.h"
+#include "umem_intercept.h"
 
 #define DKEY_NUM    4
 #define START_EPOCH 5
@@ -274,9 +275,74 @@ local_transaction(void **state)
 	}
 }
 
+static int wal_entries    = 0;
+static int wal_tx_nesting = 0;
+
+static void
+wal_tx_begin()
+{
+	++wal_tx_nesting;
+}
+
+static void
+wal_tx_commit()
+{
+	--wal_tx_nesting;
+	/** It is assumed only the outermost transaction yields a WAL entry. */
+	if (wal_tx_nesting == 0) {
+		++wal_entries;
+	}
+}
+
+static struct umem_intercept_cbs wal_intercept_cbs = {.tx_begin  = wal_tx_begin,
+						      .tx_commit = wal_tx_commit};
+
+static void
+wal_check(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
+
+	int                    rc;
+	struct dtx_handle     *dth       = NULL;
+	const char            *test_data = "Hello";
+
+	daos_key_t            *insert_dkey = &la->dkey[0];
+
+	umem_intercept_init(arg->ctx.tc_po_hdl, &wal_intercept_cbs);
+
+	rc =
+	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	la->iod.iod_size = strlen(test_data);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+
+	print_message("- a few inserts at DKEY[0]\n");
+	for (int i = 0; i < 15; ++i) {
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, insert_dkey,
+				       1, &la->iod, NULL, &la->sgl, dth);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = dtx_end(dth, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	umem_intercept_fini();
+
+	/** All transactions are expected to be completed at this point. */
+	assert_int_equal(wal_tx_nesting, 0);
+
+	/** A single WAL entry is expected to accommodate all of them. */
+	assert_int_equal(wal_entries, 1);
+}
+
 static const struct CMUnitTest local_tests_all[] = {
     {"DTX100: Simple local transaction", local_transaction, setup_local_args, teardown_local_args},
     {"DTX101: Simple local transaction with pre-existing data", local_transaction, warmup, cleanup},
+    {"DTX102: Number of WAL entries per local transaction", wal_check, setup_local_args,
+     teardown_local_args},
 };
 
 int
