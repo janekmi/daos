@@ -16,8 +16,10 @@ jobs:
       - name: Install dependencies
         working-directory: daos/utils/scripts
         run: sudo ./install-ubuntu.sh
-      - name: Install scons
-        run: sudo apt-get install scons
+      - name: Install builders
+        run: |
+          sudo apt-get install scons
+          pip3 install --user meson
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
