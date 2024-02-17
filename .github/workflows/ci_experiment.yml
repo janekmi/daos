@@ -14,7 +14,10 @@ jobs:
           path: daos
           ref: janekmi/local_tx2
       - name: Install dependencies
-        run: sudo apt-get install scons libhwloc-dev libboost-dev nasm
+        working-directory: daos/utils/scripts
+        run: sudo ./install-ubuntu.sh
+      - name: Install scons
+        run: sudo apt-get install scons
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
