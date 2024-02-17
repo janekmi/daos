@@ -1,0 +1,18 @@
+name: CI Experiment
+
+on:
+  push:
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: daos-stack/daos
+          path: daos
+          ref: janekmi/local_tx2
+      - name: Build
+        working-directory: daos
+        run: scons PREFIX=/opt/daos TARGET_TYPE=release -j32
