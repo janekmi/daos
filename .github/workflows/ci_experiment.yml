@@ -13,8 +13,8 @@ jobs:
           repository: daos-stack/daos
           path: daos
           ref: janekmi/local_tx2
-      - name: Install scons
-        run: sudo apt-get install scons
+      - name: Install dependencies
+        run: sudo apt-get install scons hwloc-devel
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
