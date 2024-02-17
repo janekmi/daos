@@ -14,12 +14,10 @@ jobs:
           path: daos
           ref: janekmi/local_tx2
       - name: Install dependencies
-        working-directory: daos/utils/scripts
-        run: sudo ./install-ubuntu.sh
-      - name: Install builders
+        working-directory: daos
         run: |
-          sudo apt-get install scons
-          sudo pip3 install meson elftools
+          sudo ./utils/scripts/install-ubuntu.sh
+          sudo pip3 install -r requirements.txt
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
