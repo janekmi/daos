@@ -17,4 +17,4 @@ jobs:
         run: sudo apt-get install scons
       - name: Build
         working-directory: daos
-        run: scons PREFIX=/opt/daos TARGET_TYPE=release -j32
+        run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
