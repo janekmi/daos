@@ -13,6 +13,8 @@ jobs:
           repository: daos-stack/daos
           path: daos
           ref: janekmi/local_tx2
+      - name: Install scons
+        run: apt-get install scons
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release -j32
