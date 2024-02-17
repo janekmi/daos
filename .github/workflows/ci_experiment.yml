@@ -19,7 +19,7 @@ jobs:
       - name: Install builders
         run: |
           sudo apt-get install scons
-          sudo pip3 install meson
+          sudo pip3 install meson elftools
       - name: Build
         working-directory: daos
         run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
