@@ -2,22 +2,15 @@ name: CI Experiment
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   Build:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/janekmi/daos:CI-experiment
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          repository: daos-stack/daos
-          path: daos
-          ref: janekmi/local_tx2
-      - name: Install dependencies
-        working-directory: daos
+      - name: Hello world
         run: |
-          sudo ./utils/scripts/install-ubuntu.sh
-          sudo pip3 install -r requirements.txt
-      - name: Build
-        working-directory: daos
-        run: scons PREFIX=/opt/daos TARGET_TYPE=release --build-deps=yes -j32
+          sudo dnf install tree
+          tree /opt/daos
