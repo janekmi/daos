@@ -10,11 +10,14 @@ jobs:
     container:
       image: ghcr.io/janekmi/daos:CI-experiment
       options: |
-        --user root:root
+        --user daos_agent
     env:
       DEPS_JOBS: 10
     permissions:
       contents: read
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: debug
         continue-on-error: true
@@ -22,6 +25,9 @@ jobs:
           echo $USER || true
           ls -al || true
           pwd || true
+          cd /home/daos
+          pwd || true
+          ls -al || true
 
       - name: Checkout code
         uses: actions/checkout@v4
