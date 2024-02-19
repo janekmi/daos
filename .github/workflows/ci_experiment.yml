@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/janekmi/daos:CI-experiment
+      options: --user root
     env:
       DEPS_JOBS: 10
     permissions:
