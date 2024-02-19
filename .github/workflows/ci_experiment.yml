@@ -18,15 +18,15 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: debug
-        continue-on-error: true
-        run: |
-          echo $USER || true
-          ls -al || true
-          pwd || true
-          cd /home/daos
-          pwd || true
-          ls -al || true
+      # - name: debug
+      #   continue-on-error: true
+      #   run: |
+      #     echo $USER || true
+      #     ls -al || true
+      #     pwd || true
+      #     cd /home/daos
+      #     pwd || true
+      #     ls -al || true
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,6 +36,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and install
+        env:
+          COMPILER: gcc
+          DEPS_JOBS: 10
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" \
             BUILD_TYPE=debug TARGET_TYPE=release -c install
