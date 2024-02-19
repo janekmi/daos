@@ -21,6 +21,7 @@ jobs:
         run: |
           echo $USER || true
           ls -al || true
+          pwd || true
 
       - name: Checkout code
         uses: actions/checkout@v4
