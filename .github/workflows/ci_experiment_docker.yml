@@ -31,6 +31,9 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Build and push Docker image
+        env:
+          DEPS_JOBS: 10
+          BASE_DISTRO: rockylinux/rockylinux:8
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -38,3 +41,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            DEPS_JOBS
+            BASE_DISTRO
+            DAOS_BUILD=no
