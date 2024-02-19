@@ -11,12 +11,15 @@ jobs:
       image: ghcr.io/janekmi/daos:CI-experiment
     env:
       DEPS_JOBS: 10
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and install
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" \
