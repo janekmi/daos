@@ -9,8 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/janekmi/daos:CI-experiment
+    env:
+      DEPS_JOBS: 10
     steps:
-      - name: Hello world
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 1
+      - name: Build and install
         run: |
-          sudo dnf install tree
-          tree /opt/daos
+          scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" \
+            BUILD_TYPE=debug TARGET_TYPE=release -c install

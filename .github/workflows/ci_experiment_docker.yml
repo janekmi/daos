@@ -1,7 +1,9 @@
 name: Create and publish a Docker image
 
 on:
-  # push:
+  push:
+    paths:
+      - .github/workflows/ci_experiment_docker.yml
   workflow_dispatch:
 
 env:
