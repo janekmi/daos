@@ -14,12 +14,19 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: debug
+        continue-on-error: true
+        run: |
+          echo $USER || true
+          ls -al || true
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and install
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" \
