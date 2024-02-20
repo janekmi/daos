@@ -41,6 +41,7 @@ jobs:
 
       - name: debug
         run: |
+          git config --global --add safe.directory /__w/daos/daos
           git submodule init
           pwd || true
           ls -al || true
