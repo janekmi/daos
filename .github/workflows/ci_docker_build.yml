@@ -3,7 +3,7 @@ name: 'CI: Docker build'
 on:
   push:
     paths:
-      - .github/workflows/ci_experiment_docker.yml
+      - .github/workflows/ci_docker_build.yml
   workflow_dispatch:
 
 env:

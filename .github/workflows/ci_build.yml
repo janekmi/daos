@@ -1,8 +1,10 @@
 name: CI Build
 
 on:
-  workflow_dispatch:
   push:
+    paths:
+      - .github/workflows/ci_build.yml
+  workflow_dispatch:
 
 jobs:
   Build:
