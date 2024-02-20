@@ -18,12 +18,11 @@ jobs:
       run:
         shell: bash
     steps:
-      # - name: debug
-      #   continue-on-error: true
-      #   run: |
+      - name: debug
+        run: |
+          pwd || true
+          ls -al || true
       #     echo $USER || true
-      #     ls -al || true
-      #     pwd || true
       #     cd /home/daos
       #     pwd || true
       #     ls -al || true
@@ -36,6 +35,13 @@ jobs:
           ref: janekmi/local_tx2
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: debug
+        run: |
+          pwd || true
+          ls -al || true
+          cd $GITHUB_WORKSPACE
+          ls -al || true
 
       - name: Build and install
         env:
