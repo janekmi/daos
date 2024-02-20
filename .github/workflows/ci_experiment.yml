@@ -32,6 +32,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+          repository: daos-stack/daos
+          ref: janekmi/local_tx2
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -42,3 +44,14 @@ jobs:
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" \
             BUILD_TYPE=debug TARGET_TYPE=release -c install
+      
+      - name: debug
+        run: |
+          cd /opt/daos
+          ls -al || true
+          pwd || true
+          dnf install tree
+          tree
+          which daos_agent || true
+          which daos_server || tree
+          which dfs_test || true
