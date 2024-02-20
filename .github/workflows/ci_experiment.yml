@@ -53,11 +53,9 @@ jobs:
       
       - name: debug
         run: |
-          cd /opt/daos
-          ls -al || true
           pwd || true
+          ls -al || true
+          cd $GITHUB_WORKSPACE
+          ls -al || true
           dnf install tree
-          tree
-          which daos_agent || true
-          which daos_server || tree
-          which dfs_test || true
+          tree .
