@@ -34,9 +34,12 @@ jobs:
           path: '*'
           fail-on-cache-miss: true
 
-      - name: debug
+      - name: Setting up daos_server_helper
         run: |
-          which daos_agent || true
-          which daos_server || true
-          which dfs_test || true
-          echo $PATH
+          . utils/sl/setup_local.sh
+          ./utils/setup_daos_server_helper.sh
+
+      - name: Container copy test
+        run: |
+          ./utils/node_local_test.py --no-root --memcheck no \
+            --system-ram-reserved 1 --test cont_copy
