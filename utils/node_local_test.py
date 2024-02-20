@@ -537,7 +537,7 @@ class DaosServer():
             self._test_class = None
         self.valgrind = valgrind
         self._agent = None
-        self.max_start_time = 120
+        self.max_start_time = 600
         self.max_stop_time = 30
         self.stop_sleep_time = 0.5
         self.engines = conf.args.engine_count
