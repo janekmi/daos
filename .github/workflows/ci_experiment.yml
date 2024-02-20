@@ -42,7 +42,7 @@ jobs:
       - name: debug
         run: |
           git config --global --add safe.directory /__w/daos/daos
-          git submodule init
+          git submodule update --init --recursive
           pwd || true
           ls -al || true
           cd $GITHUB_WORKSPACE
