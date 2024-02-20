@@ -1,4 +1,4 @@
-name: CI Experiment
+name: CI Build
 
 on:
   workflow_dispatch:
