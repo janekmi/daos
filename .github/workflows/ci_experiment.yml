@@ -22,6 +22,7 @@ jobs:
         run: |
           pwd || true
           ls -al || true
+          dnf install tree
       #     echo $USER || true
       #     cd /home/daos
       #     pwd || true
@@ -49,12 +50,32 @@ jobs:
           DEPS_JOBS: 10
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug TARGET_TYPE=release -c install
-      
+
       - name: debug
         run: |
           pwd || true
-          ls -al || true
-          cd $GITHUB_WORKSPACE
-          ls -al || true
-          dnf install tree
+          tree .
+
+      - name: Build and install
+        env:
+          COMPILER: gcc
+          DEPS_JOBS: 10
+        run: |
+          scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos TARGET_TYPE=release
+
+      - name: debug
+        run: |
+          pwd || true
+          tree .
+
+      - name: Build and install
+        env:
+          COMPILER: gcc
+          DEPS_JOBS: 10
+        run: |
+          scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
+
+      - name: debug
+        run: |
+          pwd || true
           tree .
