@@ -71,6 +71,6 @@ jobs:
           COMPILER: gcc
           DEPS_JOBS: 10
         run: |
-          scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
+          scons --jobs $DEPS_JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
           pwd || true
           tree .
