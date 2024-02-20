@@ -64,6 +64,6 @@ jobs:
 
       - name: Build and install
         run: |
-          scons --jobs $DEPS_JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
+          scons --jobs $DEPS_JOBS install --build-deps=yes PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
           pwd || true
           tree .
