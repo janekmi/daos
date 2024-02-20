@@ -44,15 +44,16 @@ jobs:
           cd $GITHUB_WORKSPACE
           ls -al || true
 
+      - name: Dependencies
+        run: |
+          dnf install fuse3-devel
+
       - name: Build and install
         env:
           COMPILER: gcc
           DEPS_JOBS: 10
         run: |
           scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug TARGET_TYPE=release -c install
-
-      - name: debug
-        run: |
           pwd || true
           tree .
 
@@ -62,9 +63,6 @@ jobs:
           DEPS_JOBS: 10
         run: |
           scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos TARGET_TYPE=release
-
-      - name: debug
-        run: |
           pwd || true
           tree .
 
@@ -74,8 +72,5 @@ jobs:
           DEPS_JOBS: 10
         run: |
           scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
-
-      - name: debug
-        run: |
           pwd || true
           tree .
