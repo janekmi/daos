@@ -52,7 +52,7 @@ jobs:
 
       - name: Dependencies
         run: |
-          dnf install fuse3-devel
+          dnf install fuse3-devel zstd
 
       # - name: Build and install
       #   run: |
