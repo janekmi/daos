@@ -13,7 +13,7 @@ jobs:
     env:
       DEPS_JOBS: 10
       COMPILER: gcc
-      GOFLAGS: -buildvcs=false
+      # GOFLAGS: -buildvcs=false
     permissions:
       contents: read
     defaults:
@@ -33,7 +33,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: true
+          # submodules: true
           repository: daos-stack/daos
           ref: janekmi/local_tx2
           fetch-depth: 1
@@ -41,6 +41,7 @@ jobs:
 
       - name: debug
         run: |
+          git submodule init
           pwd || true
           ls -al || true
           cd $GITHUB_WORKSPACE
@@ -64,6 +65,6 @@ jobs:
 
       - name: Build and install
         run: |
-          scons --jobs $DEPS_JOBS install --build-deps=yes PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
+          scons --jobs $DEPS_JOBS install PREFIX=/opt/daos COMPILER=$COMPILER BUILD_TYPE=debug TARGET_TYPE=release
           pwd || true
           tree .
