@@ -25,20 +25,18 @@ jobs:
         with:
           key: install
           path: /opt/daos/*
-      
-      - name: debug
-        run: |
-          cd /opt/daos
-          pwd
-          tree
+          fail-on-cache-miss: true
 
       - name: Restore src cache
         uses: actions/cache/restore@v4
         with:
           key: src
           path: '*'
+          fail-on-cache-miss: true
 
       - name: debug
         run: |
-          pwd
-          tree
+          which daos_agent || true
+          which daos_server || true
+          which dfs_test || true
+          echo $PATH
