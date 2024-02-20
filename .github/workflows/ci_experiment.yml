@@ -48,9 +48,9 @@ jobs:
           cd $GITHUB_WORKSPACE
           ls -al || true
 
-      - name: Dependencies
-        run: |
-          dnf install fuse3-devel
+      # - name: Dependencies
+      #   run: |
+      #     dnf install fuse3-devel
 
       # - name: Build and install
       #   run: |
@@ -70,3 +70,27 @@ jobs:
           cd /opt/daos
           pwd
           tree
+
+      - name: Upload src artifact
+        uses: actions/upload-artifact@v4.2.0
+        with:
+          name: src
+          path: '*'
+
+      - name: Upload /opt/daos artifact
+        uses: actions/upload-artifact@v4.2.0
+        with:
+          name: install
+          path: /opt/daos/*
+
+      # - name: Upload src cache
+      #   uses: actions/cache/save@v3
+      #   with:
+      #     key: src
+      #     path: '*'
+
+      # - name: Upload /opt/daos cache
+      #   uses: actions/cache/save@v3
+      #   with:
+      #     key: install
+      #     path: /opt/daos/*
