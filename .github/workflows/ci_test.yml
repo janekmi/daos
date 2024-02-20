@@ -15,6 +15,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    permissions:
+      contents: read
     steps:
       - name: debug
         run: |
@@ -27,31 +29,20 @@ jobs:
           path: /opt/daos/*
           fail-on-cache-miss: true
 
-      - name: Restore src cache
-        uses: actions/cache/restore@v4
-        with:
-          key: src
-          path: '*'
-          fail-on-cache-miss: true
+      # - name: Restore src cache
+      #   uses: actions/cache/restore@v4
+      #   with:
+      #     key: src
+      #     path: '*'
+      #     fail-on-cache-miss: true
 
-      - name: Patch src
-        run: |
-          cat << EOF >> patch.diff
-          diff --git a/utils/node_local_test.py b/utils/node_local_test.py
-          index a6a484818..15af2fbdb 100755
-          --- a/utils/node_local_test.py
-          +++ b/utils/node_local_test.py
-          @@ -537,7 +537,7 @@ class DaosServer():
-                      self._test_class = None
-                  self.valgrind = valgrind
-                  self._agent = None
-          -       self.max_start_time = 120
-          +       self.max_start_time = 600
-                  self.max_stop_time = 30
-                  self.stop_sleep_time = 0.5
-                  self.engines = conf.args.engine_count
-          EOF
-          git apply patch.diff
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: janekmi/daos
+          ref: CI-experiment
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setting up daos_server_helper
         run: |
