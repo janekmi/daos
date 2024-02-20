@@ -33,3 +33,6 @@ jobs:
           dnf install tree
           pwd
           tree
+          cd /opt/daos
+          pwd
+          tree
