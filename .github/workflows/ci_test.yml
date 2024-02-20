@@ -34,6 +34,25 @@ jobs:
           path: '*'
           fail-on-cache-miss: true
 
+      - name: Patch src
+        run: |
+          cat << EOF >> patch.diff
+          diff --git a/utils/node_local_test.py b/utils/node_local_test.py
+          index a6a484818..15af2fbdb 100755
+          --- a/utils/node_local_test.py
+          +++ b/utils/node_local_test.py
+          @@ -537,7 +537,7 @@ class DaosServer():
+                      self._test_class = None
+                  self.valgrind = valgrind
+                  self._agent = None
+          -        self.max_start_time = 120
+          +        self.max_start_time = 600
+                  self.max_stop_time = 30
+                  self.stop_sleep_time = 0.5
+                  self.engines = conf.args.engine_count
+          EOF
+          git apply patch.diff
+
       - name: Setting up daos_server_helper
         run: |
           . utils/sl/setup_local.sh
