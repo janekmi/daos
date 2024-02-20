@@ -71,6 +71,10 @@ jobs:
           pwd
           tree
 
+      - name: Prepare the source directory to be stored
+        run: |
+          rm -rdf build .sconf_temp
+
       - name: Upload src artifact
         uses: actions/upload-artifact@v4.2.0
         with:
@@ -83,14 +87,14 @@ jobs:
           name: install
           path: /opt/daos/*
 
-      # - name: Save src cache
-      #   uses: actions/cache/save@v3
-      #   with:
-      #     key: src
-      #     path: '*'
+      - name: Save src cache
+        uses: actions/cache/save@v3
+        with:
+          key: src
+          path: '*'
 
-      # - name: Save /opt/daos cache
-      #   uses: actions/cache/save@v3
-      #   with:
-      #     key: install
-      #     path: /opt/daos/*
+      - name: Save /opt/daos cache
+        uses: actions/cache/save@v3
+        with:
+          key: install
+          path: /opt/daos/*
