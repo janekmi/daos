@@ -76,25 +76,25 @@ jobs:
           rm -rdf build .sconf_temp
 
       - name: Upload src artifact
-        uses: actions/upload-artifact@v4.2.0
+        uses: actions/upload-artifact@v4
         with:
           name: src
           path: '*'
 
       - name: Upload /opt/daos artifact
-        uses: actions/upload-artifact@v4.2.0
+        uses: actions/upload-artifact@v4
         with:
           name: install
           path: /opt/daos/*
 
       - name: Save src cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           key: src
           path: '*'
 
       - name: Save /opt/daos cache
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           key: install
           path: /opt/daos/*
