@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: debug
         run: |
-          dnf install tree zstd
+          dnf install tree
 
       - name: Restore /opt/daos cache
         uses: actions/cache/restore@v4
