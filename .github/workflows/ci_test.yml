@@ -17,13 +17,13 @@ jobs:
         shell: bash
     steps:
       - name: Restore src cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/restore@v4
         with:
           key: src
           path: '*'
 
       - name: Restore /opt/daos cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/restore@v4
         with:
           key: install
           path: '*'
