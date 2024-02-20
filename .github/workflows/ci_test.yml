@@ -16,12 +16,6 @@ jobs:
       run:
         shell: bash
     steps:
-      # - name: Restore src cache
-      #   uses: actions/cache/restore@v4
-      #   with:
-      #     key: src
-      #     path: '*'
-
       - name: Restore /opt/daos cache
         uses: actions/cache/restore@v4
         with:
@@ -31,8 +25,17 @@ jobs:
       - name: debug
         run: |
           dnf install tree
+          cd /opt/daos
           pwd
           tree
-          cd /opt/daos
+
+      - name: Restore src cache
+        uses: actions/cache/restore@v4
+        with:
+          key: src
+          path: '*'
+
+      - name: debug
+        run: |
           pwd
           tree
