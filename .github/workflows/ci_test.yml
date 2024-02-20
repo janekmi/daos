@@ -29,12 +29,12 @@ jobs:
           path: /opt/daos/*
           fail-on-cache-miss: true
 
-      # - name: Restore src cache
-      #   uses: actions/cache/restore@v4
-      #   with:
-      #     key: src
-      #     path: '*'
-      #     fail-on-cache-miss: true
+      - name: Restore src cache
+        uses: actions/cache/restore@v4
+        with:
+          key: src
+          path: '*'
+          fail-on-cache-miss: true
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,6 +43,11 @@ jobs:
           ref: CI-experiment
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
+          path: head
+      
+      - name: Patch source code
+        run: |
+          cp head/utils/node_local_test.py utils/node_local_test.py
 
       - name: Setting up daos_server_helper
         run: |
