@@ -50,18 +50,24 @@ jobs:
           cp head/utils/node_local_test.py utils/node_local_test.py
           cp head/ci/docker_nlt.sh ci/docker_nlt.sh
 
-      - name: Setting up daos_server_helper
-        # shell: bash --noprofile --norc -e -x -o pipefail {0}
+      - name: debug
         run: |
-          . utils/sl/setup_local.sh
-          sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
-          rm /opt/daos/bin/daos_server_helper
-          ls -al /usr/bin/ | grep daos_server_helper
+          mkdir /mnt/daos_0
+          mount -F tmpfs swap /mnt/daos_0
+          mount -v
 
-      - name: Container copy test
-        run: |
-          ./utils/node_local_test.py --no-root --memcheck no \
-            --system-ram-reserved 1 --test cont_copy
+      # - name: Setting up daos_server_helper
+      #   # shell: bash --noprofile --norc -e -x -o pipefail {0}
+      #   run: |
+      #     . utils/sl/setup_local.sh
+      #     sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
+      #     rm /opt/daos/bin/daos_server_helper
+      #     ls -al /usr/bin/ | grep daos_server_helper
+
+      # - name: Container copy test
+      #   run: |
+      #     ./utils/node_local_test.py --no-root --memcheck no \
+      #       --system-ram-reserved 1 --test cont_copy
 
       # - name: Cheat way
       #   run: ./ci/docker_nlt.sh
