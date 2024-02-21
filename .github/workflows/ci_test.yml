@@ -54,6 +54,8 @@ jobs:
         run: |
           . utils/sl/setup_local.sh
           ./utils/setup_daos_server_helper.sh
+          rm /usr/bin/daos_server_helper
+          ls -al /usr/bin/ | grep daos_server_helper
 
       - name: Container copy test
         run: |
