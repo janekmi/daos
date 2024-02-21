@@ -51,6 +51,7 @@ jobs:
           cp head/ci/docker_nlt.sh ci/docker_nlt.sh
 
       - name: Setting up daos_server_helper
+        shell: bash --noprofile --norc -e -x -o pipefail {0}
         run: |
           . utils/sl/setup_local.sh
           ./utils/setup_daos_server_helper.sh
