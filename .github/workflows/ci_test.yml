@@ -62,5 +62,5 @@ jobs:
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
             --system-ram-reserved 1 launch &
-          wait 30
+          sleep 30
           dmg pool list
