@@ -54,7 +54,7 @@ jobs:
         # shell: bash --noprofile --norc -e -x -o pipefail {0}
         run: |
           . utils/sl/setup_local.sh
-          ./utils/setup_daos_server_helper.sh
+          sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
           rm /opt/daos/bin/daos_server_helper
           ls -al /usr/bin/ | grep daos_server_helper
 
