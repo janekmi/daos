@@ -27,7 +27,7 @@ pushd "$TMP_DIR"
 set +e
 
 sudo --preserve-env=VIRTUAL_ENV,PATH ./node_local_test.py \
-    --no-root --memcheck no --system-ram-reserved 48 --server-debug WARN \
+    --no-root --memcheck no --system-ram-reserved 1 --server-debug WARN \
     --log-usage-import nltr.json --log-usage-save nltr.xml "$@"
 
 RC=$?
