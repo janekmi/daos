@@ -48,6 +48,7 @@ jobs:
       - name: Patch source code
         run: |
           cp head/utils/node_local_test.py utils/node_local_test.py
+          cp head/ci/docker_nlt.sh ci/docker_nlt.sh
 
       # - name: Setting up daos_server_helper
       #   run: |
