@@ -53,7 +53,7 @@ jobs:
       - name: debug
         run: |
           mkdir /mnt/daos_0
-          ls -al mnt
+          ls -al /mnt
           sudo mount -t tmpfs swap /mnt/daos_0
           mount -v
 
