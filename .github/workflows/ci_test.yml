@@ -61,5 +61,5 @@ jobs:
       - name: Container copy test
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
-            --system-ram-reserved 1 --test cont_copy
+            --system-ram-reserved 1 launch
           cat nlt-errors.json
