@@ -62,3 +62,4 @@ jobs:
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
             --system-ram-reserved 1 --test cont_copy
+          cat nlt-errors.json
