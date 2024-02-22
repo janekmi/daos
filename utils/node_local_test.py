@@ -570,7 +570,8 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        # self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        self.agent_dir = '/var/run/daos_agent/'
 
         self._yaml_file = None
         self._io_server_dir = None
