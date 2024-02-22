@@ -20,3 +20,7 @@ engines:
       -
         class: ram
         scm_mount: /mnt/daos
+
+        bdev_class: file
+        bdev_list: [/tmp/daos-bdev]
+        bdev_size: 5
