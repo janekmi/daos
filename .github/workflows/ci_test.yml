@@ -71,9 +71,9 @@ jobs:
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
             --system-ram-reserved 1 launch &
-          sleep 30
+          sleep 10
           echo ===
-          cat /var/daos_agent/nlt_agent.yaml
+          cat /var/run/daos_agent/nlt_agent.yaml
           echo ===
           dmg --insecure pool list
           dfs_test -u
