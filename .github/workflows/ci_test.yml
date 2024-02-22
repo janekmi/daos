@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/janekmi/daos:CI-experiment
-      options: --user root --privileged -v /sys/bus/pci/drivers:/sys/bus/pci/drivers -v /sys/kernel/mm/hugepages:/sys/kernel/mm/hugepages -v /sys/devices/system/node:/sys/devices/system/node -v /dev:/dev -v /proc/sys:/proc/sys
+      options: --user root --privileged -v /sys/bus/pci/drivers:/sys/bus/pci/drivers -v /sys/kernel/mm/hugepages:/sys/kernel/mm/hugepages -v /sys/devices/system/node:/sys/devices/system/node -v /dev:/dev
     defaults:
       run:
         shell: bash
@@ -63,13 +63,17 @@ jobs:
           # grep Huge /proc/meminfo
           # mkdir /tmp/daos-bdev
           # tree /tmp/daos-bdev
+          # sysctl hw.contigmem.num_buffers
         run: |
-          sysctl hw.contigmem.num_buffers
+          echo X
 
       - name: Container copy test
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
             --system-ram-reserved 1 launch &
           sleep 30
+          echo ===
+          cat /var/daos_agent/nlt_agent.yaml
+          echo ===
           dmg --insecure pool list
           dfs_test -u
