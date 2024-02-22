@@ -60,10 +60,11 @@ jobs:
           rm /opt/daos/bin/daos_server_helper
 
       - name: debug
+          # grep Huge /proc/meminfo
+          # mkdir /tmp/daos-bdev
+          # tree /tmp/daos-bdev
         run: |
-          grep Huge /proc/meminfo
-          mkdir /tmp/daos-bdev
-          tree /tmp/daos-bdev
+          sysctl hw.contigmem.num_buffers
 
       - name: Container copy test
         run: |
