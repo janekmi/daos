@@ -59,6 +59,10 @@ jobs:
           ./utils/setup_daos_server_helper.sh
           rm /opt/daos/bin/daos_server_helper
 
+      - name: debug
+        run: |
+          grep Huge /proc/meminfo
+
       - name: Container copy test
         run: |
           ./utils/node_local_test.py --no-root --memcheck no \
