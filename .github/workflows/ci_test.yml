@@ -16,7 +16,7 @@ jobs:
         - /sys/bus/pci/drivers
         - /sys/kernel/mm/hugepages
         - /sys/devices/system/node
-        # - /dev
+        - /dev:/dev
     defaults:
       run:
         shell: bash
