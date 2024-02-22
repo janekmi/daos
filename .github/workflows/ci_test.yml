@@ -12,6 +12,11 @@ jobs:
     container:
       image: ghcr.io/janekmi/daos:CI-experiment
       options: --user root --privileged
+      volumes:
+        - /sys/bus/pci/drivers
+        - /sys/kernel/mm/hugepages
+        - /sys/devices/system/node
+        - /dev
     defaults:
       run:
         shell: bash
