@@ -64,3 +64,4 @@ jobs:
             --system-ram-reserved 1 launch &
           sleep 30
           dmg --insecure pool list
+          dfs_test -u
