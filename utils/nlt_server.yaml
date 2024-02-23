@@ -3,6 +3,7 @@ port: 10001
 provider: ofi+tcp;ofi_rxm
 disable_hugepages: false
 nr_hugepages: 4096
+disable_vfio: true
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
 engines:
