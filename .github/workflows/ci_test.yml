@@ -76,4 +76,4 @@ jobs:
           cat /var/run/daos_agent/nlt_agent.yaml
           echo ===
           dmg --insecure pool list
-          dfs_test -u
+          POOL_NVME_SIZE=0 dfs_test -u
