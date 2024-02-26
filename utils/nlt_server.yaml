@@ -21,6 +21,7 @@ engines:
     storage:
       -
         class: ram
+        scm_size: 32
         scm_mount: /mnt/daos
       # -
       #   class: file
