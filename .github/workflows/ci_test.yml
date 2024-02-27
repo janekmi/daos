@@ -76,6 +76,6 @@ jobs:
           cat /var/run/daos_agent/nlt_agent.yaml
           echo ===
           dmg --insecure pool list
-          dmg --insecure pool destroy NLT
+          dmg --insecure -r -f pool destroy NLT
           dmg --insecure pool list
           POOL_NVME_SIZE=0 POOL_SCM_SIZE=5 dfs_test -u
