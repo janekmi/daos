@@ -25,6 +25,8 @@ int
 run_local_rdb_tests(const char *cfg);
 int
 run_structs_tests(const char *cfg);
+int
+run_xxx_tests(const char *cfg);
 
 static void
 print_usage()
@@ -50,6 +52,7 @@ run_all_tests(int keys)
 	failed += run_local_tests(cfg_desc_io);
 	failed += run_local_rdb_tests(cfg_desc_io);
 	failed += run_structs_tests(cfg_desc_io);
+	failed += run_xxx_tests(cfg_desc_io);
 
 	return failed;
 }
