@@ -264,5 +264,5 @@ run_local_tests(const char *cfg)
 
 	dts_global_init();
 
-	return cmocka_run_group_tests_name(test_name, local_tests_all, setup_io, teardown_io);
+	return cmocka_run_group_tests_name(test_name, local_tests_all, NULL, NULL);
 }

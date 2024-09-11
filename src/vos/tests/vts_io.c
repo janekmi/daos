@@ -201,14 +201,18 @@ test_args_init(struct io_test_args *args,
 	}
 	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
 		 vos_path, init_type);
+}
 
-
+void
+test_args_fini(struct io_test_args *args)
+{
+	vts_ctx_fini(&args->ctx);
 }
 
 void
 test_args_reset(struct io_test_args *args, uint64_t pool_size)
 {
-	vts_ctx_fini(&args->ctx);
+	test_args_fini(args);
 	test_args_init(args, pool_size);
 }
 
@@ -256,7 +260,7 @@ teardown_io(void **state)
 	}
 
 	assert_ptr_equal(arg, &test_args);
-	vts_ctx_fini(&arg->ctx);
+	test_args_fini(arg);
 	return 0;
 }
 

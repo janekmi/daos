@@ -136,20 +136,22 @@ _dts_fetch_and_validate(daos_handle_t coh, struct dts_local_args *la, unsigned d
 
 /** Setup and teardown functions */
 
+static struct io_test_args   test_args;
 static struct dts_local_args local_args;
 
 int
 setup_local_args(void **state)
 {
-	struct io_test_args   *arg      = *state;
+	struct io_test_args   *arg      = &test_args;
 	struct dts_local_args *la       = &local_args;
-	int                    int_flag = is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64);
+	int                    int_flag;
 	int                    rc;
 
-	memset(&local_args, 0, sizeof(local_args));
+	test_args_init(&test_args, VPOOL_SIZE);
 
-	/** i.a. recreates the container */
-	test_args_reset(arg, VPOOL_SIZE);
+	int_flag = is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64);
+
+	memset(&local_args, 0, sizeof(local_args));
 
 	/** prepare OID */
 	la->oid = gen_oid(arg->otype);
@@ -181,6 +183,8 @@ setup_local_args(void **state)
 	/** attach local arguments */
 	arg->custom = la;
 
+	*state = arg;
+
 	return 0;
 }
 
@@ -196,6 +200,8 @@ teardown_local_args(void **state)
 
 	/** detach local arguments */
 	arg->custom = NULL;
+
+	test_args_fini(arg);
 
 	return 0;
 }
