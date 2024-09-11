@@ -147,7 +147,7 @@ setup_local_args(void **state)
 	int                    int_flag;
 	int                    rc;
 
-	test_args_init(&test_args, VPOOL_SIZE);
+	test_args_init(&test_args, VPOOL_64M);
 
 	int_flag = is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64);
 

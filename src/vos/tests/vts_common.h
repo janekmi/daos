@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,7 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
+#define VPOOL_64M        (64ULL << 20)
 #define VPOOL_256M	(256ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
