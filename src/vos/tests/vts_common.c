@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,7 +100,7 @@ exit:
 }
 
 int
-vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
+vts_ctx_init(struct vos_test_ctx *tcx, size_t psize, bool create)
 {
 	int	 rc;
 	char      uuid_str[] = "dd6728be-696a-11ef-a059-a4bf0165c389";
@@ -116,31 +116,41 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	rc = vts_alloc_gen_fname(uuid_str, &tcx->tc_po_name);
 	assert_int_equal(rc, 0);
 
-	if (vts_file_exists(tcx->tc_po_name)) {
-		rc = remove(tcx->tc_po_name);
-		assert_int_equal(rc, 0);
+	if (create) {
+		if (vts_file_exists(tcx->tc_po_name)) {
+			rc = remove(tcx->tc_po_name);
+			assert_int_equal(rc, 0);
+		}
+	} else {
+		assert_true(vts_file_exists(tcx->tc_po_name));
 	}
 
 	// uuid_generate_time_safe(tcx->tc_co_uuid);
 	uuid_parse(uuid_str2, tcx->tc_co_uuid);
 
-	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0, 0 /* version */,
-			     &tcx->tc_po_hdl);
-	if (rc) {
-		print_error("vpool create %s failed with error : %d\n",
-			    tcx->tc_po_name, rc);
-		goto failed;
-	}
-	tcx->tc_step = TCX_PO_CREATE_OPEN;
+	if (create) {
+		/* specify @psize as both NVMe size and SCM size */
+		rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0,
+				     0 /* version */, &tcx->tc_po_hdl);
+		if (rc) {
+			print_error("vpool create %s failed with error : %d\n", tcx->tc_po_name,
+				    rc);
+			goto failed;
+		}
+		tcx->tc_step = TCX_PO_CREATE_OPEN;
 
-	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
-	if (rc) {
-		print_error("vos container creation error: "DF_RC"\n",
-			    DP_RC(rc));
-		goto failed;
+		rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
+		if (rc) {
+			print_error("vos container creation error: " DF_RC "\n", DP_RC(rc));
+			goto failed;
+		}
+		tcx->tc_step = TCX_CO_CREATE;
+	} else {
+		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &tcx->tc_po_hdl);
+		assert_int_equal(rc, 0);
+		/* the container should already exists */
+		tcx->tc_step = TCX_CO_CREATE;
 	}
-	tcx->tc_step = TCX_CO_CREATE;
 
 	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
 			   &tcx->tc_co_hdl);

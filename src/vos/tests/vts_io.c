@@ -167,8 +167,7 @@ static enum daos_otype_t init_type;
 static int init_num_keys;
 
 void
-test_args_init(struct io_test_args *args,
-	       uint64_t pool_size)
+test_args_init(struct io_test_args *args, uint64_t pool_size, bool create)
 {
 	int	rc;
 
@@ -177,7 +176,7 @@ test_args_init(struct io_test_args *args,
 
 	vts_epoch_gen = 1;
 
-	rc = vts_ctx_init(&args->ctx, pool_size);
+	rc = vts_ctx_init(&args->ctx, pool_size, create);
 	if (rc != 0)
 		print_error("rc = "DF_RC"\n", DP_RC(rc));
 	assert_rc_equal(rc, 0);
@@ -213,7 +212,7 @@ void
 test_args_reset(struct io_test_args *args, uint64_t pool_size)
 {
 	test_args_fini(args);
-	test_args_init(args, pool_size);
+	test_args_init(args, pool_size, true /* create */);
 }
 
 static struct io_test_args	test_args;
@@ -226,7 +225,7 @@ setup_io(void **state)
 	struct vos_ts_table	*table;
 
 	srand(time(NULL));
-	test_args_init(&test_args, VPOOL_SIZE);
+	test_args_init(&test_args, VPOOL_SIZE, true /* create */);
 
 	table = vos_ts_table_get(true);
 	if (table == NULL)

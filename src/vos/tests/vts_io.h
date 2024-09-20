@@ -100,7 +100,7 @@ void			reset_oid_stable(uint32_t seed);
 daos_unit_oid_t		gen_oid_stable(enum daos_otype_t type);
 void			inc_cntr(unsigned long op_flags);
 void
-test_args_init(struct io_test_args *args, uint64_t pool_size);
+test_args_init(struct io_test_args *args, uint64_t pool_size, bool create);
 void
 			test_args_fini(struct io_test_args *args);
 void			test_args_reset(struct io_test_args *args,

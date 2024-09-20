@@ -136,22 +136,13 @@ _dts_fetch_and_validate(daos_handle_t coh, struct dts_local_args *la, unsigned d
 
 /** Setup and teardown functions */
 
-static struct io_test_args   test_args;
-static struct dts_local_args local_args;
-
-int
-setup_local_args(void **state)
+static void
+local_args_init(struct io_test_args *arg, struct dts_local_args *la)
 {
-	struct io_test_args   *arg      = &test_args;
-	struct dts_local_args *la       = &local_args;
-	int                    int_flag;
-	int                    rc;
+	int int_flag = is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64);
+	int rc;
 
-	test_args_init(&test_args, VPOOL_64M);
-
-	int_flag = is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64);
-
-	memset(&local_args, 0, sizeof(local_args));
+	memset(la, 0, sizeof(*la));
 
 	/** prepare OID */
 	la->oid = gen_oid(arg->otype);
@@ -179,6 +170,28 @@ setup_local_args(void **state)
 	assert_rc_equal(rc, 0);
 
 	la->epoch = START_EPOCH;
+}
+
+static void
+local_args_fini(struct dts_local_args *la)
+{
+	/** finalize scatter-gather lists */
+	d_sgl_fini(&la->sgl, false);
+	d_sgl_fini(&la->fetch_sgl, false);
+}
+
+static struct io_test_args   test_args;
+static struct dts_local_args local_args;
+
+int
+setup_local_args(void **state)
+{
+	struct io_test_args   *arg = &test_args;
+	struct dts_local_args *la  = &local_args;
+
+	test_args_init(&test_args, VPOOL_64M, true /* create */);
+
+	local_args_init(arg, la);
 
 	/** attach local arguments */
 	arg->custom = la;
@@ -194,14 +207,46 @@ teardown_local_args(void **state)
 	struct io_test_args   *arg = *state;
 	struct dts_local_args *la  = arg->custom;
 
-	/** finalize scatter-gather lists */
-	d_sgl_fini(&la->sgl, false);
-	d_sgl_fini(&la->fetch_sgl, false);
+	local_args_fini(la);
 
 	/** detach local arguments */
 	arg->custom = NULL;
 
 	test_args_fini(arg);
+
+	return 0;
+}
+
+int
+dts_basic_create(void **state)
+{
+	struct io_test_args *arg = &test_args;
+
+	test_args_init(&test_args, VPOOL_64M, true /* create */);
+
+	*state = arg;
+
+	return 0;
+}
+
+int
+dts_basic_close(void **state)
+{
+	struct io_test_args *arg = *state;
+
+	test_args_fini(arg);
+
+	return 0;
+}
+
+int
+dts_basic_open(void **state)
+{
+	struct io_test_args *arg = &test_args;
+
+	test_args_init(&test_args, VPOOL_64M, false /* open */);
+
+	*state = arg;
 
 	return 0;
 }

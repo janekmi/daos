@@ -94,8 +94,7 @@ vts_pool_fallocate(char **fname);
  * test context for I/O tests
  */
 int
-vts_ctx_init(struct vos_test_ctx *tcx,
-	     size_t pool_size);
+vts_ctx_init(struct vos_test_ctx *tcx, size_t pool_size, bool create);
 
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);
