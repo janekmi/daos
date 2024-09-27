@@ -240,7 +240,7 @@ static inline bool
 daos_is_valid_uuid_string(const char *uuid)
 {
 	const char	*p;
-	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
+	size_t           len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
 	int		 i;
 
 	if (strnlen(uuid, len) != len)
