@@ -25,6 +25,8 @@ int
 run_local_rdb_tests(const char *cfg);
 int
 run_structs_tests(const char *cfg);
+int
+run_xxx_tests(const char *cfg);
 
 static void
 print_usage()
@@ -50,6 +52,7 @@ run_all_tests(int keys)
 	failed += run_local_tests(cfg_desc_io);
 	failed += run_local_rdb_tests(cfg_desc_io);
 	failed += run_structs_tests(cfg_desc_io);
+	failed += run_xxx_tests(cfg_desc_io);
 
 	return failed;
 }
@@ -58,6 +61,7 @@ int
 main(int argc, char **argv)
 {
 	int                  rc        = 0;
+	char                 filter[1024];
 	int                  nr_failed = 0;
 	int                  opt       = 0;
 	int                  index     = 0;
@@ -104,8 +108,6 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 		{
 			/** Add wildcards for easier filtering */
-			char filter[sizeof(optarg) + 2];
-
 			sprintf(filter, "*%s*", optarg);
 			cmocka_set_test_filter(filter);
 			printf("Test filter: %s\n", filter);

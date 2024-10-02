@@ -112,6 +112,15 @@ setup_local_args(void **state);
 int
 teardown_local_args(void **state);
 
+int
+dts_basic_create(void **state);
+
+int
+dts_basic_close(void **state);
+
+int
+dts_basic_open(void **state);
+
 #define BASIC_UT(NO, NAME, FUNC)                                                                   \
 	{                                                                                          \
 		"DTX" #NO ": " NAME, FUNC, setup_local_args, teardown_local_args                   \

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,7 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
+#define VPOOL_64M        (64ULL << 20)
 #define VPOOL_256M	(256ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
@@ -83,7 +84,7 @@ bool
 vts_file_exists(const char *filename);
 
 int
-vts_alloc_gen_fname(char **fname);
+vts_alloc_gen_fname(char *po_uuid, char **fname);
 
 int
 vts_pool_fallocate(char **fname);
@@ -93,8 +94,7 @@ vts_pool_fallocate(char **fname);
  * test context for I/O tests
  */
 int
-vts_ctx_init(struct vos_test_ctx *tcx,
-	     size_t pool_size);
+vts_ctx_init(struct vos_test_ctx *tcx, size_t pool_size, bool create);
 
 void
 vts_ctx_fini(struct vos_test_ctx *tcx);

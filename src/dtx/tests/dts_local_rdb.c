@@ -114,5 +114,5 @@ run_local_rdb_tests(const char *cfg)
 
 	dts_global_init();
 
-	return cmocka_run_group_tests_name(test_name, tests_all, setup_io, teardown_io);
+	return cmocka_run_group_tests_name(test_name, tests_all, NULL, NULL);
 }

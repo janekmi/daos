@@ -167,8 +167,7 @@ static enum daos_otype_t init_type;
 static int init_num_keys;
 
 void
-test_args_init(struct io_test_args *args,
-	       uint64_t pool_size)
+test_args_init(struct io_test_args *args, uint64_t pool_size, bool create)
 {
 	int	rc;
 
@@ -177,7 +176,7 @@ test_args_init(struct io_test_args *args,
 
 	vts_epoch_gen = 1;
 
-	rc = vts_ctx_init(&args->ctx, pool_size);
+	rc = vts_ctx_init(&args->ctx, pool_size, create);
 	if (rc != 0)
 		print_error("rc = "DF_RC"\n", DP_RC(rc));
 	assert_rc_equal(rc, 0);
@@ -201,15 +200,19 @@ test_args_init(struct io_test_args *args,
 	}
 	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
 		 vos_path, init_type);
+}
 
-
+void
+test_args_fini(struct io_test_args *args)
+{
+	vts_ctx_fini(&args->ctx);
 }
 
 void
 test_args_reset(struct io_test_args *args, uint64_t pool_size)
 {
-	vts_ctx_fini(&args->ctx);
-	test_args_init(args, pool_size);
+	test_args_fini(args);
+	test_args_init(args, pool_size, true /* create */);
 }
 
 static struct io_test_args	test_args;
@@ -222,7 +225,7 @@ setup_io(void **state)
 	struct vos_ts_table	*table;
 
 	srand(time(NULL));
-	test_args_init(&test_args, VPOOL_SIZE);
+	test_args_init(&test_args, VPOOL_SIZE, true /* create */);
 
 	table = vos_ts_table_get(true);
 	if (table == NULL)
@@ -256,7 +259,7 @@ teardown_io(void **state)
 	}
 
 	assert_ptr_equal(arg, &test_args);
-	vts_ctx_fini(&arg->ctx);
+	test_args_fini(arg);
 	return 0;
 }
 
@@ -956,7 +959,7 @@ io_obj_cache_test(void **state)
 	struct vos_object	*obj1, *obj2;
 	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
-	char			*po_name;
+	char			*po_name = "";
 	uuid_t			 pool_uuid;
 	daos_handle_t		 l_poh, l_coh;
 	struct daos_lru_cache   *old_cache;
@@ -970,8 +973,8 @@ io_obj_cache_test(void **state)
 	old_cache       = tls->vtl_ocache;
 	tls->vtl_ocache = occ;
 
-	rc = vts_alloc_gen_fname(&po_name);
-	assert_int_equal(rc, 0);
+	// rc = vts_alloc_gen_fname(&po_name);
+	// assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
 	rc = vos_pool_create(po_name, pool_uuid, VPOOL_256M, 0, 0, 0 /* version */, &l_poh);
@@ -1105,7 +1108,7 @@ io_obj_cache_test(void **state)
 	assert_rc_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
 	tls->vtl_ocache = old_cache;
-	free(po_name);
+	// free(po_name);
 }
 
 static void
