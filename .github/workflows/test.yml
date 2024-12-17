@@ -2,14 +2,14 @@ name: Test
 
 on:
   workflow_call:
-    inputs:
-      VARIABLE:
-        type: string
-        required: true
+    # inputs:
+    #   VARIABLE:
+    #     type: string
+    #     required: true
 
 jobs:
   XXX:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo ${{ inputs.VARIABLE }}
+          echo ${{ env.VARIABLE }}
