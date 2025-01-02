@@ -977,12 +977,13 @@ ts_group(void **state) {
 		case 'p':
 			ik_btr_perf(st);
 			break;
-		default:
-			D_PRINT("Unsupported command %c\n", opt);
 		case 'm':
 		case 't':
-			/* handled previously */
+			/* Ought to be handled at the earlier stage. */
+			fail_msg("Unexpected command %c\n", opt);
 			break;
+		default:
+			fail_msg("Unsupported command %c\n", opt);
 		}
 	}
 }
@@ -1038,18 +1039,24 @@ main(int argc, char **argv)
 		start_idx = 2;
 		test_name = argv[2];
 		if (strcmp(argv[3], "-t") == 0) {
+			++start_idx;
 			D_PRINT("Using dynamic tree order\n");
 			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
-			if (strcmp(argv[4], "-m") == 0)
+			if (strcmp(argv[4], "-m") == 0) {
+				++start_idx;
 				rc = use_pmem();
+			}
 		} else if (strcmp(argv[3], "-m") == 0) {
+			++start_idx;
 			rc = use_pmem();
 			if (strcmp(argv[4], "-t") == 0) {
+				++start_idx;
 				D_PRINT("Using dynamic tree order\n");
 				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
 			}
 		}
 	} else {
+		/* TODO: Is this branch still alive? */
 		start_idx = 0;
 		test_name = "Btree testing tool";
 		optind = 0;
