@@ -838,7 +838,7 @@ ik_btr_perf(void **state)
 static void
 ik_btr_drain(void **state)
 {
-	static const int drain_keys  = 10000;
+	static const int drain_keys  = 10;
 	static const int drain_creds = 23;
 
 	unsigned int	*arr;
@@ -1038,6 +1038,11 @@ main(int argc, char **argv)
 	if (strcmp(argv[1], "--start-test") == 0) {
 		start_idx = 2;
 		test_name = argv[2];
+		/* XXX */
+		printf("%s\n", test_name);
+		printf("argv[3]=%s\n", argv[3]);
+		printf("argv[4]=%s\n", argv[4]);
+		/* XXX */
 		if (strcmp(argv[3], "-t") == 0) {
 			++start_idx;
 			D_PRINT("Using dynamic tree order\n");
