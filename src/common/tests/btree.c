@@ -1009,7 +1009,7 @@ run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 int
 main(int argc, char **argv)
 {
-	struct timeval	tv;
+	// struct timeval	tv;
 	int		rc = 0;
 	int		opt;
 	int		dynamic_flag = 0;
@@ -1019,15 +1019,15 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
+	// gettimeofday(&tv, NULL);
+	// srand(tv.tv_usec);
 
 	ik_toh = DAOS_HDL_INVAL;
 	ik_root_off = UMOFF_NULL;
 
-	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc != 0)
-		return rc;
+	// rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	// if (rc != 0)
+	// 	return rc;
 
 	if (argc == 1) {
 		print_message("Invalid format.\n");
@@ -1060,6 +1060,9 @@ main(int argc, char **argv)
 				dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
 			}
 		}
+	} else if (strcmp(argv[1], "--from-file") == 0) {
+		printf("Hi!\n");
+		exit(1);
 	} else {
 		/* TODO: Is this branch still alive? */
 		start_idx = 0;
