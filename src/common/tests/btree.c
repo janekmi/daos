@@ -53,6 +53,8 @@ static umem_off_t		 ik_root_off;
 static struct btr_root		*ik_root;
 static daos_handle_t		 ik_toh;
 
+static bool ik_inplace;
+
 
 /** integer key record */
 struct ik_rec {
@@ -1006,6 +1008,345 @@ run_cmd_line_test(char *test_name, char **args, int start_idx, int stop_idx)
 					   NULL);
 }
 
+enum {
+	USE_PMEM = 1 << 0,
+	USE_DYNAMIC_ROOT = 1 << 1
+};
+
+enum Op {
+    OP_CREATE = 1,
+    OP_CLOSE = 2,
+    OP_DESTROY = 3,
+    OP_OPEN = 4,
+    OP_UPDATE = 5,
+    OP_ITER = 6,
+    OP_QUERY = 7,
+    OP_LOOKUP = 8,
+    OP_DELETE = 9,
+    OP_DRAIN = 10,
+};
+
+enum OpCreateOpt {
+	INPLACE = 1 << 0,
+	UINT_KEY = 1 << 1,
+	EMBED_FIRST = 1 << 2
+};
+
+static void
+op_create(char opts, char order) {
+	uint64_t feats = 0;
+	int rc;
+
+	if (opts & UINT_KEY) {
+		feats += BTR_FEAT_UINT_KEY;
+	}
+	if (opts & EMBED_FIRST) {
+		feats += BTR_FEAT_EMBED_FIRST;
+	}
+
+	if (order != 0){
+		ik_order = order;
+	}
+
+	ik_inplace = ((opts & INPLACE) != 0);
+
+	if (ik_inplace) {
+		rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
+						ik_order, ik_uma, ik_root,
+						&ik_toh);
+	} else {
+		rc = dbtree_create(IK_TREE_CLASS, feats, ik_order,
+					ik_uma, &ik_root_off, &ik_toh);
+	}
+
+	assert_rc_equal(rc, 0);
+}
+
+static void
+op_open() {
+	int rc;
+
+	if (ik_inplace) {
+		rc = dbtree_open_inplace(ik_root, ik_uma, &ik_toh);
+	} else {
+		rc = dbtree_open(ik_root_off, ik_uma, &ik_toh);
+	}
+
+	assert_rc_equal(rc, 0);
+}
+
+/*
+ * Records is just a different name for copies of entries kept by test for
+ * validation.
+ */
+struct record {
+	uint64_t key;
+	char *value;
+	size_t value_size;
+};
+
+#define RECORDS_INCREASE 10
+
+size_t records_total = 0;
+size_t records_used = 0;
+struct record *records = NULL;
+
+#define VALUES_INCREASE 10
+#define VALUE_MAX 256
+
+size_t values_size = 0;
+size_t values_pos = 0;
+char *values = NULL;
+
+static size_t
+record_get_empty() {
+	if (records_used == records_total) {
+		records = (struct record *)realloc(records,
+			sizeof(struct record) * (records_total + RECORDS_INCREASE));
+		records_total += RECORDS_INCREASE;
+	}
+	return records_used++;
+}
+
+static void
+record_check(uint64_t key, char *value, size_t value_size) {
+	for (int i = 0; i < records_used; ++i) {
+		if (records[i].key == key) {
+			assert_int_equal(records[i].value_size, value_size);
+			assert_int_equal
+				(memcmp(records[i].value, value, sizeof(char) * value_size), 0);
+			return;
+		}
+	}
+}
+
+static void
+value_rand(struct record *rec)
+{
+	rec->value_size = rand() % VALUE_MAX;
+	if (values_pos + rec->value_size > values_size) {
+		values = (char *)realloc(values,
+			sizeof(char) * (values_size + VALUES_INCREASE));
+	}
+	rec->value = &values[values_pos];
+	for (int i = 0; i < rec->value_size; ++i) {
+		rec->value[i] = rand() % 256;
+	}
+}
+
+static void
+op_update(char entries_num) {
+	const int use_existing_chance = 30;
+	size_t idx;
+	d_iov_t	key_iov;
+	d_iov_t	val_iov;
+	int rc;
+
+	for (int i = 0; i < entries_num; ++i) {
+		// if possible give a chance to use an existing key
+		bool use_existing = ((rand() % 100) < use_existing_chance);
+		if (records_used == 0) {
+			use_existing = false;
+		}
+		if (use_existing) {
+			idx = rand() % records_used;
+		} else {
+			idx = record_get_empty();
+			records[idx].key = rand();
+		}
+		// rand a new value
+		value_rand(&records[idx]);
+		// update the tree
+		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+		d_iov_set(&val_iov, records[idx].value, records[idx].value_size);
+		rc = dbtree_update(ik_toh, &key_iov, &val_iov);
+		assert_rc_equal(rc, 0);
+	}
+}
+
+#define ITER_STEPS_MAX 10
+
+static void
+op_iter(int entries_num) {
+	dbtree_probe_opc_t opc;
+	daos_handle_t ih;
+	size_t idx;
+	d_iov_t	key_iov;
+	d_iov_t	val_iov;
+	d_iov_t	*key_iovp = NULL;
+	int rc;
+	switch(rand() % 3) {
+		case 0:
+			opc = BTR_PROBE_FIRST;
+			break;
+		case 1:
+			opc = BTR_PROBE_LAST;
+			break;
+		case 2:
+			opc = BTR_PROBE_EQ;
+			break;
+		/* XXX: Probes? */
+	}
+	if (opc == BTR_PROBE_EQ) {
+		idx = rand() & records_used;
+		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+		key_iovp = &key_iov;
+	}
+	assert_rc_equal(dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih), 0);
+	/* XXX: Other intents? */
+	/* XXX: Anchors? */
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, key_iovp, NULL);
+	assert_rc_equal(rc, 0); /* XXX? */
+	int steps_num = entries_num + rand() % ITER_STEPS_MAX;
+	bool prev;
+	for (int i = 0; i < steps_num; ++i) {
+		int steps_remaining = steps_num - i;
+		if (rand() % 2 == 0) {
+			d_iov_set(&key_iov, NULL, 0);
+			d_iov_set(&val_iov, NULL, 0);
+			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+			assert_rc_equal(rc, 0);
+			record_check(*((uint64_t *)key_iov.iov_buf),
+				(char *)val_iov.iov_buf, val_iov.iov_len);
+		}
+		if (rand() % steps_num > steps_remaining) {
+			assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
+		}
+		prev = rand() % 2;
+		if (prev) {
+			rc = dbtree_iter_prev(ih);
+		} else {
+			rc = dbtree_iter_next(ih);
+		}
+		assert_rc_equal(rc, 0); /* XXX */
+	}
+}
+
+static void
+op_query() {
+	struct btr_attr attr;
+	struct btr_stat stat;
+	assert_rc_equal(dbtree_query(ik_toh, &attr, &stat), 0);
+}
+
+static void
+op_lookup(int entries_num) {
+	d_iov_t	key_iov;
+	d_iov_t	val_iov;
+	for (int i = 0; i < entries_num; ++i) {
+		int idx = rand() % records_used;
+		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+		d_iov_set(&val_iov, NULL, 0); /* get address */
+		/* XXX get a value is missing? */
+		assert_rc_equal(dbtree_lookup(ik_toh, &key_iov, &val_iov), 0);
+		record_check(records[idx].key, (char *)val_iov.iov_buf, val_iov.iov_len);
+	}
+}
+
+static void
+op_delete(int entries_num) {
+	d_iov_t	key_iov;
+	for (int i = 0; i < entries_num; ++i) {
+		int idx = rand() % records_used;
+		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+		assert_rc_equal(dbtree_delete(ik_toh, BTR_PROBE_EQ, &key_iov, NULL), 0);
+		/* XXX other probes? */
+		if (idx == records_used - 1) {
+			memcpy(&records[idx], &records[idx + 1],
+				sizeof(char) * (records_used - idx - 1));
+		}
+		records_used -= 1;
+	}
+}
+
+static void
+run_cmd_from_file(char *cmds, size_t read)
+{
+	int rc;
+	// initialize pseudo-random generator
+	char seed = cmds[1];
+	srand(seed);
+	// parse options
+	char opt = cmds[0];
+	if (opt & USE_PMEM) {
+		(void) use_pmem();
+	} else {
+		D_PRINT("Using vmem\n");
+		assert_int_equal(utest_vmem_create(sizeof(*ik_root), &ik_utx), 0);
+	}
+	int dynamic_flag = 0;
+	if (opt & USE_DYNAMIC_ROOT) {
+		dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+	}
+	// register class and populate globals
+	rc = dbtree_class_register(
+	    IK_TREE_CLASS, dynamic_flag | BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY, &ik_ops);
+	assert_int_equal(rc, 0);
+	ik_root = utest_utx2root(ik_utx);
+	ik_uma = utest_utx2uma(ik_utx);
+	// execute operations
+	char arg1;
+	char arg2;
+	for (unsigned pos = 2; pos < read; ++pos) {
+		enum Op op = cmds[pos];
+		switch (op) {
+			case OP_CREATE:
+				arg1 = cmds[pos + 1]; // opts
+				arg2 = cmds[pos + 2]; // order
+				pos += 2;
+				op_create(arg1, arg2);
+				break;
+			case OP_CLOSE:
+				assert_rc_equal(dbtree_close(ik_toh), 0);
+				ik_toh = DAOS_HDL_INVAL;
+				break;
+			case OP_DESTROY:
+				assert_rc_equal(dbtree_destroy(ik_toh, NULL), 0);
+				ik_toh = DAOS_HDL_INVAL;
+				break;
+			case OP_OPEN:
+				op_open();
+				break;
+			case OP_UPDATE:
+				arg1 = cmds[pos + 1]; // # of entries
+				pos += 1;
+				op_update(arg1);
+				break;
+			case OP_ITER:
+				arg1 = cmds[pos + 1]; // # of entries
+				pos += 1;
+				op_iter(arg1);
+				break;
+			case OP_QUERY:
+				op_query();
+				break;
+			case OP_LOOKUP:
+				arg1 = cmds[pos + 1]; // # of entries
+				pos += 1;
+				op_lookup(arg1);
+				break;
+			case OP_DELETE:
+				arg1 = cmds[pos + 1]; // # of entries
+				pos += 1;
+				op_delete(arg1);
+				break;
+			case OP_DRAIN:
+				arg1 = cmds[pos + 1]; // # of credits
+				pos += 1;
+				int creds = arg1;
+				assert_rc_equal(dbtree_drain(ik_toh, &creds, NULL, NULL), 0);
+				break;
+			default:
+				fail_msg("Unsupported op: %u", op);
+		}
+	}
+	(void) arg1;
+	(void) arg2;
+	// clean up
+	daos_debug_fini();
+	assert_int_equal(utest_utx_destroy(ik_utx), 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1025,9 +1366,9 @@ main(int argc, char **argv)
 	ik_toh = DAOS_HDL_INVAL;
 	ik_root_off = UMOFF_NULL;
 
-	// rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	// if (rc != 0)
-	// 	return rc;
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc != 0)
+		return rc;
 
 	if (argc == 1) {
 		print_message("Invalid format.\n");
@@ -1061,8 +1402,16 @@ main(int argc, char **argv)
 			}
 		}
 	} else if (strcmp(argv[1], "--from-file") == 0) {
-		printf("Hi!\n");
-		exit(1);
+		#define CMDS_MAX 512
+		char cmds[CMDS_MAX];
+		FILE *file = fopen(argv[2],"rb");
+		assert_non_null(file);
+		size_t read = fread(cmds, sizeof(char), CMDS_MAX, file);
+		assert_int_not_equal(feof(file), 0);
+		assert_int_equal(fclose(file), 0);
+		assert_true(read > 2);
+		run_cmd_from_file(cmds, read);
+		exit(0);
 	} else {
 		/* TODO: Is this branch still alive? */
 		start_idx = 0;
