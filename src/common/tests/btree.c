@@ -1081,6 +1081,7 @@ op_open() {
  */
 struct record {
 	uint64_t key;
+	size_t value_pos;
 	char *value;
 	size_t value_size;
 };
@@ -1105,6 +1106,7 @@ record_get_empty() {
 			sizeof(struct record) * (records_total + RECORDS_INCREASE));
 		records_total += RECORDS_INCREASE;
 	}
+	records[records_used].value = NULL;
 	return records_used++;
 }
 
@@ -1118,6 +1120,28 @@ record_check(uint64_t key, char *value, size_t value_size) {
 			return;
 		}
 	}
+	fail_msg("Can not find a record of key: %lu", key);
+}
+
+#define RECORD_IDX_UNKNOWN (-1)
+
+static void
+record_delete(uint64_t key, int idx) {
+	if (idx == RECORD_IDX_UNKNOWN) {
+		for (int i = 0; i < records_used; ++i) {
+			if (records[i].key == key) {
+				idx = i;
+				break;
+			}
+		}
+		assert_int_not_equal(idx, RECORD_IDX_UNKNOWN);
+	}
+	printf("Deleted [%d]: %lu\n", idx, records[idx].key);
+	if (idx != records_used - 1) {
+		memcpy(&records[idx], &records[idx + 1],
+			sizeof(struct record) * (records_used - idx - 1));
+	}
+	records_used -= 1;
 }
 
 static void
@@ -1125,19 +1149,31 @@ value_rand(struct record *rec)
 {
 	rec->value_size = rand() % VALUE_MAX;
 	if (values_pos + rec->value_size > values_size) {
+		unsigned increase = (rec->value_size / VALUES_INCREASE + 1) * VALUES_INCREASE;
 		values = (char *)realloc(values,
-			sizeof(char) * (values_size + VALUES_INCREASE));
+			sizeof(char) * (values_size + increase));
+		values_size += increase;
+		// fix pointers in the records
+		for (int i = 0; i < records_used; ++i) {
+			if (records[i].value == NULL) {
+				continue;
+			}
+			records[i].value = &values[records[i].value_pos];
+		}
 	}
+	rec->value_pos = values_pos;
 	rec->value = &values[values_pos];
+	values_pos += rec->value_size;
 	for (int i = 0; i < rec->value_size; ++i) {
 		rec->value[i] = rand() % 256;
+		// rec->value[i] = 'a'; // XXX
 	}
 }
 
 static void
 op_update(char entries_num) {
 	const int use_existing_chance = 30;
-	size_t idx;
+	int idx;
 	d_iov_t	key_iov;
 	d_iov_t	val_iov;
 	int rc;
@@ -1158,21 +1194,25 @@ op_update(char entries_num) {
 		value_rand(&records[idx]);
 		// update the tree
 		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
-		d_iov_set(&val_iov, records[idx].value, records[idx].value_size);
+		d_iov_set(&val_iov, records[idx].value,
+			sizeof(char) * records[idx].value_size);
 		rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 		assert_rc_equal(rc, 0);
+		printf("%s [%d]: %lu\n", use_existing ? "Updated" : "Added", idx,
+			records[idx].key);
 	}
 }
 
 #define ITER_STEPS_MAX 10
 
-static void
-op_iter(int entries_num) {
+static int
+op_iter_probe_rand(daos_handle_t ih) {
+	if (records_used == 0) {
+		return -DER_NONEXIST;
+	}
 	dbtree_probe_opc_t opc;
-	daos_handle_t ih;
-	size_t idx;
+	int idx;
 	d_iov_t	key_iov;
-	d_iov_t	val_iov;
 	d_iov_t	*key_iovp = NULL;
 	int rc;
 	switch(rand() % 3) {
@@ -1188,20 +1228,33 @@ op_iter(int entries_num) {
 		/* XXX: Probes? */
 	}
 	if (opc == BTR_PROBE_EQ) {
-		idx = rand() & records_used;
+		idx = rand() % records_used;
 		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
 		key_iovp = &key_iov;
 	}
-	assert_rc_equal(dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih), 0);
 	/* XXX: Other intents? */
 	/* XXX: Anchors? */
 	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, key_iovp, NULL);
-	assert_rc_equal(rc, 0); /* XXX? */
+	assert_rc_equal(rc, 0);
+	return rc;
+}
+
+static void
+op_iter(int entries_num) {
+	daos_handle_t ih;
+	d_iov_t	key_iov;
+	d_iov_t	val_iov;
+	int rc;
+	assert_rc_equal(dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih), 0);
+	if (op_iter_probe_rand(ih) != 0) {
+		return;
+	}
 	int steps_num = entries_num + rand() % ITER_STEPS_MAX;
 	bool prev;
 	for (int i = 0; i < steps_num; ++i) {
 		int steps_remaining = steps_num - i;
 		if (rand() % 2 == 0) {
+			/* fetch and check the value is as expected */
 			d_iov_set(&key_iov, NULL, 0);
 			d_iov_set(&val_iov, NULL, 0);
 			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
@@ -1210,7 +1263,18 @@ op_iter(int entries_num) {
 				(char *)val_iov.iov_buf, val_iov.iov_len);
 		}
 		if (rand() % steps_num > steps_remaining) {
+			/* fetch the key to remove it from the records */
+			d_iov_set(&key_iov, NULL, 0);
+			d_iov_set(&val_iov, NULL, 0);
+			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+			assert_rc_equal(rc, 0);
+			record_delete(*(uint64_t *)key_iov.iov_buf, RECORD_IDX_UNKNOWN);
+			/* delete the entry */
 			assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
+			/* re-probe since after the delete the iterator is not ready */
+			if (op_iter_probe_rand(ih) != 0) {
+				return;
+			}
 		}
 		prev = rand() % 2;
 		if (prev) {
@@ -1218,8 +1282,15 @@ op_iter(int entries_num) {
 		} else {
 			rc = dbtree_iter_next(ih);
 		}
-		assert_rc_equal(rc, 0); /* XXX */
+		assert_true(rc == 0 || rc == -DER_NONEXIST);
+		if (rc == -DER_NONEXIST) {
+			/* re-probe since after hitting a non-existing entry the iterator is not ready */
+			if (op_iter_probe_rand(ih) != 0) {
+				return;
+			}
+		}
 	}
+	dbtree_iter_finish(ih);
 }
 
 static void
@@ -1237,6 +1308,7 @@ op_lookup(int entries_num) {
 		int idx = rand() % records_used;
 		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
 		d_iov_set(&val_iov, NULL, 0); /* get address */
+		printf("Lookup [%d]: %lu\n", idx, *(uint64_t *)key_iov.iov_buf);
 		/* XXX get a value is missing? */
 		assert_rc_equal(dbtree_lookup(ik_toh, &key_iov, &val_iov), 0);
 		record_check(records[idx].key, (char *)val_iov.iov_buf, val_iov.iov_len);
@@ -1247,15 +1319,16 @@ static void
 op_delete(int entries_num) {
 	d_iov_t	key_iov;
 	for (int i = 0; i < entries_num; ++i) {
+		if (records_used == 0) {
+			return;
+		}
 		int idx = rand() % records_used;
+		/* delete the entry */
 		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
 		assert_rc_equal(dbtree_delete(ik_toh, BTR_PROBE_EQ, &key_iov, NULL), 0);
 		/* XXX other probes? */
-		if (idx == records_used - 1) {
-			memcpy(&records[idx], &records[idx + 1],
-				sizeof(char) * (records_used - idx - 1));
-		}
-		records_used -= 1;
+		/* delete from the records */
+		record_delete(0, idx);
 	}
 }
 
@@ -1291,50 +1364,61 @@ run_cmd_from_file(char *cmds, size_t read)
 		enum Op op = cmds[pos];
 		switch (op) {
 			case OP_CREATE:
+				printf("OP_CREATE\n");
 				arg1 = cmds[pos + 1]; // opts
 				arg2 = cmds[pos + 2]; // order
 				pos += 2;
 				op_create(arg1, arg2);
 				break;
 			case OP_CLOSE:
+				printf("OP_CLOSE\n");
 				assert_rc_equal(dbtree_close(ik_toh), 0);
 				ik_toh = DAOS_HDL_INVAL;
 				break;
 			case OP_DESTROY:
+				printf("OP_DESTROY\n");
 				assert_rc_equal(dbtree_destroy(ik_toh, NULL), 0);
 				ik_toh = DAOS_HDL_INVAL;
 				break;
 			case OP_OPEN:
+				printf("OP_OPEN\n");
 				op_open();
 				break;
 			case OP_UPDATE:
+				printf("OP_UPDATE\n");
 				arg1 = cmds[pos + 1]; // # of entries
 				pos += 1;
 				op_update(arg1);
 				break;
 			case OP_ITER:
+				printf("OP_ITER\n");
 				arg1 = cmds[pos + 1]; // # of entries
 				pos += 1;
 				op_iter(arg1);
 				break;
 			case OP_QUERY:
+				printf("OP_QUERY\n");
 				op_query();
 				break;
 			case OP_LOOKUP:
+				printf("OP_LOOKUP\n");
 				arg1 = cmds[pos + 1]; // # of entries
 				pos += 1;
 				op_lookup(arg1);
 				break;
 			case OP_DELETE:
+				printf("OP_DELETE\n");
 				arg1 = cmds[pos + 1]; // # of entries
 				pos += 1;
 				op_delete(arg1);
 				break;
 			case OP_DRAIN:
+				printf("OP_DRAIN\n");
 				arg1 = cmds[pos + 1]; // # of credits
 				pos += 1;
 				int creds = arg1;
-				assert_rc_equal(dbtree_drain(ik_toh, &creds, NULL, NULL), 0);
+				bool destroyed;
+				assert_rc_equal(dbtree_drain(ik_toh, &creds, NULL, &destroyed), 0);
 				break;
 			default:
 				fail_msg("Unsupported op: %u", op);
