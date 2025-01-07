@@ -1168,6 +1168,8 @@ value_rand(struct record *rec)
 		rec->value[i] = rand() % 256;
 		// rec->value[i] = 'a'; // XXX
 	}
+	// rec->value_size = 2; // XXX
+	// rec->value[1] = '\0';
 }
 
 static void
@@ -1210,7 +1212,7 @@ op_iter_probe_rand(daos_handle_t ih) {
 	if (records_used == 0) {
 		return -DER_NONEXIST;
 	}
-	dbtree_probe_opc_t opc;
+	dbtree_probe_opc_t opc = BTR_PROBE_EQ;
 	int idx;
 	d_iov_t	key_iov;
 	d_iov_t	*key_iovp = NULL;
