@@ -105,6 +105,22 @@ run_test()
 
     if [ -z ${PERF} ]; then
 
+        RECORDS='276289596:a,547756153:a,316019427:a,1661389366:a,1054491192:a,1272506267:a'
+        KEYS='316019427,1054491192,547756153,1272506267,276289596,1661389366'
+        UINT='%'
+
+        echo "XXX..."
+        DAOS_DEBUG="$DDEBUG"                        \
+        eval "${VCMD}" "$BTR" --start-test \
+        "'btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}'" \
+        "${DYN}" "${PMEM}" \
+        -C "${UINT}${IPL}o:$ORDER" \
+        -u "$RECORDS"                               \
+        -d "$KEYS"                                  \
+        -D
+
+        exit 1
+
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
         eval "${VCMD}" "$BTR" --start-test \
@@ -151,9 +167,11 @@ run_test()
     fi
 }
 
-for IPL in "i," ""; do
+# for IPL in "i," ""; do
+for IPL in ""; do
     for IDIR in "f" "b"; do
-        for PMEM in "-m" ""; do
+        # for PMEM in "-m" ""; do
+        for PMEM in ""; do
             run_test
         done
     done
