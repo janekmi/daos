@@ -105,9 +105,11 @@ run_test()
 
     if [ -z ${PERF} ]; then
 
-        # VCMD='gdbserver localhost:2345'
+        VCMD='gdbserver localhost:2345'
         RECORDS='276289596:a,547756153:a,316019427:a,1661389366:a,1054491192:a,1272506267:a'
-        KEYS='316019427,1054491192,547756153,1272506267,276289596,1661389366'
+        KEYS='316019427,1054491192,547756153,1272506267'
+        KEYS2='276289596'
+        KEYS3='1661389366'
         PMEM=''
         UINT='%'
         IPL=''
@@ -123,6 +125,10 @@ run_test()
         -o                                          \
         -u "$RECORDS"                               \
         -d "$KEYS"                                  \
+        -i 'f'                                  \
+        -d "$KEYS2"                                  \
+        -i 'f'                                  \
+        -d "$KEYS3"                                  \
         -D
 
         exit 1

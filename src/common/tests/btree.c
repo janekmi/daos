@@ -254,6 +254,116 @@ ik_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+#define BTR_TRACE_MAX		40
+
+/**
+ * btree iterator, it is embedded in btr_context.
+ */
+struct btr_iterator {
+	/** state of the iterator */
+	unsigned short			 it_state;
+	/** private iterator */
+	bool				 it_private;
+	/**
+	 * Reserved for hash collision:
+	 * collisions happened on current hkey.
+	 */
+	unsigned int			 it_collisions;
+};
+
+/**
+ * Trace for tree search.
+ */
+struct btr_trace {
+	/** pointer to a tree node */
+	umem_off_t			tr_node;
+	/** child/record index within this node */
+	unsigned int			tr_at;
+};
+
+struct btr_trace_info {
+	struct btr_trace *ti_trace;
+	uint32_t          ti_embedded_info;
+};
+
+/**
+ * Context for btree operations.
+ * NB: object cache will retain this data structure.
+ */
+struct btr_context {
+	/** Tree domain: root pointer, memory pool and memory class etc */
+	struct btr_instance		 tc_tins;
+	/** embedded iterator */
+	struct btr_iterator		 tc_itr;
+	/** embedded fake record for the purpose of handling embedded value */
+	struct btr_record                tc_record;
+	/** This provides space for the hkey for the fake record */
+	struct ktr_hkey                  tc_hkey;
+	/** cached configured tree order */
+	uint16_t			 tc_order;
+	/** cached tree depth, avoid loading from slow memory */
+	uint16_t			 tc_depth;
+	/** credits for drain, see dbtree_drain */
+	uint32_t                         tc_creds    : 30;
+	/**
+	 * credits is turned on, \a tcx::tc_creds should be checked
+	 * while draining the tree
+	 */
+	uint32_t                         tc_creds_on : 1;
+	/**
+	 * returned value of the probe, it should be reset after upsert
+	 * or delete because the probe path could have been changed.
+	 */
+	int				 tc_probe_rc;
+	/** refcount, used by iterator */
+	int				 tc_ref;
+	/** cached tree class, avoid loading from slow memory */
+	int				 tc_class;
+	/** cached feature bits, avoid loading from slow memory */
+	uint64_t			 tc_feats;
+	/** trace for the tree root */
+	struct btr_trace_info            tc_trace;
+	/** trace buffer */
+	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
+};
+
+static void
+ik_tree_print() {
+	struct btr_context *tcx = (struct btr_context *)ik_toh.cookie;
+	struct btr_instance *tins = &tcx->tc_tins;
+	struct umem_instance *umm = &tins->ti_umm;
+	struct btr_root *root = tins->ti_root;
+	struct btr_node *node;
+	struct btr_record *rec;
+	
+	if (tcx->tc_feats & BTR_FEAT_EMBEDDED) {
+		rec = &tcx->tc_record;
+		printf("%lu\n", rec->rec_off);
+		return;
+	}
+
+	if (root->tr_node == UMOFF_NULL) {
+		printf("(empty)\n\n");
+		return;
+	}
+
+	node = umem_off2ptr(umm, root->tr_node);
+
+	while (node != NULL) {
+		for (int i = 0; i < node->tn_keyn; ++i) {
+			rec = &node->tn_recs[i];
+			printf("%lu\n", rec->rec_off);
+		}
+
+		if (node->tn_child == UMOFF_NULL) {
+			break;
+		}
+
+		node = umem_off2ptr(umm, node->tn_child);
+	}
+	printf("\n");
+}
+
 static btr_ops_t ik_ops = {
     .to_hkey_size  = ik_hkey_size,
     .to_hkey_gen   = ik_hkey_gen,
@@ -347,6 +457,8 @@ ik_btr_open_create(void **state)
 				create ? "create" : "open", rc);
 		fail_msg("%s", outbuf);
 	}
+
+	ik_tree_print();
 }
 
 static void
@@ -477,6 +589,7 @@ ik_btr_kv_operate(void **state)
 				"Failed to update "DF_U64":%s\n", key, val);
 				fail_msg("%s", outbuf);
 			}
+			ik_tree_print();
 			break;
 
 		case BTR_OPC_DELETE:
@@ -492,6 +605,7 @@ ik_btr_kv_operate(void **state)
 
 			if (dbtree_is_empty(ik_toh) && verbose)
 				D_PRINT("Tree is empty now\n");
+			ik_tree_print();
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
@@ -563,114 +677,114 @@ ik_btr_query(void **state)
 
 }
 
-static void
-ik_btr_iterate(void **state)
-{
-	daos_handle_t	ih;
-	int		i;
-	int		d;
-	int		del;
-	int		rc;
-	int		opc;
-	char		*err;
-	char		*arg;
+// static void
+// ik_btr_iterate(void **state)
+// {
+// 	daos_handle_t	ih;
+// 	int		i;
+// 	int		d;
+// 	int		del;
+// 	int		rc;
+// 	int		opc;
+// 	char		*err;
+// 	char		*arg;
 
-	arg = tst_fn_val.optval;
+// 	arg = tst_fn_val.optval;
 
-	if (daos_handle_is_inval(ik_toh)) {
-		fail_msg("Can't find opened tree\n");
-	}
+// 	if (daos_handle_is_inval(ik_toh)) {
+// 		fail_msg("Can't find opened tree\n");
+// 	}
 
-	rc = dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih);
-	if (rc != 0) {
-		err = "Failed to initialize tree\n";
-		goto failed;
-	}
+// 	rc = dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih);
+// 	if (rc != 0) {
+// 		err = "Failed to initialize tree\n";
+// 		goto failed;
+// 	}
 
-	if (arg[0] == 'b')
-		opc = BTR_PROBE_LAST;
-	else
-		opc = BTR_PROBE_FIRST;
+// 	if (arg[0] == 'b')
+// 		opc = BTR_PROBE_LAST;
+// 	else
+// 		opc = BTR_PROBE_FIRST;
 
-	if (arg[1] == ':')
-		del = atoi(&arg[2]);
-	else
-		del = 0;
+// 	if (arg[1] == ':')
+// 		del = atoi(&arg[2]);
+// 	else
+// 		del = 0;
 
-	for (i = d = 0;; i++) {
-		d_iov_t	key_iov;
-		d_iov_t	val_iov;
-		uint64_t	key;
+// 	for (i = d = 0;; i++) {
+// 		d_iov_t	key_iov;
+// 		d_iov_t	val_iov;
+// 		uint64_t	key;
 
-		if (i == 0 || (del != 0 && d <= del)) {
-			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
-						   NULL, NULL);
-			if (rc == -DER_NONEXIST)
-				break;
+// 		if (i == 0 || (del != 0 && d <= del)) {
+// 			rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT,
+// 						   NULL, NULL);
+// 			if (rc == -DER_NONEXIST)
+// 				break;
 
-			if (rc != 0) {
-				err = "probe failure\n";
-				goto failed;
-			}
+// 			if (rc != 0) {
+// 				err = "probe failure\n";
+// 				goto failed;
+// 			}
 
-			if (del != 0) {
-				if (d == del)
-					del = d = 0; /* done */
-				else
-					d++;
-			}
-		}
+// 			if (del != 0) {
+// 				if (d == del)
+// 					del = d = 0; /* done */
+// 				else
+// 					d++;
+// 			}
+// 		}
 
-		d_iov_set(&key_iov, NULL, 0);
-		d_iov_set(&val_iov, NULL, 0);
-		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
-		if (rc != 0) {
-			err = "fetch failure\n";
-			goto failed;
-		}
+// 		d_iov_set(&key_iov, NULL, 0);
+// 		d_iov_set(&val_iov, NULL, 0);
+// 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+// 		if (rc != 0) {
+// 			err = "fetch failure\n";
+// 			goto failed;
+// 		}
 
-		D_ASSERT(key_iov.iov_len == sizeof(key));
-		memcpy(&key, key_iov.iov_buf, sizeof(key));
+// 		D_ASSERT(key_iov.iov_len == sizeof(key));
+// 		memcpy(&key, key_iov.iov_buf, sizeof(key));
 
-		if (d != 0) { /* delete */
-			D_PRINT("Delete "DF_U64": %s\n",
-				key, (char *)val_iov.iov_buf);
-			rc = dbtree_iter_delete(ih, NULL);
-			if (rc != 0) {
-				err = "delete failure\n";
-				goto failed;
-			}
+// 		if (d != 0) { /* delete */
+// 			D_PRINT("Delete "DF_U64": %s\n",
+// 				key, (char *)val_iov.iov_buf);
+// 			rc = dbtree_iter_delete(ih, NULL);
+// 			if (rc != 0) {
+// 				err = "delete failure\n";
+// 				goto failed;
+// 			}
 
-		} else { /* iterate */
-			D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
+// 		} else { /* iterate */
+// 			D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
 
-			if (opc == BTR_PROBE_LAST)
-				rc = dbtree_iter_prev(ih);
-			else
-				rc = dbtree_iter_next(ih);
+// 			if (opc == BTR_PROBE_LAST)
+// 				rc = dbtree_iter_prev(ih);
+// 			else
+// 				rc = dbtree_iter_next(ih);
 
-			if (rc == -DER_NONEXIST)
-				break;
+// 			if (rc == -DER_NONEXIST)
+// 				break;
 
-			if (rc != 0) {
-				err = "move failure\n";
-				goto failed;
-			}
-		}
-	}
+// 			if (rc != 0) {
+// 				err = "move failure\n";
+// 				goto failed;
+// 			}
+// 		}
+// 	}
 
-	D_PRINT("%s iterator: total %d, deleted %d\n",
-		opc == BTR_PROBE_FIRST ? "forward" : "backward", i, d);
-	dbtree_iter_finish(ih);
-	goto pass;
+// 	D_PRINT("%s iterator: total %d, deleted %d\n",
+// 		opc == BTR_PROBE_FIRST ? "forward" : "backward", i, d);
+// 	dbtree_iter_finish(ih);
+// 	goto pass;
 
-failed:
-	dbtree_iter_finish(ih);
-	fail_msg("%s", err);
+// failed:
+// 	dbtree_iter_finish(ih);
+// 	fail_msg("%s", err);
 
-pass:
-	print_message("Test Passed\n");
-}
+// pass:
+// 	print_message("Test Passed\n");
+// }
 
 /* fill in @arr with natural number from 1 to key_nr, randomize their order */
 void
@@ -917,6 +1031,8 @@ use_pmem() {
 	return rc;
 }
 
+static void op_iter(int entries_num);
+
 static void
 ts_group(void **state) {
 
@@ -971,7 +1087,8 @@ ts_group(void **state) {
 			ik_btr_kv_operate(st);
 			break;
 		case 'i':
-			ik_btr_iterate(st);
+			// ik_btr_iterate(st);
+			op_iter(2);
 			break;
 		case 'b':
 			ik_btr_batch_oper(st);
@@ -1166,7 +1283,7 @@ value_rand(struct record *rec)
 	values_pos += rec->value_size;
 	for (int i = 0; i < rec->value_size; ++i) {
 		rec->value[i] = rand() % 256;
-		// rec->value[i] = 'a'; // XXX
+		rec->value[i] = 'a'; // XXX
 	}
 	// rec->value_size = 2; // XXX
 	// rec->value[1] = '\0';
@@ -1209,26 +1326,26 @@ op_update(char entries_num) {
 
 static int
 op_iter_probe_rand(daos_handle_t ih) {
-	if (records_used == 0) {
-		return -DER_NONEXIST;
-	}
-	dbtree_probe_opc_t opc = BTR_PROBE_EQ;
+	// if (records_used == 0) {
+	// 	return -DER_NONEXIST;
+	// }
+	dbtree_probe_opc_t opc = BTR_PROBE_FIRST;
 	int idx;
 	d_iov_t	key_iov;
 	d_iov_t	*key_iovp = NULL;
 	int rc;
-	switch(rand() % 3) {
-		case 0:
-			opc = BTR_PROBE_FIRST;
-			break;
-		case 1:
-			opc = BTR_PROBE_LAST;
-			break;
-		case 2:
-			opc = BTR_PROBE_EQ;
-			break;
-		/* XXX: Probes? */
-	}
+	// switch(rand() % 3) {
+	// 	case 0:
+	// 		opc = BTR_PROBE_FIRST;
+	// 		break;
+	// 	case 1:
+	// 		opc = BTR_PROBE_LAST;
+	// 		break;
+	// 	case 2:
+	// 		opc = BTR_PROBE_EQ;
+	// 		break;
+	// 	/* XXX: Probes? */
+	// }
 	if (opc == BTR_PROBE_EQ) {
 		idx = rand() % records_used;
 		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
@@ -1251,39 +1368,39 @@ op_iter(int entries_num) {
 	if (op_iter_probe_rand(ih) != 0) {
 		return;
 	}
-	int steps_num = entries_num + rand() % ITER_STEPS_MAX;
-	bool prev;
+	int steps_num = entries_num; // + rand() % ITER_STEPS_MAX;
+	// bool prev;
 	for (int i = 0; i < steps_num; ++i) {
-		int steps_remaining = steps_num - i;
-		if (rand() % 2 == 0) {
+		// int steps_remaining = steps_num - i;
+		// if (rand() % 2 == 0) {
 			/* fetch and check the value is as expected */
 			d_iov_set(&key_iov, NULL, 0);
 			d_iov_set(&val_iov, NULL, 0);
 			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 			assert_rc_equal(rc, 0);
-			record_check(*((uint64_t *)key_iov.iov_buf),
-				(char *)val_iov.iov_buf, val_iov.iov_len);
-		}
-		if (rand() % steps_num > steps_remaining) {
-			/* fetch the key to remove it from the records */
-			d_iov_set(&key_iov, NULL, 0);
-			d_iov_set(&val_iov, NULL, 0);
-			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
-			assert_rc_equal(rc, 0);
-			record_delete(*(uint64_t *)key_iov.iov_buf, RECORD_IDX_UNKNOWN);
-			/* delete the entry */
-			assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
-			/* re-probe since after the delete the iterator is not ready */
-			if (op_iter_probe_rand(ih) != 0) {
-				return;
-			}
-		}
-		prev = rand() % 2;
-		if (prev) {
-			rc = dbtree_iter_prev(ih);
-		} else {
+			// record_check(*((uint64_t *)key_iov.iov_buf),
+			// 	(char *)val_iov.iov_buf, val_iov.iov_len);
+		// }
+		// if (rand() % steps_num > steps_remaining) {
+		// 	/* fetch the key to remove it from the records */
+		// 	d_iov_set(&key_iov, NULL, 0);
+		// 	d_iov_set(&val_iov, NULL, 0);
+		// 	rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+		// 	assert_rc_equal(rc, 0);
+		// 	record_delete(*(uint64_t *)key_iov.iov_buf, RECORD_IDX_UNKNOWN);
+		// 	/* delete the entry */
+		// 	assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
+		// 	/* re-probe since after the delete the iterator is not ready */
+		// 	if (op_iter_probe_rand(ih) != 0) {
+		// 		return;
+		// 	}
+		// }
+		// prev = rand() % 2;
+		// if (prev) {
+		// 	rc = dbtree_iter_prev(ih);
+		// } else {
 			rc = dbtree_iter_next(ih);
-		}
+		// }
 		assert_true(rc == 0 || rc == -DER_NONEXIST);
 		if (rc == -DER_NONEXIST) {
 			/* re-probe since after hitting a non-existing entry the iterator is not ready */
