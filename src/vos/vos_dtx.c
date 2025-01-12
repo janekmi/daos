@@ -2217,46 +2217,186 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 }
 
+/* 4 bit magic number + version */
+#define ILOG_MAGIC		0x00000006
+#define ILOG_MAGIC_BITS		4
+#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
+#define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
+
+struct ilog_tree {
+	umem_off_t	it_root;
+	uint64_t	it_embedded;
+};
+
+struct ilog_root {
+	union {
+		struct ilog_id		lr_id;
+		struct ilog_tree	lr_tree;
+	};
+	uint32_t			lr_ts_idx;
+	uint32_t			lr_magic;
+};
+
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[])
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_container	 *cont;
-	int			  committed = 0;
-	int			  rc = 0;
+	struct vos_container *cont = vos_hdl2cont(coh);
+	struct umem_instance *umm = vos_cont2umm(cont);
+	struct vos_cont_df *cont_df = cont->vc_cont_df;
+	umem_off_t dbd_off = cont_df->cd_dtx_active_head;
+	struct vos_dtx_blob_df *dbd;
+	struct vos_dtx_act_ent_df *dae_df;
+	const umem_off_t off_inv = 1; // invalid
+	umem_off_t ilog_off;
+	umem_off_t svt_off;
+	umem_off_t evt_off;
+	umem_off_t ilog_off_inv = off_inv;
+	umem_off_t evt_off_inv = off_inv;
+	const int records_all_num = 5;
+	umem_off_t records_all[records_all_num];
+	const int rec_noninline = 10;
+	umem_off_t rec_off;
+	umem_off_t *rec;
+	int i;
+	int r;
+	int rc;
+	
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0) {
+		return rc;
+	}
 
-	D_ASSERT(count > 0);
+	if (UMOFF_IS_NULL(dbd_off)) {
+		// allocate and "attach" a DTX blob to the container
+		dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 
-	D_ALLOC_ARRAY(daes, count);
-	if (daes == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ALLOC_ARRAY(dces, count);
-	if (dces == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
-
-	/* Commit multiple DTXs via single local transaction. */
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
-	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, dtis, count, 0, rm_cos, daes, dces);
-		if (committed >= 0) {
-			rc = umem_tx_commit(vos_cont2umm(cont));
-			D_ASSERT(rc == 0);
-		} else {
-			rc = umem_tx_abort(vos_cont2umm(cont), committed);
+		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_active_head, sizeof(dbd_off));
+		if (rc != 0) {
+			goto out;
 		}
-		vos_dtx_post_handle(cont, daes, dces, count, false, rc != 0);
+
+		cont_df->cd_dtx_active_head = dbd_off;
+	} else {
+		rc = umem_tx_add(umm, dbd_off, sizeof(*dbd));
+		if (rc != 0) {
+			goto out;
+		}
+	}
+
+	// minimal initialization of the DTX blob
+	dbd = umem_off2ptr(umm, dbd_off);
+	dbd->dbd_magic = DTX_ACT_BLOB_MAGIC;
+	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
+			sizeof(struct vos_dtx_act_ent_df);
+	dbd->dbd_count = 1;
+	dbd->dbd_index = 1;
+
+	// populate the first DTX entry
+	dae_df = &dbd->dbd_active_data[0];
+	dae_df->dae_xid.dti_hlc = 1;
+	dae_df->dae_lid = DTX_LID_RESERVED;
+	dae_df->dae_epoch = 1;
+	dae_df->dae_rec_cnt = DTX_INLINE_REC_CNT + rec_noninline;
+
+	// allocate and "attach" a records array to the DTX entry (non-inline)
+	if (UMOFF_IS_NULL(dae_df->dae_rec_off)) {
+		rec_off = umem_zalloc(umm, sizeof(umem_off_t) * rec_noninline);
+
+		rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_off, sizeof(rec_off));
+		if (rc != 0) {
+			goto out;
+		}
+
+		dae_df->dae_rec_off = rec_off;
+	} else {
+		rec_off = dae_df->dae_rec_off;
+	}
+
+	{
+		// prepare valid and invalid records
+		struct ilog_root *ilog;
+		struct evt_desc *evt;
+
+		ilog_off = umem_zalloc(umm, sizeof(*ilog));
+		ilog = umem_off2ptr(umm, ilog_off);
+		ilog->lr_magic = ILOG_MAGIC;
+		dtx_type2umoff_flag(&ilog_off, DTX_RT_ILOG);
+
+		dtx_type2umoff_flag(&ilog_off_inv, DTX_RT_ILOG);
+
+		svt_off = umem_zalloc(umm, sizeof(int));
+		dtx_type2umoff_flag(&svt_off, DTX_RT_SVT);
+
+		evt_off = umem_zalloc(umm, sizeof(*evt));
+		evt = umem_off2ptr(umm, evt_off);
+		evt->dc_magic = EVT_DESC_MAGIC;
+		dtx_type2umoff_flag(&evt_off, DTX_RT_EVT);
+
+		dtx_type2umoff_flag(&evt_off_inv, DTX_RT_EVT);
+
+		records_all[0] = ilog_off;
+		records_all[1] = ilog_off_inv;
+		records_all[2] = svt_off;
+		records_all[3] = evt_off;
+		records_all[4] = evt_off_inv;
+	}
+
+	// copy records (inline)
+	for (i = 0, r = 0; i < DTX_INLINE_REC_CNT; ++i, ++r) {
+		dae_df->dae_rec_inline[i] = records_all[r % records_all_num];
+	}
+
+	// copy records (non-inline)
+	rec = umem_off2ptr(umm, rec_off);
+	for (i = 0; i < rec_noninline; ++i, ++r) {
+		rec[i] = records_all[r % records_all_num];
 	}
 
 out:
-	D_FREE(daes);
-	D_FREE(dces);
+	if (rc == 0) {
+		rc = umem_tx_commit(umm);
+	} else {
+		rc = umem_tx_abort(umm, rc);
+	}
 
-	return rc < 0 ? rc : committed;
+	return rc;
+// 	struct vos_dtx_act_ent	**daes = NULL;
+// 	struct vos_dtx_cmt_ent	**dces = NULL;
+// 	struct vos_container	 *cont;
+// 	int			  committed = 0;
+// 	int			  rc = 0;
+
+// 	D_ASSERT(count > 0);
+
+// 	D_ALLOC_ARRAY(daes, count);
+// 	if (daes == NULL)
+// 		D_GOTO(out, rc = -DER_NOMEM);
+
+// 	D_ALLOC_ARRAY(dces, count);
+// 	if (dces == NULL)
+// 		D_GOTO(out, rc = -DER_NOMEM);
+
+// 	cont = vos_hdl2cont(coh);
+// 	D_ASSERT(cont != NULL);
+
+// 	/* Commit multiple DTXs via single local transaction. */
+// 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+// 	if (rc == 0) {
+// 		committed = vos_dtx_commit_internal(cont, dtis, count, 0, rm_cos, daes, dces);
+// 		if (committed >= 0) {
+// 			rc = umem_tx_commit(vos_cont2umm(cont));
+// 			D_ASSERT(rc == 0);
+// 		} else {
+// 			rc = umem_tx_abort(vos_cont2umm(cont), committed);
+// 		}
+// 		vos_dtx_post_handle(cont, daes, dces, count, false, rc != 0);
+// 	}
+
+// out:
+// 	D_FREE(daes);
+// 	D_FREE(dces);
+
+// 	return rc < 0 ? rc : committed;
 }
 
 int
@@ -2382,26 +2522,6 @@ out:
 
 	return rc;
 }
-
-/* 4 bit magic number + version */
-#define ILOG_MAGIC		0x00000006
-#define ILOG_MAGIC_BITS		4
-#define ILOG_MAGIC_MASK		((1 << ILOG_MAGIC_BITS) - 1)
-#define ILOG_MAGIC_VALID(magic)	(((magic) & ILOG_MAGIC_MASK) == ILOG_MAGIC)
-
-struct ilog_tree {
-	umem_off_t	it_root;
-	uint64_t	it_embedded;
-};
-
-struct ilog_root {
-	union {
-		struct ilog_id		lr_id;
-		struct ilog_tree	lr_tree;
-	};
-	uint32_t			lr_ts_idx;
-	uint32_t			lr_magic;
-};
 
 static void
 do_dtx_rec_discard(struct umem_instance *umm, umem_off_t *rec, int *discarded)
@@ -2891,6 +3011,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 	struct umem_instance		*umm = vos_cont2umm(cont);
 	struct vos_cont_df		*cont_df = cont->vc_cont_df;
 	struct vos_dtx_blob_df		*dbd;
+	// umem_off_t			 dbd_off = UMOFF_NULL; // cont_df->cd_dtx_active_head;
 	umem_off_t			 dbd_off = cont_df->cd_dtx_active_head;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;

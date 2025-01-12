@@ -149,7 +149,7 @@ setup_local_args(void **state)
 	memset(&local_args, 0, sizeof(local_args));
 
 	/** i.a. recreates the container */
-	test_args_reset(arg, VPOOL_SIZE);
+	// test_args_reset(arg, VPOOL_SIZE);
 
 	/** prepare OID */
 	la->oid = gen_oid(arg->otype);

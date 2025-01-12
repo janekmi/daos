@@ -970,7 +970,7 @@ io_obj_cache_test(void **state)
 	old_cache       = tls->vtl_ocache;
 	tls->vtl_ocache = occ;
 
-	rc = vts_alloc_gen_fname(&po_name);
+	rc = vts_alloc_gen_fname(&po_name, 0);
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
