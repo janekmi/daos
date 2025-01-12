@@ -2530,7 +2530,7 @@ vos_dtx_discard(daos_handle_t coh, struct dtx_id *dti, int *discarded)
 	}
 
 out:
-	if (rc == -DER_ALREADY) {
+	if (rc == -DER_ALREADY || rc == -DER_CANCELED) {
 		rc = 0;
 	}
 
