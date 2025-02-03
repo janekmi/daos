@@ -11,7 +11,7 @@ export PMEMOBJ_CONF="sds.at_create=0"
 gdbserver localhost:2345 ./btree --from-file testcase_dir/$1.bin
 
 # set -e
-# for bin in `seq 0 95`; do
-#     echo "./btree --from-file testcase_dir/$bin.bin"
-#     ./btree --from-file testcase_dir/$bin.bin
+# for bin in testcase_dir/*.bin; do
+#     echo "./btree --from-file $bin"
+#     ./btree --from-file $bin
 # done
