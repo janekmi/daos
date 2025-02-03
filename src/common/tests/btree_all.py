@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import yaml
 import subprocess
+
+import yaml
 
 TESTS = '../../../utils/utest.yaml'
 

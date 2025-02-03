@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
-import yaml
-
 from enum import IntEnum
+
+import yaml
 
 INPUT = 'btree_cmds.yml'
 OUTPUT_DEBUG = 'testcases.yml'
