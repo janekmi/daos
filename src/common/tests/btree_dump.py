@@ -61,6 +61,12 @@ STR_2_OpCreateOpt = {
 
 OpCreateOpt_Special = ['+', '%']
 
+FIRST_OPTS_SHIFT=(8 - 2)
+FIRST_SEED_MASK=0b00111111
+
+OP_CREATE_OPTS_SHIFT=(8 - 3)
+OP_CREATE_ORDER_MASK=0b00011111
+
 def op_create_open(optarg: str):
     # i,o:11
     opts = 0
@@ -77,7 +83,9 @@ def op_create_open(optarg: str):
             opts += STR_2_OpCreateOpt[kv[0]]
         else:
             raise ValueError(f'Unknown key: {kv[0]}')
-    output = [Op.CREATE.value, opts, order]
+    # combine opts and order to limit the number of irrelevant bits
+    opts_and_order = (opts << OP_CREATE_OPTS_SHIFT) + (order & OP_CREATE_ORDER_MASK)
+    output = [Op.CREATE.value, opts_and_order]
     # print(output)
     return output, True
 
@@ -200,11 +208,11 @@ def translate(cmd):
     # print(cmd)
     args = PARSER.parse_args(cmd)
     # [Opt, Seed]
-    cmdb = [
-        (Opt.USE_PMEM.value if args.use_pmem else 0) +
-        (Opt.USE_DYNAMIC_ROOT.value if args.use_dynamic_root else 0),
-        73 # arbitrary pseudo-random seed
-    ]
+    opt = (Opt.USE_PMEM.value if args.use_pmem else 0) + \
+        (Opt.USE_DYNAMIC_ROOT.value if args.use_dynamic_root else 0)
+    seed = 73 # arbitrary pseudo-random seed
+    opt_and_seed = (opt << FIRST_OPTS_SHIFT) + (seed & FIRST_SEED_MASK)
+    cmdb = [opt_and_seed]
     skip_one = False
     for i in range(len(cmd)):
         if skip_one:
@@ -227,12 +235,12 @@ def compare(a: list, b: list):
 def main():
     with open(INPUT) as file:
         cmds = yaml.safe_load(file)
-    cmdbs = []
+    cmdbs = [] # binary commands
     for cmd in cmds:
         cmdb = translate(cmd)
         cmdbs.append(cmdb)
     print(len(cmdbs))
-    ucmdbs = []
+    ucmdbs = [] # unique binary commands
     for a in cmdbs:
         already_there = False
         for b in ucmdbs:
@@ -242,8 +250,10 @@ def main():
         if not already_there:
             ucmdbs.append(a)
     print(len(ucmdbs))
+    # dump collected binaries commands as text for inspection
     with open(OUTPUT_DEBUG, 'w') as file:
         yaml.dump(ucmdbs, file)
+    # write binary command files
     for i in range(len(ucmdbs)):
         with open(f'{OUTPUT_DIR}/{i}.bin', 'wb') as file:
             file.write(bytes(ucmdbs[i]))

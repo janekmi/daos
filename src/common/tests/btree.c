@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1130,6 +1130,12 @@ enum {
 	USE_DYNAMIC_ROOT = 1 << 1
 };
 
+#define FIRST_OPTS_SHIFT     (8 - 2)
+#define FIRST_SEED_MASK      b00111111
+
+#define OP_CREATE_OPTS_SHIFT (8 - 3)
+#define OP_CREATE_ORDER_MASK b00011111
+
 enum Op {
     OP_CREATE = 1,
     OP_CLOSE = 2,
@@ -1456,10 +1462,10 @@ run_cmd_from_file(char *cmds, size_t read)
 {
 	int rc;
 	// initialize pseudo-random generator
-	char seed = cmds[1];
+	char seed = (cmds[0] & FIRST_SEED_MASK);
 	srand(seed);
 	// parse options
-	char opt = cmds[0];
+	char opt = cmds[0] >> FIRST_OPTS_SHIFT;
 	if (opt & USE_PMEM) {
 		(void) use_pmem();
 	} else {
@@ -1479,14 +1485,14 @@ run_cmd_from_file(char *cmds, size_t read)
 	// execute operations
 	char arg1;
 	char arg2;
-	for (unsigned pos = 2; pos < read; ++pos) {
+	for (unsigned pos = 1; pos < read; ++pos) {
 		enum Op op = cmds[pos];
 		switch (op) {
 			case OP_CREATE:
 				printf("OP_CREATE\n");
-				arg1 = cmds[pos + 1]; // opts
-				arg2 = cmds[pos + 2]; // order
-				pos += 2;
+				arg1 = cmds[pos + 1] >> OP_CREATE_OPTS_SHIFT; // opts
+				arg2 = cmds[pos + 1] & OP_CREATE_ORDER_MASK;  // order
+				pos += 1;
 				op_create(arg1, arg2);
 				break;
 			case OP_CLOSE:
