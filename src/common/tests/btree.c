@@ -1131,10 +1131,10 @@ enum {
 };
 
 #define FIRST_OPTS_SHIFT     (8 - 2)
-#define FIRST_SEED_MASK      b00111111
+#define FIRST_SEED_MASK      0b00111111
 
 #define OP_CREATE_OPTS_SHIFT (8 - 3)
-#define OP_CREATE_ORDER_MASK b00011111
+#define OP_CREATE_ORDER_MASK 0b00011111
 
 enum Op {
     OP_CREATE = 1,
