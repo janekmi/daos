@@ -1,4 +1,4 @@
-# Copyright 2016-2024 Intel Corporation
+# Copyright 2016-2025 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -468,7 +468,7 @@ class PreReqComponent():
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
                               ['default', 'dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('COMPILER', "Set the compiler family to use", 'gcc',
-                              ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
+                              ['gcc', 'covc', 'clang', 'icc', 'afl-gcc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
 
@@ -625,7 +625,8 @@ class PreReqComponent():
                                  'CXX': '/opt/BullseyeCoverage/bin/g++',
                                  'CVS': '/opt/BullseyeCoverage/bin/covselect',
                                  'COV01': '/opt/BullseyeCoverage/bin/cov01'},
-                        'clang': {'CC': 'clang', 'CXX': 'clang++'}}
+                        'clang': {'CC': 'clang', 'CXX': 'clang++'},
+                        'afl-gcc': {'CC': '/home/beside/work/AFL/afl-gcc', 'CXX': '/home/beside/work/AFL/afl-g++'}}
 
         if GetOption('clean') or GetOption('help'):
             return

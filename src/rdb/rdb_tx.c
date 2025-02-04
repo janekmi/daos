@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2025 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1154,7 +1154,7 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
-	uint64_t	i;
+	uint64_t        i = 0;
 	int		rc;
 
 	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
@@ -1187,7 +1187,7 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
-	uint64_t	i;
+	uint64_t        i = 0;
 	int		rc;
 
 	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
@@ -1211,7 +1211,7 @@ rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key_out)
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
-	uint64_t	i;
+	uint64_t        i = 0;
 	int		rc;
 
 	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
@@ -1246,7 +1246,7 @@ rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iter
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
-	uint64_t	i;
+	uint64_t        i = 0;
 	int		rc;
 
 	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
