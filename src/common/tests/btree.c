@@ -70,7 +70,7 @@ static int	test_group_stop;
 
 #define IK_TREE_CLASS	100
 #define POOL_NAME "/mnt/daos/btree-test"
-#define POOL_SIZE ((1024 * 1024 * 1024ULL))
+#define POOL_SIZE       ((10 * 1024 * 1024ULL))
 
 /** customized functions for btree */
 static int
