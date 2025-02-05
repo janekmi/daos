@@ -1137,16 +1137,17 @@ enum {
 #define OP_CREATE_ORDER_MASK 0b00011111
 
 enum Op {
-    OP_CREATE = 1,
-    OP_CLOSE = 2,
-    OP_DESTROY = 3,
-    OP_OPEN = 4,
-    OP_UPDATE = 5,
-    OP_ITER = 6,
-    OP_QUERY = 7,
-    OP_LOOKUP = 8,
-    OP_DELETE = 9,
-    OP_DRAIN = 10,
+	OP_CREATE  = 0,
+	OP_CLOSE   = 1,
+	OP_DESTROY = 2,
+	OP_OPEN    = 3,
+	OP_UPDATE  = 4,
+	OP_ITER    = 5,
+	OP_QUERY   = 6,
+	OP_LOOKUP  = 7,
+	OP_DELETE  = 8,
+	OP_DRAIN   = 9,
+	OP_MAX     = 10,
 };
 
 enum OpCreateOpt {
@@ -1486,7 +1487,7 @@ run_cmd_from_file(char *cmds, size_t read)
 	char arg1;
 	char arg2;
 	for (unsigned pos = 1; pos < read; ++pos) {
-		enum Op op = cmds[pos];
+		enum Op op = cmds[pos] % OP_MAX;
 		switch (op) {
 			case OP_CREATE:
 				printf("OP_CREATE\n");

@@ -37,16 +37,16 @@ class Opt(IntEnum):
     USE_DYNAMIC_ROOT = 2
 
 class Op(IntEnum):
-    CREATE = 1
-    CLOSE = 2
-    DESTROY = 3
-    OPEN = 4
-    UPDATE = 5
-    ITER = 6
-    QUERY = 7
-    LOOKUP = 8
-    DELETE = 9
-    DRAIN = 10
+    CREATE = 0
+    CLOSE = 1
+    DESTROY = 2
+    OPEN = 3
+    UPDATE = 4
+    ITER = 5
+    QUERY = 6
+    LOOKUP = 7
+    DELETE = 8
+    DRAIN = 9
 
 class OpCreateOpt(IntEnum):
     INPLACE = 1
