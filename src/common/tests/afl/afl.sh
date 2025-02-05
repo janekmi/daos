@@ -3,7 +3,9 @@
 PATH=/home/beside/work/AFL:$PATH
 BIN=/home/beside/work/daos-stack/daos/build/debug/afl-gcc/src/common/tests/btree
 
-afl-cmin -i testcase_dir -o findings_dir $BIN --from-file @@
+# afl-cmin -i testcase_dir -o findings_dir $BIN --from-file @@
+
+afl-fuzz -i testcase_min_dir -o findings_dir $BIN --from-file @@
 
 # afl-cmin produces no log on crash/failure. The line could be helpful in this case.
 # Copied directly from the afl-cmin script.

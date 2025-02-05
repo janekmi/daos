@@ -9,7 +9,7 @@ BIN=/home/beside/work/daos-stack/daos/build/debug/afl-gcc/src/common/tests/btree
 #   - the issue goes away when the BTR_FEAT_EMBEDDED feature is turned off
 # - patch for all of these: https://github.com/daos-stack/daos/pull/15815
 
-# gdbserver localhost:2345 $BIN --from-file testcase_dir/$1.bin
+# gdbserver localhost:2345 $BIN --from-file $1
 
 set -e
 for bin in testcase_dir/*.bin; do
