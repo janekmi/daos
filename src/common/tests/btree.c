@@ -1160,6 +1160,7 @@ static void
 op_create(char opts, char order) {
 	uint64_t feats = 0;
 	int rc;
+	int      rc_exp = 0;
 
 	if (opts & UINT_KEY) {
 		feats += BTR_FEAT_UINT_KEY;
@@ -1174,6 +1175,11 @@ op_create(char opts, char order) {
 
 	ik_inplace = ((opts & INPLACE) != 0);
 
+	/* If the tree is already there */
+	if (daos_handle_is_valid(ik_toh)) {
+		rc_exp = -DER_NO_PERM;
+	}
+
 	if (ik_inplace) {
 		rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
 						ik_order, ik_uma, ik_root,
@@ -1183,12 +1189,38 @@ op_create(char opts, char order) {
 					ik_uma, &ik_root_off, &ik_toh);
 	}
 
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, rc_exp);
+}
+
+static void
+op_close()
+{
+	int rc_exp = daos_handle_is_valid(ik_toh) ? 0 : -DER_NO_HDL;
+	assert_rc_equal(dbtree_close(ik_toh), rc_exp);
+	if (rc_exp == 0) {
+		ik_toh = DAOS_HDL_INVAL;
+	}
+}
+
+static void
+op_destroy()
+{
+	int rc_exp = daos_handle_is_valid(ik_toh) ? 0 : -DER_NO_HDL;
+	assert_rc_equal(dbtree_destroy(ik_toh, NULL), rc_exp);
+	if (rc_exp == 0) {
+		ik_toh = DAOS_HDL_INVAL;
+	}
 }
 
 static void
 op_open() {
 	int rc;
+
+	/* dbtree_open*() have no safeguards. */
+	if (daos_handle_is_valid(ik_toh)) {
+		D_PRINT("Tree is already opened.\n");
+		return;
+	}
 
 	if (ik_inplace) {
 		rc = dbtree_open_inplace(ik_root, ik_uma, &ik_toh);
@@ -1234,17 +1266,26 @@ record_get_empty() {
 	return records_used++;
 }
 
-static void
-record_check(uint64_t key, char *value, size_t value_size) {
+static struct record *
+record_get(uint64_t key)
+{
 	for (int i = 0; i < records_used; ++i) {
 		if (records[i].key == key) {
-			assert_int_equal(records[i].value_size, value_size);
-			assert_int_equal
-				(memcmp(records[i].value, value, sizeof(char) * value_size), 0);
-			return;
+			return &records[i];
 		}
 	}
-	fail_msg("Can not find a record of key: %lu", key);
+	return NULL;
+}
+
+static void
+record_check(uint64_t key, char *value, size_t value_size)
+{
+	struct record *record = record_get(key);
+	if (record == NULL) {
+		fail_msg("Can not find a record of key: %lu", key);
+	}
+	assert_int_equal(record->value_size, value_size);
+	assert_int_equal(memcmp(record->value, value, sizeof(char) * value_size), 0);
 }
 
 #define RECORD_IDX_UNKNOWN (-1)
@@ -1290,10 +1331,7 @@ value_rand(struct record *rec)
 	values_pos += rec->value_size;
 	for (int i = 0; i < rec->value_size; ++i) {
 		rec->value[i] = rand() % 256;
-		rec->value[i] = 'a'; // XXX
 	}
-	// rec->value_size = 2; // XXX
-	// rec->value[1] = '\0';
 }
 
 static void
@@ -1303,6 +1341,16 @@ op_update(char entries_num) {
 	d_iov_t	key_iov;
 	d_iov_t	val_iov;
 	int rc;
+
+	if (!daos_handle_is_valid(ik_toh)) {
+		uint64_t blob = rand();
+		d_iov_set(&key_iov, &blob, sizeof(blob));
+		d_iov_set(&val_iov, &blob, sizeof(blob));
+		rc = dbtree_update(ik_toh, &key_iov, &val_iov);
+		assert_rc_equal(rc, -DER_NO_HDL);
+		D_PRINT("dbtree_update() without the tree opened attempted.\n");
+		return;
+	}
 
 	for (int i = 0; i < entries_num; ++i) {
 		// if possible give a chance to use an existing key
@@ -1341,27 +1389,35 @@ op_iter_probe_rand(daos_handle_t ih) {
 	d_iov_t	key_iov;
 	d_iov_t	*key_iovp = NULL;
 	int rc;
-	// switch(rand() % 3) {
-	// 	case 0:
-	// 		opc = BTR_PROBE_FIRST;
-	// 		break;
-	// 	case 1:
-	// 		opc = BTR_PROBE_LAST;
-	// 		break;
-	// 	case 2:
-	// 		opc = BTR_PROBE_EQ;
-	// 		break;
-	// 	/* XXX: Probes? */
-	// }
+	int                rc_exp = 0;
+	switch (rand() % 3) {
+	case 0:
+		opc = BTR_PROBE_FIRST;
+		break;
+	case 1:
+		opc = BTR_PROBE_LAST;
+		break;
+	case 2:
+		opc = BTR_PROBE_EQ;
+		break;
+		/* XXX: Probes? */
+	}
 	if (opc == BTR_PROBE_EQ) {
-		idx = rand() % records_used;
-		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
-		key_iovp = &key_iov;
+		if (records_used > 0) {
+			idx = rand() % records_used;
+			d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+			key_iovp = &key_iov;
+		} else {
+			opc = BTR_PROBE_FIRST; /* fall back */
+		}
+	}
+	if (records_used == 0) {
+		rc_exp = -DER_NONEXIST;
 	}
 	/* XXX: Other intents? */
 	/* XXX: Anchors? */
 	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, key_iovp, NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, rc_exp);
 	return rc;
 }
 
@@ -1371,43 +1427,53 @@ op_iter(int entries_num) {
 	d_iov_t	key_iov;
 	d_iov_t	val_iov;
 	int rc;
+
+	if (!daos_handle_is_valid(ik_toh)) {
+		uint64_t blob = rand();
+		d_iov_set(&key_iov, &blob, sizeof(blob));
+		d_iov_set(&val_iov, &blob, sizeof(blob));
+		assert_rc_equal(dbtree_update(ik_toh, &key_iov, &val_iov), -DER_NO_HDL);
+		D_PRINT("dbtree_iter_prepare() without the tree opened attempted.\n");
+		return;
+	}
+
 	assert_rc_equal(dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih), 0);
 	if (op_iter_probe_rand(ih) != 0) {
 		return;
 	}
-	int steps_num = entries_num; // + rand() % ITER_STEPS_MAX;
-	// bool prev;
+	int  steps_num = entries_num;
+	bool prev;
 	for (int i = 0; i < steps_num; ++i) {
-		// int steps_remaining = steps_num - i;
-		// if (rand() % 2 == 0) {
+		int steps_remaining = steps_num - i;
+		if (rand() % 2 == 0) {
 			/* fetch and check the value is as expected */
 			d_iov_set(&key_iov, NULL, 0);
 			d_iov_set(&val_iov, NULL, 0);
 			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 			assert_rc_equal(rc, 0);
-			// record_check(*((uint64_t *)key_iov.iov_buf),
-			// 	(char *)val_iov.iov_buf, val_iov.iov_len);
-		// }
-		// if (rand() % steps_num > steps_remaining) {
-		// 	/* fetch the key to remove it from the records */
-		// 	d_iov_set(&key_iov, NULL, 0);
-		// 	d_iov_set(&val_iov, NULL, 0);
-		// 	rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
-		// 	assert_rc_equal(rc, 0);
-		// 	record_delete(*(uint64_t *)key_iov.iov_buf, RECORD_IDX_UNKNOWN);
-		// 	/* delete the entry */
-		// 	assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
-		// 	/* re-probe since after the delete the iterator is not ready */
-		// 	if (op_iter_probe_rand(ih) != 0) {
-		// 		return;
-		// 	}
-		// }
-		// prev = rand() % 2;
-		// if (prev) {
-		// 	rc = dbtree_iter_prev(ih);
-		// } else {
+			record_check(*((uint64_t *)key_iov.iov_buf), (char *)val_iov.iov_buf,
+				     val_iov.iov_len);
+		}
+		if (rand() % steps_num > steps_remaining) {
+			/* fetch the key to remove it from the records */
+			d_iov_set(&key_iov, NULL, 0);
+			d_iov_set(&val_iov, NULL, 0);
+			rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
+			assert_rc_equal(rc, 0);
+			record_delete(*(uint64_t *)key_iov.iov_buf, RECORD_IDX_UNKNOWN);
+			/* delete the entry */
+			assert_rc_equal(dbtree_iter_delete(ih, NULL), 0);
+			/* re-probe since after the delete the iterator is not ready */
+			if (op_iter_probe_rand(ih) != 0) {
+				return;
+			}
+		}
+		prev = rand() % 2;
+		if (prev) {
+			rc = dbtree_iter_prev(ih);
+		} else {
 			rc = dbtree_iter_next(ih);
-		// }
+		}
 		assert_true(rc == 0 || rc == -DER_NONEXIST);
 		if (rc == -DER_NONEXIST) {
 			/* re-probe since after hitting a non-existing entry the iterator is not ready */
@@ -1423,38 +1489,87 @@ static void
 op_query() {
 	struct btr_attr attr;
 	struct btr_stat stat;
-	assert_rc_equal(dbtree_query(ik_toh, &attr, &stat), 0);
+	int             rc_exp = 0;
+
+	if (!daos_handle_is_valid(ik_toh)) {
+		rc_exp = -DER_NO_HDL;
+	}
+
+	assert_rc_equal(dbtree_query(ik_toh, &attr, &stat), rc_exp);
 }
 
 static void
 op_lookup(int entries_num) {
+	const int use_random_chance = 20;
 	d_iov_t	key_iov;
 	d_iov_t	val_iov;
+	uint64_t  key;
+	int       idx;
+	int       rc_exp;
 	for (int i = 0; i < entries_num; ++i) {
-		int idx = rand() % records_used;
-		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
+		bool use_random = ((rand() % 100) < use_random_chance);
+		if (records_used == 0 || use_random) {
+			key = rand();
+			if (record_get(key) == NULL) {
+				rc_exp = -DER_NONEXIST;
+				printf("Lookup for non-existing: %lu\n", key);
+			} else {
+				rc_exp = 0;
+				printf("Lookup for existing: %lu\n", key);
+			}
+		} else {
+			idx    = rand() % records_used;
+			key    = records[idx].key;
+			rc_exp = 0;
+			printf("Lookup [%d]: %lu\n", idx, key);
+		}
+		/* overwrite the expected rc set above */
+		if (daos_handle_is_inval(ik_toh)) {
+			rc_exp = -DER_NO_HDL;
+		}
+		d_iov_set(&key_iov, &key, sizeof(key));
 		d_iov_set(&val_iov, NULL, 0); /* get address */
-		printf("Lookup [%d]: %lu\n", idx, *(uint64_t *)key_iov.iov_buf);
+
 		/* XXX get a value is missing? */
-		assert_rc_equal(dbtree_lookup(ik_toh, &key_iov, &val_iov), 0);
-		record_check(records[idx].key, (char *)val_iov.iov_buf, val_iov.iov_len);
+		assert_rc_equal(dbtree_lookup(ik_toh, &key_iov, &val_iov), rc_exp);
+		if (rc_exp == 0) {
+			record_check(key, (char *)val_iov.iov_buf, val_iov.iov_len);
+		}
 	}
 }
 
 static void
 op_delete(int entries_num) {
+	const int use_random_chance = 20;
 	d_iov_t	key_iov;
+	uint64_t  key;
+	int       rc_exp = -1;
+	int       idx    = -1;
 	for (int i = 0; i < entries_num; ++i) {
-		if (records_used == 0) {
-			return;
+		bool use_random = ((rand() % 100) < use_random_chance);
+		if (records_used == 0 || use_random) {
+			key = rand();
+			if (record_get(key) == NULL) {
+				printf("Delete an non-existing: %lu\n", key);
+				rc_exp = -DER_NONEXIST;
+			} else {
+				printf("Delete an existing: %lu\n", key);
+				rc_exp = 0;
+			}
+		} else {
+			idx    = rand() % records_used;
+			key    = records[idx].key;
+			rc_exp = 0;
+			printf("Lookup [%d]: %lu\n", idx, key);
 		}
-		int idx = rand() % records_used;
 		/* delete the entry */
-		d_iov_set(&key_iov, &records[idx].key, sizeof(records[idx].key));
-		assert_rc_equal(dbtree_delete(ik_toh, BTR_PROBE_EQ, &key_iov, NULL), 0);
+		d_iov_set(&key_iov, &key, sizeof(key));
+		assert_rc_equal(dbtree_delete(ik_toh, BTR_PROBE_EQ, &key_iov, NULL), rc_exp);
 		/* XXX other probes? */
-		/* delete from the records */
-		record_delete(0, idx);
+		if (rc_exp == 0) {
+			/* delete from the records */
+			record_delete(0, idx);
+		}
 	}
 }
 
@@ -1498,13 +1613,11 @@ run_cmd_from_file(char *cmds, size_t read)
 				break;
 			case OP_CLOSE:
 				printf("OP_CLOSE\n");
-				assert_rc_equal(dbtree_close(ik_toh), 0);
-				ik_toh = DAOS_HDL_INVAL;
+				op_close();
 				break;
 			case OP_DESTROY:
 				printf("OP_DESTROY\n");
-				assert_rc_equal(dbtree_destroy(ik_toh, NULL), 0);
-				ik_toh = DAOS_HDL_INVAL;
+				op_destroy();
 				break;
 			case OP_OPEN:
 				printf("OP_OPEN\n");
