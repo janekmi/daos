@@ -1019,15 +1019,20 @@ static struct option btr_ops[] = {
 };
 
 static int
-use_pmem() {
-
+use_pmem()
+{
 	int rc;
 
-	D_PRINT("Using pmem\n");
+	/* just in case the previous run crushed */
+	if (unlink(POOL_NAME) != 0) {
+		D_ASSERT(errno == ENOENT);
+	}
+
 	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
 			       sizeof(*ik_root), NULL,
 			       &ik_utx);
 	D_ASSERT(rc == 0);
+	D_PRINT("Using pmem\n");
 	return rc;
 }
 
@@ -1164,9 +1169,11 @@ op_create(char opts, char order) {
 
 	if (opts & UINT_KEY) {
 		feats += BTR_FEAT_UINT_KEY;
+		D_PRINT("- BTR_FEAT_UINT_KEY\n");
 	}
 	if (opts & EMBED_FIRST) {
 		feats += BTR_FEAT_EMBED_FIRST;
+		D_PRINT("- BTR_FEAT_EMBED_FIRST\n");
 	}
 
 	if (order != 0){
@@ -1181,6 +1188,7 @@ op_create(char opts, char order) {
 	}
 
 	if (ik_inplace) {
+		D_PRINT("- inplace\n");
 		rc = dbtree_create_inplace(IK_TREE_CLASS, feats,
 						ik_order, ik_uma, ik_root,
 						&ik_toh);
@@ -1331,7 +1339,11 @@ value_rand(struct record *rec)
 	values_pos += rec->value_size;
 	for (int i = 0; i < rec->value_size; ++i) {
 		rec->value[i] = rand() % 256;
+		rec->value[i] = 'a'; // XXX
 	}
+	// XXX
+	rec->value[1]   = '\0';
+	rec->value_size = 2;
 }
 
 static void
@@ -1562,6 +1574,10 @@ op_delete(int entries_num) {
 			rc_exp = 0;
 			printf("Lookup [%d]: %lu\n", idx, key);
 		}
+		/* overwrite the expected rc set above */
+		if (daos_handle_is_inval(ik_toh)) {
+			rc_exp = -DER_NO_HDL;
+		}
 		/* delete the entry */
 		d_iov_set(&key_iov, &key, sizeof(key));
 		assert_rc_equal(dbtree_delete(ik_toh, BTR_PROBE_EQ, &key_iov, NULL), rc_exp);
@@ -1570,6 +1586,23 @@ op_delete(int entries_num) {
 			/* delete from the records */
 			record_delete(0, idx);
 		}
+	}
+}
+
+static void
+op_drain(int creds)
+{
+	bool destroyed = false;
+	int  rc_exp    = 0;
+
+	if (daos_handle_is_inval(ik_toh)) {
+		rc_exp = -DER_NO_HDL;
+	}
+
+	assert_rc_equal(dbtree_drain(ik_toh, &creds, NULL, &destroyed), rc_exp);
+
+	if (destroyed) {
+		ik_toh = DAOS_HDL_INVAL;
 	}
 }
 
@@ -1655,9 +1688,7 @@ run_cmd_from_file(char *cmds, size_t read)
 				printf("OP_DRAIN\n");
 				arg1 = cmds[pos + 1]; // # of credits
 				pos += 1;
-				int creds = arg1;
-				bool destroyed;
-				assert_rc_equal(dbtree_drain(ik_toh, &creds, NULL, &destroyed), 0);
+				op_drain(arg1);
 				break;
 			default:
 				fail_msg("Unsupported op: %u", op);
