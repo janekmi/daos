@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2025 Intel Corporation.
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -3536,6 +3536,11 @@ dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	/* XXX https://daosio.atlassian.net/browse/DAOS-17051 */
+	if (btr_has_embedded_value(tcx)) {
+		return 0;
+	}
 
 	if (attr != NULL) {
 		struct btr_root *root = tcx->tc_tins.ti_root;
