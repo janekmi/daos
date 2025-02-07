@@ -1595,6 +1595,8 @@ op_drain(int creds)
 	bool destroyed = false;
 	int  rc_exp    = 0;
 
+	printf("- %d\n", creds);
+
 	if (daos_handle_is_inval(ik_toh)) {
 		rc_exp = -DER_NO_HDL;
 	}
@@ -1604,6 +1606,8 @@ op_drain(int creds)
 	if (destroyed) {
 		ik_toh = DAOS_HDL_INVAL;
 	}
+
+	printf("- destroyed=%s\n", destroyed ? "true" : "false");
 }
 
 static void
