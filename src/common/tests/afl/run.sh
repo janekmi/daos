@@ -12,7 +12,8 @@ BIN=/home/beside/work/daos-stack/daos/build/debug/afl-gcc/src/common/tests/btree
 LIMIT_MB=100
 # GDB="gdbserver localhost:2345"
 # PRELOAD="/home/beside/work/AFL/libdislocator/libdislocator.so"
-(ulimit -Sv $[LIMIT_MB << 10]; LD_PRELOAD=$PRELOAD $GDB $BIN --from-file $1)
+# (ulimit -Sv $[LIMIT_MB << 10]; LD_PRELOAD=$PRELOAD $GDB $BIN --from-file $1)
+$GDB $BIN --from-file $1
 # gdb $BIN $1
 
 # set -e
