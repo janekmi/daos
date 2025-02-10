@@ -4,6 +4,7 @@ set -x
 
 export PMEMOBJ_CONF="sds.at_create=0"
 BIN=/home/beside/work/daos-stack/daos/build/debug/afl-gcc/src/common/tests/btree
+BIN=/home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree
 
 # KNOWN ISSUES:
 # - unknown key: 36, 42, 84, 90

@@ -1509,7 +1509,7 @@ op_drain(int creds)
 void run_dump(void);
 
 static void
-run_cmd_from_file(char *cmds, size_t read)
+run_cmd_from_file(unsigned char *cmds, size_t read)
 {
 	int rc;
 	// initialize pseudo-random generator
@@ -1540,6 +1540,9 @@ run_cmd_from_file(char *cmds, size_t read)
 	char arg1;
 	char arg2;
 	for (unsigned pos = 1; pos < read; ++pos) {
+		if (cmds[pos] == 0xff) {
+			continue;
+		}
 		enum Op op = cmds[pos] % OP_MAX;
 		switch (op) {
 			case OP_CREATE:
@@ -1664,10 +1667,10 @@ main(int argc, char **argv)
 		}
 	} else if (strcmp(argv[1], "--from-file") == 0) {
 		#define CMDS_MAX 512
-		char cmds[CMDS_MAX];
+		unsigned char cmds[CMDS_MAX];
 		FILE *file = fopen(argv[2],"rb");
 		assert_non_null(file);
-		size_t read = fread(cmds, sizeof(char), CMDS_MAX, file);
+		size_t read = fread(cmds, sizeof(unsigned char), CMDS_MAX, file);
 		assert_int_not_equal(feof(file), 0);
 		assert_int_equal(fclose(file), 0);
 		assert_true(read > 2);
