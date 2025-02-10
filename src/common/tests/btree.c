@@ -24,6 +24,9 @@
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
+#include "interceptor.h"
+#include "records.h"
+
 enum ik_btr_opc {
 	BTR_OPC_UPDATE,
 	BTR_OPC_LOOKUP,
@@ -49,9 +52,9 @@ static int ik_order = IK_ORDER_DEF;
 
 struct utest_context		*ik_utx;
 struct umem_attr		*ik_uma;
-static umem_off_t		 ik_root_off;
+umem_off_t		 ik_root_off;
 static struct btr_root		*ik_root;
-static daos_handle_t		 ik_toh;
+daos_handle_t		 ik_toh;
 
 static bool ik_inplace;
 
@@ -1239,113 +1242,6 @@ op_open() {
 	assert_rc_equal(rc, 0);
 }
 
-/*
- * Records is just a different name for copies of entries kept by test for
- * validation.
- */
-struct record {
-	uint64_t key;
-	size_t value_pos;
-	char *value;
-	size_t value_size;
-};
-
-#define RECORDS_INCREASE 10
-
-size_t records_total = 0;
-size_t records_used = 0;
-struct record *records = NULL;
-
-#define VALUES_INCREASE 10
-#define VALUE_MAX 256
-
-size_t values_size = 0;
-size_t values_pos = 0;
-char *values = NULL;
-
-static size_t
-record_get_empty() {
-	if (records_used == records_total) {
-		records = (struct record *)realloc(records,
-			sizeof(struct record) * (records_total + RECORDS_INCREASE));
-		records_total += RECORDS_INCREASE;
-	}
-	records[records_used].value = NULL;
-	return records_used++;
-}
-
-static struct record *
-record_get(uint64_t key)
-{
-	for (int i = 0; i < records_used; ++i) {
-		if (records[i].key == key) {
-			return &records[i];
-		}
-	}
-	return NULL;
-}
-
-static void
-record_check(uint64_t key, char *value, size_t value_size)
-{
-	struct record *record = record_get(key);
-	if (record == NULL) {
-		fail_msg("Can not find a record of key: %lu", key);
-	}
-	assert_int_equal(record->value_size, value_size);
-	assert_int_equal(memcmp(record->value, value, sizeof(char) * value_size), 0);
-}
-
-#define RECORD_IDX_UNKNOWN (-1)
-
-static void
-record_delete(uint64_t key, int idx) {
-	if (idx == RECORD_IDX_UNKNOWN) {
-		for (int i = 0; i < records_used; ++i) {
-			if (records[i].key == key) {
-				idx = i;
-				break;
-			}
-		}
-		assert_int_not_equal(idx, RECORD_IDX_UNKNOWN);
-	}
-	printf("Deleted [%d]: %lu\n", idx, records[idx].key);
-	if (idx != records_used - 1) {
-		memcpy(&records[idx], &records[idx + 1],
-			sizeof(struct record) * (records_used - idx - 1));
-	}
-	records_used -= 1;
-}
-
-static void
-value_rand(struct record *rec)
-{
-	rec->value_size = rand() % VALUE_MAX;
-	if (values_pos + rec->value_size > values_size) {
-		unsigned increase = (rec->value_size / VALUES_INCREASE + 1) * VALUES_INCREASE;
-		values = (char *)realloc(values,
-			sizeof(char) * (values_size + increase));
-		values_size += increase;
-		// fix pointers in the records
-		for (int i = 0; i < records_used; ++i) {
-			if (records[i].value == NULL) {
-				continue;
-			}
-			records[i].value = &values[records[i].value_pos];
-		}
-	}
-	rec->value_pos = values_pos;
-	rec->value = &values[values_pos];
-	values_pos += rec->value_size;
-	for (int i = 0; i < rec->value_size; ++i) {
-		rec->value[i] = rand() % 256;
-		rec->value[i] = 'a'; // XXX
-	}
-	// XXX
-	rec->value[1]   = '\0';
-	rec->value_size = 2;
-}
-
 static void
 op_update(char entries_num) {
 	const int use_existing_chance = 30;
@@ -1610,6 +1506,8 @@ op_drain(int creds)
 	printf("- destroyed=%s\n", destroyed ? "true" : "false");
 }
 
+void run_dump(void);
+
 static void
 run_cmd_from_file(char *cmds, size_t read)
 {
@@ -1635,6 +1533,9 @@ run_cmd_from_file(char *cmds, size_t read)
 	assert_int_equal(rc, 0);
 	ik_root = utest_utx2root(ik_utx);
 	ik_uma = utest_utx2uma(ik_utx);
+
+	// run_dump();
+
 	// execute operations
 	char arg1;
 	char arg2;
@@ -1732,6 +1633,8 @@ main(int argc, char **argv)
 		print_message("Invalid format.\n");
 		return -1;
 	}
+
+	interceptor_output = getenv(INTERCEPTOR_ENV);
 
 	stop_idx = argc-1;
 	if (strcmp(argv[1], "--start-test") == 0) {

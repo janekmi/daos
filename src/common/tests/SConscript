@@ -8,7 +8,23 @@ def scons():
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     tenv.require('argobots')
 
-    tenv.d_test_program('btree', ['btree.c', utest_utils],
+    benv = tenv.Clone()
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_create'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_close'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_open'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_update'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_prepare'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_probe'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_fetch'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_delete'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_next'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_prev'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_iter_finish'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_query'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_lookup'])
+    benv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dbtree_drain'])
+
+    benv.d_test_program('btree', ['btree.c', 'dump.c', 'interceptor.c', 'records.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
