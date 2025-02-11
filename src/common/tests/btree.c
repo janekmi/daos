@@ -330,6 +330,60 @@ struct btr_context {
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
 };
 
+/**
+ * Tree node types.
+ * NB: a node can be both root and leaf.
+ */
+// enum btr_node_type {
+// 	BTR_NODE_LEAF		= (1 << 0),
+// 	BTR_NODE_ROOT		= (1 << 1),
+// };
+
+// static inline btr_ops_t *
+// btr_ops(struct btr_context *tcx)
+// {
+// 	return tcx->tc_tins.ti_ops;
+// }
+
+// static inline uint32_t
+// btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
+// {
+// 	uint32_t size;
+
+// 	if (BTR_IS_DIRECT_KEY(feats))
+// 		return sizeof(umem_off_t);
+
+// 	if (BTR_IS_UINT_KEY(feats))
+// 		return sizeof(uint64_t);
+
+// 	size = ops->to_hkey_size();
+
+// 	D_ASSERT(size <= DAOS_HKEY_MAX);
+// 	return size;
+// }
+
+// static uint32_t
+// btr_hkey_size(struct btr_context *tcx)
+// {
+// 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
+// }
+
+// static inline uint32_t
+// btr_rec_size(struct btr_context *tcx)
+// {
+// 	return btr_hkey_size(tcx) + sizeof(struct btr_record);
+// }
+
+// static struct btr_record *
+// btr_node_rec_at(struct btr_context *tcx, umem_off_t nd_off,
+// 		unsigned int at)
+// {
+// 	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
+// 	char		*addr = (char *)&nd[1];
+
+// 	return (struct btr_record *)&addr[btr_rec_size(tcx) * at];
+// }
+
 static void
 ik_tree_print() {
 	struct btr_context *tcx = (struct btr_context *)ik_toh.cookie;
@@ -353,6 +407,12 @@ ik_tree_print() {
 	node = umem_off2ptr(umm, root->tr_node);
 
 	while (node != NULL) {
+		// bool leaf = (node->tn_flags & BTR_NODE_LEAF) != 0;
+		// if (leaf) {
+		// 	rec = btr_node_rec_at(tcx, nd_off, i);
+		// } else {
+
+		// }
 		for (int i = 0; i < node->tn_keyn; ++i) {
 			rec = &node->tn_recs[i];
 			printf("%lu\n", rec->rec_off);
@@ -957,11 +1017,11 @@ ik_btr_perf(void **state)
 static void
 ik_btr_drain(void **state)
 {
-	static const int drain_keys  = 10;
-	static const int drain_creds = 23;
+	static const int drain_keys  = 0;
+	static const int drain_creds = 7;
 
 	unsigned int	*arr;
-	unsigned int	 drained = 0;
+	// unsigned int	 drained = 0;
 	char		 buf[64];
 	int		 i;
 
@@ -982,8 +1042,8 @@ ik_btr_drain(void **state)
 		ik_btr_kv_operate(NULL);
 	}
 
-	ik_btr_query(NULL);
-	while (1) {
+	// ik_btr_query(NULL);
+	// while (1) {
 		int	creds = drain_creds;
 		bool	empty = false;
 		int	rc;
@@ -993,12 +1053,11 @@ ik_btr_drain(void **state)
 			fail_msg("Failed to drain btree: %s\n", d_errstr(rc));
 			fail();
 		}
-		drained += drain_creds - creds;
-		D_PRINT("Drained %d of %d KVs, empty=%d\n",
-			drained, drain_keys, empty);
-		if (empty)
-			break;
-	}
+		// drained += drain_creds - creds;
+		D_PRINT("Drained %d\n", drain_creds);
+	// 	if (empty)
+	// 		break;
+	// }
 
 	D_FREE(arr);
 }
@@ -1504,6 +1563,8 @@ op_drain(int creds)
 	}
 
 	printf("- destroyed=%s\n", destroyed ? "true" : "false");
+
+	// ik_tree_print();
 }
 
 void run_dump(void);

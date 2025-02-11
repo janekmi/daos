@@ -11,13 +11,13 @@
 #include "interceptor.h"
 #include "records.h"
 
-#define RECORDS_INCREASE 10
+#define RECORDS_INCREASE 1024
 
 size_t records_total = 0;
 size_t records_used = 0;
 struct record *records = NULL;
 
-#define VALUES_INCREASE 10
+#define VALUES_INCREASE 4096
 #define VALUE_MAX 256
 
 size_t values_size = 0;

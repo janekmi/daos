@@ -1,0 +1,53 @@
++ export PMEMOBJ_CONF=sds.at_create=0
++ PMEMOBJ_CONF=sds.at_create=0
++ BIN=/home/beside/work/daos-stack/daos/build/debug/afl-gcc/src/common/tests/btree
++ BIN=/home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree
++ LIMIT_MB=100
++ LD_PRELOAD=
++ /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree --from-file crash.bin
+Using vmem
+OP_CREATE
+- BTR_FEAT_UINT_KEY
+OP_UPDATE
+Added [0]: 1502197874
+Updated [0]: 1502197874
+Updated [0]: 1502197874
+Added [1]: 1192679685
+Updated [1]: 1192679685
+Added [2]: 465301214
+Added [3]: 245736342
+Added [4]: 1723068700
+Added [5]: 1795368433
+Added [6]: 1365108004
+Added [7]: 2114468557
+Added [8]: 1562914339
+Added [9]: 1387216815
+Added [10]: 2131185017
+OP_DRAIN
+- 7
+- destroyed=false
+OP_UPDATE
+
+1757603302
+
+[vbox:820917:0:820917] Caught signal 11 (Segmentation fault: address not mapped to object at address 0x56076a4f9f40)
+==== backtrace (tid: 820917) ====
+ 0  /opt/daos/prereq/release/ucx/lib64/libucs.so.0(ucs_handle_error+0x294) [0x7f2a8897ae04]
+ 1  /opt/daos/prereq/release/ucx/lib64/libucs.so.0(+0x2cfbf) [0x7f2a8897afbf]
+ 2  /opt/daos/prereq/release/ucx/lib64/libucs.so.0(+0x2d286) [0x7f2a8897b286]
+ 3  /lib64/libc.so.6(+0x3e730) [0x7f2a8923e730]
+ 4  /opt/daos/lib64/libdaos_common_pmem.so(+0x5d153) [0x7f2a89541153]
+ 5  /opt/daos/lib64/libdaos_common_pmem.so(+0x629a8) [0x7f2a895469a8]
+ 6  /opt/daos/lib64/libdaos_common_pmem.so(+0x63ae2) [0x7f2a89547ae2]
+ 7  /opt/daos/lib64/libdaos_common_pmem.so(+0x64f09) [0x7f2a89548f09]
+ 8  /opt/daos/lib64/libdaos_common_pmem.so(+0x68406) [0x7f2a8954c406]
+ 9  /opt/daos/lib64/libdaos_common_pmem.so(dbtree_update+0x97) [0x7f2a8954ca72]
+10  /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree(+0xd17b) [0x560768fea17b]
+11  /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree(+0x8d58) [0x560768fe5d58]
+12  /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree(+0xa186) [0x560768fe7186]
+13  /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree(+0xa70a) [0x560768fe770a]
+14  /lib64/libc.so.6(+0x295d0) [0x7f2a892295d0]
+15  /lib64/libc.so.6(__libc_start_main+0x80) [0x7f2a89229680]
+16  /home/beside/work/daos-stack/daos/build/debug/gcc/src/common/tests/btree(+0x3595) [0x560768fe0595]
+=================================
+./run.sh: line 19: 820917 Segmentation fault      (core dumped) LD_PRELOAD=$PRELOAD $GDB $BIN --from-file $1

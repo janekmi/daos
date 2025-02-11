@@ -59,10 +59,10 @@ def _base_setup(env):
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
 
     if build_type == 'debug':
-        if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
-        else:
-            env.AppendUnique(CCFLAGS=['-O0'])
+        # if compiler == 'gcc':
+        #     env.AppendUnique(CCFLAGS=['-Og'])
+        # else:
+        env.AppendUnique(CCFLAGS=['-O0'])
     else:
         if build_type == 'release':
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
