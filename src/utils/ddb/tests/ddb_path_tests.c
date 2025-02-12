@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +27,7 @@ simple_path_parsing(void **state)
 	assert_success(itp_parse("", &itp));
 	assert_success(itp_parse("/", &itp));
 	assert_success(itp_parse("/[0]", &itp));
+	assert_success(itp_parse("/[*]", &itp));
 	assert_success(itp_parse("/[0]/", &itp));
 	assert_success(itp_parse("/[0]/[0]", &itp));
 	assert_success(itp_parse("/[0]/[0]/", &itp));
@@ -375,6 +377,9 @@ ddb_path_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
 	    TEST(simple_path_parsing),
+	};
+	static const struct CMUnitTest tests2[] = {
+	    TEST(simple_path_parsing),
 	    TEST(key_safe_str_tests),
 	    TEST(key_printing_and_parsing_tests),
 	    TEST(fully_set_and_print_path_parts),
@@ -383,5 +388,6 @@ ddb_path_tests_run()
 	    TEST(string_to_path_to_string),
 	    TEST(invalid_paths_return_error),
 	};
+	(void)tests2;
 	return cmocka_run_group_tests_name("DDB Path Parsing Tests", tests, NULL, NULL);
 }

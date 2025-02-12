@@ -889,6 +889,7 @@ struct dtx_modify_args {
 	struct dtx_id			 dti;
 	bool                             dti_all;
 	daos_handle_t			 coh;
+	bool                             coh_all;
 };
 
 /* setup information needed for calling commit or abort active dtx entry */
@@ -902,19 +903,21 @@ dtx_modify_init(struct ddb_ctx *ctx, char *path, char *dtx_id_str, struct dtx_mo
 	if (!SUCCESS(rc))
 		D_GOTO(error, rc);
 
-	itp_print_full(ctx, itp);
-	ddb_print(ctx, "\n");
+	args->coh_all = (itp_idx(itp, PATH_PART_CONT) == IDX_ALL);
 
-	if (!itp_has_cont(itp)) {
-		ddb_error(ctx, "Path to container is required\n");
-		D_GOTO(error, rc = -DER_INVAL);
-	}
+	// itp_print_full(ctx, itp);
+	// ddb_print(ctx, "\n");
 
-	rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &args->coh);
-	if (!SUCCESS(rc)) {
-		ddb_errorf(ctx, "Unable to open container: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(error, rc);
-	}
+	// if (!itp_has_cont(itp)) {
+	// 	ddb_error(ctx, "Path to container is required\n");
+	// 	D_GOTO(error, rc = -DER_INVAL);
+	// }
+
+	// rc = dv_cont_open(ctx->dc_poh, itp_cont(itp), &args->coh);
+	// if (!SUCCESS(rc)) {
+	// 	ddb_errorf(ctx, "Unable to open container: "DF_RC"\n", DP_RC(rc));
+	// 	D_GOTO(error, rc);
+	// }
 
 	if (!args->dti_all) {
 		rc = ddb_parse_dtx_id(dtx_id_str, &args->dti);
@@ -1112,6 +1115,25 @@ dtx_active_entry_discard_invalid(struct dv_dtx_active_entry *entry, void *cb_arg
 	return 0;
 }
 
+static int
+ddb_run_dtx_act_discard_invalid_one_cont(struct dtx_active_entry_discard_invalid_cb_arg *bundle)
+{
+	int rc;
+
+	if (bundle->args->dti_all) {
+		rc = dv_dtx_get_act_table(bundle->args->coh, dtx_active_entry_discard_invalid,
+					  bundle);
+		if (!SUCCESS(rc)) {
+			return rc;
+		}
+	} else {
+		struct dv_dtx_active_entry entry = {.ddtx_id = bundle->args->dti};
+		dtx_active_entry_discard_invalid(&entry, &bundle);
+	}
+
+	return 0;
+}
+
 int
 ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt)
 {
@@ -1133,14 +1155,36 @@ ddb_run_dtx_act_discard_invalid(struct ddb_ctx *ctx, struct dtx_act_options *opt
 		return rc;
 	}
 
-	if (args.dti_all) {
-		rc = dv_dtx_get_act_table(args.coh, dtx_active_entry_discard_invalid, &bundle);
-		if (!SUCCESS(rc)) {
-			return rc;
+	if (!args.coh_all) {
+		rc = ddb_run_dtx_act_discard_invalid_one_cont(&bundle);
+		dtx_modify_fini(&args);
+		return rc;
+	}
+
+	int    i = 0;
+	uuid_t uuid;
+	while (true) {
+		rc = dv_get_cont_uuid(ctx->dc_poh, i, uuid);
+		if (rc == -DER_NONEXIST) {
+			/* run out of available containers */
+			break;
+		} else if (!SUCCESS(rc)) {
+			ddb_errorf(ctx, "Error while looking for a container: " DF_RC "\n",
+				   DP_RC(rc));
+			break;
 		}
-	} else {
-		struct dv_dtx_active_entry entry = {.ddtx_id = args.dti};
-		dtx_active_entry_discard_invalid(&entry, &bundle);
+		rc = dv_cont_open(ctx->dc_poh, uuid, &args.coh);
+		if (!SUCCESS(rc)) {
+			ddb_errorf(ctx, "Unable to open container: " DF_RC "\n", DP_RC(rc));
+			break;
+		}
+		itp_print_full(ctx, &args.itp);
+		ddb_print(ctx, "\n");
+		rc = ddb_run_dtx_act_discard_invalid_one_cont(&bundle);
+		if (!SUCCESS(rc)) {
+			break;
+		}
+		dv_cont_close(&args.coh);
 	}
 
 	dtx_modify_fini(&args);

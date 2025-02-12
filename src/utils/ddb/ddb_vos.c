@@ -533,6 +533,10 @@ dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 	if (itp_has_idx(itp, PATH_PART_CONT)) {
 		uuid_t uuid;
 
+		if (itp_idx(itp, PATH_PART_CONT) == IDX_ALL) {
+			return 0;
+		}
+
 		rc = dv_get_cont_uuid(poh, itp_idx(itp, PATH_PART_CONT), uuid);
 		if (!SUCCESS(rc)) {
 			D_ERROR("Unable to get container index %d\n", itp_idx(itp, PATH_PART_CONT));

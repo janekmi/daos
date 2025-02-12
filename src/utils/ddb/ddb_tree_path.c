@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,11 +39,18 @@ try_parse_idx(const char *str, uint32_t *idx)
 	if (str_len < 3) /* must be at least 3 chars */
 		return -DER_INVAL;
 
-	if (str[0] == '[' && str[str_len - 1] == ']') {
-		*idx = atol(str + 1);
+	if (str[0] != '[' || str[str_len - 1] != ']') {
+		return -DER_INVAL;
+	}
+
+	/* wildcard */
+	if (str_len == 3 && str[1] == '*') {
+		*idx = IDX_ALL;
 		return str_len;
 	}
-	return -DER_INVAL;
+
+	*idx = atol(str + 1);
+	return str_len;
 }
 
 int

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,7 +13,8 @@
 #define DF_DDB_RECX	"{"DF_U64"-"DF_U64"}"
 #define DP_DDB_RECX(r)	(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
 
-#define INVALID_IDX          (-1)
+#define INVALID_IDX          (UINT32_MAX)
+#define IDX_ALL              (UINT32_MAX - 1)
 #define INVALID_PATH "INVALID PATH"
 #define DDB_MAX_PRITABLE_KEY 1024
 
