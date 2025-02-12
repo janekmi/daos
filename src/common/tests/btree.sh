@@ -105,6 +105,27 @@ run_test()
 
     if [ -z ${PERF} ]; then
 
+        VCMD='gdbserver localhost:2345'
+        RECORDS='1502197874:a,1192679685:a,465301214:a,245736342:a,1723068700:a,1795368433:a,1365108004:a,2114468557:a,1562914339:a,1387216815:a,2131185017:a'
+        RECORDS2='1757603302:a'
+        PMEM=''
+        UINT='+'
+        IPL=''
+        ORDER=11
+
+        echo "XXX..."
+        DAOS_DEBUG="$DDEBUG"                        \
+        eval "${VCMD}" "$BTR" --start-test \
+        "'btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}'" \
+        "${DYN}" "${PMEM}" \
+        -C "${UINT}${IPL}o:$ORDER" \
+        -u "$RECORDS"                               \
+        -e \
+        -u "$RECORDS2"                               \
+        -D
+
+        exit 0
+
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
         eval "${VCMD}" "$BTR" --start-test \
@@ -151,10 +172,13 @@ run_test()
     fi
 }
 
-for IPL in "i," ""; do
-    for IDIR in "f" "b"; do
-        for PMEM in "-m" ""; do
+# for IPL in "i," ""; do
+#     for IDIR in "f" "b"; do
+#         for PMEM in "-m" ""; do
+for IPL in ''; do
+    # for IDIR in "f" "b"; do
+        for PMEM in ""; do
             run_test
         done
-    done
+    # done
 done
