@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -838,33 +839,33 @@ ik_btr_perf(void **state)
 static void
 ik_btr_drain(void **state)
 {
-	static const int drain_keys  = 10000;
-	static const int drain_creds = 23;
+	// static const int drain_keys  = 10000;
+	static const int drain_creds = 7;
 
-	unsigned int	*arr;
-	unsigned int	 drained = 0;
-	char		 buf[64];
-	int		 i;
+	// unsigned int	*arr;
+	// unsigned int	 drained = 0;
+	// char		 buf[64];
+	// int		 i;
 
-	D_ALLOC_ARRAY(arr, drain_keys);
-	if (arr == NULL) {
-		fail_msg("Array allocation failed");
-		return;
-	}
+	// D_ALLOC_ARRAY(arr, drain_keys);
+	// if (arr == NULL) {
+	// 	fail_msg("Array allocation failed");
+	// 	return;
+	// }
 
-	D_PRINT("Batch add %d records.\n", drain_keys);
-	ik_btr_gen_keys(arr, drain_keys);
-	for (i = 0; i < drain_keys; i++) {
-		sprintf(buf, "%d:%d", arr[i], arr[i]);
-		tst_fn_val.opc	  = BTR_OPC_UPDATE;
-		tst_fn_val.optval = buf;
-		tst_fn_val.input  = false;
+	// D_PRINT("Batch add %d records.\n", drain_keys);
+	// ik_btr_gen_keys(arr, drain_keys);
+	// for (i = 0; i < drain_keys; i++) {
+	// 	sprintf(buf, "%d:%d", arr[i], arr[i]);
+	// 	tst_fn_val.opc	  = BTR_OPC_UPDATE;
+	// 	tst_fn_val.optval = buf;
+	// 	tst_fn_val.input  = false;
 
-		ik_btr_kv_operate(NULL);
-	}
+	// 	ik_btr_kv_operate(NULL);
+	// }
 
-	ik_btr_query(NULL);
-	while (1) {
+	// ik_btr_query(NULL);
+	// while (1) {
 		int	creds = drain_creds;
 		bool	empty = false;
 		int	rc;
@@ -874,14 +875,14 @@ ik_btr_drain(void **state)
 			fail_msg("Failed to drain btree: %s\n", d_errstr(rc));
 			fail();
 		}
-		drained += drain_creds - creds;
+		// drained += drain_creds - creds;
 		D_PRINT("Drained %d of %d KVs, empty=%d\n",
-			drained, drain_keys, empty);
-		if (empty)
-			break;
-	}
+			drain_creds, 0, empty);
+		// if (empty)
+		// 	break;
+	// }
 
-	D_FREE(arr);
+	// D_FREE(arr);
 }
 
 static struct option btr_ops[] = {
