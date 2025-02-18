@@ -26,7 +26,7 @@ def scons():
 
     benv.AppendUnique(CCFLAGS=['-O0'])
 
-    benv.d_test_program('btree', ['btree.c', 'dump.c', 'interceptor.c', 'records.c', utest_utils],
+    benv.d_test_program('btree', ['btree.c', 'btree_print.c', 'dump.c', 'interceptor.c', 'records.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
