@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -236,5 +237,20 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (ei *EngineInstance) Stop(signal os.Signal) error {
 	ei.runner.Signal(signal)
+	return nil
+}
+
+func (ei *EngineInstance) SetPostSigkillCleanup(enable bool) error {
+	const envDaosEnginePostSigkillCleanup string = "DAOS_ENGINE_POST_SIGKILL_CLEANUP"
+	cfg := ei.runner.GetConfig()
+	if enable {
+		cfg.WithEnvVars(envDaosEnginePostSigkillCleanup + "=1")
+	} else {
+		envVars, err := common.DeleteKeyValue(cfg.EnvVars, envDaosEnginePostSigkillCleanup)
+		if err != nil {
+			return err
+		}
+		cfg.EnvVars = envVars
+	}
 	return nil
 }

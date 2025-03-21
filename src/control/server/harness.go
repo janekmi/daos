@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,6 +70,8 @@ type Engine interface {
 	Tracef(string, ...interface{})
 	GetLastHealthStats(string) *ctlpb.BioHealthResp
 	SetLastHealthStats(string, *ctlpb.BioHealthResp)
+
+	SetPostSigkillCleanup(enable bool) error
 }
 
 // EngineHarness is responsible for managing Engine instances.

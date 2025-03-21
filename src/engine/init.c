@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1173,6 +1174,26 @@ parse(int argc, char **argv)
 	return 0;
 }
 
+#define DAOS_ENGINE_POST_SIGKILL_CLEANUP_ENV "DAOS_ENGINE_POST_SIGKILL_CLEANUP"
+
+void
+post_sigkill_cleanup()
+{
+	char *env = getenv(DAOS_ENGINE_POST_SIGKILL_CLEANUP_ENV);
+	if (env == NULL) {
+		/* No post-SIGKILL cleanup requested. Continue as normal. */
+		return;
+	}
+
+	D_INFO("Post-SIGKILL cleanup requested\n");
+
+	/* XXX */
+
+	D_INFO("Post-SIGKILL cleanup done\n");
+
+	exit(EXIT_SUCCESS);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1184,6 +1205,8 @@ main(int argc, char **argv)
 	rc = parse(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
+
+	post_sigkill_cleanup();
 
 	/** block all possible signals but faults */
 	sigfillset(&set);

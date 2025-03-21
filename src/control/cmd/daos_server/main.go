@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -201,6 +203,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 }
 
 func main() {
+	time.Sleep(30 * time.Second)
 	log := logging.NewCommandLineLogger()
 	opts := mainOpts{
 		preExecTests: []execTestFn{

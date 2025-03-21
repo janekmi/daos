@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -195,6 +196,29 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
 		return nil, errors.Wrap(err, "waiting for engines to stop")
 	}
+
+	/* XXX */
+	if signal == syscall.SIGKILL {
+		engineExitChans := []chan struct{}{}
+		for _, ei := range instances {
+			eiExitChan := make(chan struct{})
+			engineExitChans = append(engineExitChans, eiExitChan)
+			err := ei.SetPostSigkillCleanup(true)
+			if err != nil {
+				return nil, err
+			}
+			ei.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
+				err := ei.SetPostSigkillCleanup(false)
+				eiExitChan <- struct{}{}
+				return err
+			})
+			ei.requestStart(ctx)
+		}
+		for _, eiExitChan := range engineExitChans {
+			<-eiExitChan
+		}
+	}
+	/* XXX */
 
 	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop",
 		"system stop: rank failed to stop")
