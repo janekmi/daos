@@ -1,0 +1,38 @@
+access_points:
+- localhost:10001
+control_log_file: /tmp/dnt_control.log
+control_log_mask: DEBUG
+control_metadata:
+  path: /var/daos/config
+disable_hugepages: false
+engines:
+- env_vars:
+  - DAOS_MD_CAP=1024
+  - DAOS_STRICT_SHUTDOWN=1
+  - DAOS_TARGET_OVERSUBSCRIBE=1
+  - ABT_STACK_OVERFLOW_CHECK=mprotect
+  - DD_MASK=all
+  - DD_SUBSYS=all
+  - D_LOG_MASK=DEBUG
+  - D_LOG_SIZE=5g
+  - FI_UNIVERSE_SIZE=128
+  - CRT_CTX_NUM=32
+  # - DAOS_MD_ON_SSD_MODE=1
+  fabric_iface: lo
+  fabric_iface_port: 31416
+  first_core: 0
+  log_file: /tmp/dnt_server.log
+  nr_xs_helpers: 2
+  storage:
+  - class: ram
+    scm_mount: /mnt/daos
+  - class: nvme
+    bdev_list: [0000:83:00.0]
+    bdev_roles: [wal, meta, data]
+  targets: 4
+helper_log_file: 1
+name: daos_server
+port: 10001
+provider: ofi+tcp
+socket_dir: /home/michalsk/work/daos-stack/daos/instance/dnt_agent/
+system_ram_reserved: 10

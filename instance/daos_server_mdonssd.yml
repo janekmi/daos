@@ -7,7 +7,7 @@ name: daos_server
 # control listen port, default 10001
 # port: 10001
 provider: ofi+tcp
-control_log_mask: DEBUG
+control_log_mask: TRACE
 control_log_file: /tmp/daos_server.log
 control_metadata:
   path: /var/daos/config # Location to store control-plane metadata in MD-on-SSD mode.
@@ -39,11 +39,12 @@ engines:
     fabric_iface: lo # ib0
     fabric_iface_port: 31316
     log_file: /tmp/daos_engine.0.log
-    log_mask: INFO
+    log_mask: DEBUG
 
     env_vars:
       - FI_SOCKETS_MAX_CONN_RETRY=1
       - FI_SOCKETS_CONN_TIMEOUT=2000
+      # - DAOS_MD_ON_SSD_MODE=1
 
     # Storage definitions for Metadata on SSD.
 
@@ -83,11 +84,11 @@ engines:
       -
         class: nvme
         bdev_list: ["0000:83:00.0"]
-        bdev_roles: [wal,meta]
+        bdev_roles: [wal]
       -
         class: nvme
         bdev_list: ["0000:84:00.0"]
-        bdev_roles: [data]
+        bdev_roles: [meta,data]
 
         # To use emulated NVMe, use `class: file` instead of `class: nvme`, see
         # utils/config/daos_server.yml for details on AIO file class.
