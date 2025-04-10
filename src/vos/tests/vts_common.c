@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +68,21 @@ vts_alloc_gen_fname(char **fname)
 }
 
 int
+vts_alloc_gen_fname_with_path(char **fname, char *path)
+{
+	int rc;
+
+	rc = asprintf(fname, "%s/vpool.%d", path, gc++);
+	if (rc < 0) {
+		*fname = NULL;
+		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+int
 vts_pool_fallocate(char **fname)
 {
 	int ret = 0, fd;
@@ -88,23 +104,39 @@ exit:
 	return ret;
 }
 
+static const char Po_uuid_str[] = "a367beed-8857-461c-a532-92ca618e589c";
+static const char Co_uuid_str[] = "0faccb2b-d498-49d4-aeef-0668e929e919";
+
 int
 vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
 {
+	char *Po_path = NULL;
 	int rc;
 
 	memset(tcx, 0, sizeof(*tcx));
 	oid_cnt = 0;
-	rc = vts_alloc_gen_fname(&tcx->tc_po_name);
+
+	/* assign pool and container UUIDs */
+	rc = uuid_parse(Po_uuid_str, tcx->tc_po_uuid);
 	assert_int_equal(rc, 0);
+	rc = uuid_parse(Co_uuid_str, tcx->tc_co_uuid);
+	assert_int_equal(rc, 0);
+
+	/* make sure the pool's path exists */
+	rc = asprintf(&Po_path, "%s/%s", vos_path, Po_uuid_str);
+	assert_true(rc > 0);
+	rc = mkdir(Po_path, 0777);
+	assert_true(rc == 0 || errno == EEXIST);
+
+	rc = vts_alloc_gen_fname_with_path(&tcx->tc_po_name, Po_path);
+	assert_int_equal(rc, 0);
+	free(Po_path);
+	Po_path = NULL;
 
 	if (vts_file_exists(tcx->tc_po_name)) {
 		rc = remove(tcx->tc_po_name);
 		assert_int_equal(rc, 0);
 	}
-
-	uuid_generate_time_safe(tcx->tc_po_uuid);
-	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
 	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, meta_size,

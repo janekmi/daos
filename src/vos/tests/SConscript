@@ -35,7 +35,10 @@ def scons():
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = tenv.d_program('evt_ctl', ['evt_ctl.c', utest_utils, cmd_parser], LIBS=libraries)
 
-    tenv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
+    mj_tests_src = ['mj_tests.c', vts_objs]
+    mj_tests = tenv.d_program('mj_tests', mj_tests_src, LIBS=libraries)
+
+    tenv.Install('$PREFIX/bin/', [vos_tests, evt_ctl, mj_tests])
     tenv.Install(conf_dir, ['vos_size_input.yaml'])
 
     unit_env = tenv.Clone()
