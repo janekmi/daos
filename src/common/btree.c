@@ -15,6 +15,7 @@
 
 #include <daos_errno.h>
 #include <daos/btree.h>
+#include <daos_srv/dlck.h>
 #include <daos/dtx.h>
 
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
@@ -119,9 +120,6 @@ struct btr_trace_info {
 	struct btr_trace *ti_trace;
 	uint32_t          ti_embedded_info;
 };
-
-/** backtrace depth */
-#define BTR_TRACE_MAX		40
 
 /**
  * Context for btree operations.
@@ -4655,3 +4653,97 @@ done:
 	return 0;
 }
 
+/**
+ * DLCK: there is no safeguards in the currently existing records structure
+ * potentially a room for improvement
+ *
+ * TBD:
+ * - scan the whole tree looking for faulty nodes
+ * - do not crash nor follow faulty nodes, just add them to the array
+ */
+int
+dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array)
+{
+	(void)toh;
+	(void)array;
+	// struct btr_context *tcx;
+	// int		     rc;
+
+	// tcx = btr_hdl2tcx(toh);
+
+	// if (btr_root_empty(tcx)) {
+	// 	return DER_SUCCESS;
+	// }
+
+	/** DLCK: TBD */
+	// if (btr_has_embedded_value(tcx)) {
+	// rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
+	// return rc;
+
+	// /** Use the fake record since only the user allocated part is stored
+	//  *  in the tree root.
+	//  */
+	// rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+
+	// struct ik_rec *irec = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	// }
+
+	// umem_off_t       nd_off;
+	// struct btr_node *nd;
+	// int              start;
+	// int              end;
+	// int              level = -1;
+	// bool             next_level;
+
+	// nd_off = tcx->tc_tins.ti_root->tr_node;
+
+	// for (start = end = 0, level = 0, next_level = true;;) {
+	// 	if (next_level) { /* search a new level of the tree */
+	// 		next_level = false;
+	// 		start      = 0;
+	// 		end        = nd->tn_keyn - 1;
+	// 		nd         = btr_off2ptr(tcx, nd_off);
+	// 	}
+
+	// 	(void)start;
+
+	// if (probe_opc == BTR_PROBE_FIRST) {
+	// 	at = start = end = 0;
+	// 	cmp = BTR_CMP_GT;
+
+	// } else if (probe_opc == BTR_PROBE_LAST) {
+	// 	at = start = end;
+	// 	cmp = BTR_CMP_LT;
+	// } else {
+	// 	D_ASSERT(probe_opc & BTR_PROBE_SPEC);
+	// 	/* binary search */
+	// 	at = (start + end) / 2;
+	// 	cmp = btr_cmp(tcx, nd_off, at, hkey, key);
+	// }
+
+	// if (cmp != BTR_CMP_EQ && start < end) {
+	// 	/* continue the binary search in current level */
+	// 	if (cmp & BTR_CMP_LT)
+	// 		start = at + 1;
+	// 	else
+	// 		end = at - 1;
+	// 	continue;
+	// }
+
+	// if (btr_node_is_leaf(tcx, nd_off))
+	// 	break;
+
+	// at += !(cmp & BTR_CMP_GT);
+	// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
+
+	/* Search the next level. */
+	// nd_off = btr_node_child_at(tcx, nd_off, at);
+
+	// 	next_level = true;
+	// 	level++;
+	// }
+	/* leaf node */
+	// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
+
+	return DER_SUCCESS;
+}

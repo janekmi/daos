@@ -1131,6 +1131,12 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 	return rc;
 }
 
+#ifdef DLCK_ENABLED
+#define ITERATE_SHOW_UNCOMMITTED true
+#else
+#define ITERATE_SHOW_UNCOMMITTED false
+#endif /* DLCK_ENABLED */
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -1142,6 +1148,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 {
 	D_ASSERT((param->ip_flags & VOS_IT_KEY_TREE) == 0);
 
-	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
-				    dth);
+	return vos_iterate_internal(param, type, recursive, ITERATE_SHOW_UNCOMMITTED, anchors,
+				    pre_cb, post_cb, arg, dth);
 }

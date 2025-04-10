@@ -15,6 +15,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dlck.h>
 #include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
@@ -1641,6 +1642,32 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	return rc;
 }
 
+#ifdef DLCK_ENABLED
+static int
+pool_open_post_check(struct vos_pool_df *pool_df)
+{
+	struct btr_root *root = &pool_df->pd_cont_root;
+	bool             fix;
+
+	if (root->tr_order != VOS_CONT_ORDER) {
+		/* TBD */
+	} else if (root->tr_class != VOS_BTR_CONT_TABLE) {
+		fix = DLCK_Callbacks->dc_ask_yes_no("Fix container's tree class?");
+		if (fix) {
+			root->tr_class = VOS_BTR_CONT_TABLE;
+		} else {
+			D_ERROR("Invalid class id: %d\n", root->tr_class);
+			return -DER_INVAL;
+		}
+	} else if (root->tr_depth > BTR_TRACE_MAX) {
+		/* what can we do? */
+	} else if (pool_df->pd_nvme_sz == 0) {
+		/* DLCK: TBD vea_load() */
+	}
+	return DER_SUCCESS;
+}
+#endif /* DLCK_ENABLED */
+
 static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
 	       void *metrics, struct vos_pool *pool, int ret)
@@ -1701,6 +1728,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = vos_data_ioctxt(pool);
 		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
+		/** DLCK: TODO */
 		rc = vea_load(&pool->vp_umm, vos_txd_get(flags & VOS_POF_SYSDB),
 			      &pool_df->pd_vea_df, &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
@@ -1742,6 +1770,45 @@ out:
 	}
 	return rc;
 }
+
+#define POOL_DF_MAGIC_UNKNOWN   "Unknown DF magic %x\n"
+#define POOL_DF_VERSION_UNKNOWN "Unsupported DF version %x\n"
+
+#ifdef DLCK_ENABLED
+
+struct DLCK_value Pool_versions[] = {
+    {POOL_DF_VER_1, STRINGIFY(POOL_DF_VER_1)},     {VOS_POOL_DF_2_2, STRINGIFY(VOS_POOL_DF_2_2)},
+    {VOS_POOL_DF_2_4, STRINGIFY(VOS_POOL_DF_2_4)}, {VOS_POOL_DF_2_6, STRINGIFY(VOS_POOL_DF_2_6)},
+    {VOS_POOL_DF_2_8, STRINGIFY(VOS_POOL_DF_2_8)},
+};
+
+static int
+vos_pool_open_metrics_check(struct vos_pool_df *pool_df)
+{
+	bool fix;
+	int  fix_int;
+
+	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+		fix = DLCK_Callbacks->dc_ask_yes_no("Fix pool's magic?");
+		if (fix) {
+			pool_df->pd_magic = POOL_DF_MAGIC;
+		} else {
+			D_ERROR(POOL_DF_MAGIC_UNKNOWN, pool_df->pd_magic);
+			return -DER_DF_INVAL;
+		}
+	} else if (pool_df->pd_version > POOL_DF_VERSION || pool_df->pd_version < POOL_DF_VER_1) {
+		fix_int = DLCK_Callbacks->dc_ask_value(Pool_versions, ARRAY_SIZE(Pool_versions));
+		if (fix_int < ARRAY_SIZE(Pool_versions)) {
+			pool_df->pd_version = Pool_versions[fix_int].dv_value;
+		} else {
+			D_ERROR(POOL_DF_VERSION_UNKNOWN, pool_df->pd_version);
+			return -DER_DF_INCOMPT;
+		}
+	}
+	/** DLCK: TBD? */
+	return DER_SUCCESS;
+}
+#endif /* DLCK_ENABLED */
 
 int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
@@ -1810,15 +1877,16 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	pool_df = vos_pool_pop2df(ph);
+	DLCK_CALL_CHECK_GOTO(vos_pool_open_metrics_check, rc, out, pool_df);
 	if (pool_df->pd_magic != POOL_DF_MAGIC) {
-		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
+		D_CRIT(POOL_DF_MAGIC_UNKNOWN, pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
 		goto out;
 	}
 
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
-		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		D_ERROR(POOL_DF_VERSION_UNKNOWN, pool_df->pd_version);
 		/** Send a RAS notification */
 		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
 					   POOL_DF_VER_1, POOL_DF_VERSION,
@@ -1835,6 +1903,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 out:
+	DLCK_CALL_CHECK(pool_open_post_check, rc, pool_df);
 	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, rc);
 	if (rc == 0)
 		*poh = vos_pool2hdl(pool);
@@ -2115,4 +2184,15 @@ vos_pool_feature_skip_dtx_resync(daos_handle_t poh)
 	D_ASSERT(vos_pool != NULL);
 
 	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+}
+
+int
+dlck_vos_pool_containers_check(daos_handle_t poh, struct DLCK_btree_faulty_nodes_array *array)
+{
+	struct vos_pool *vos_pool;
+
+	vos_pool = vos_hdl2pool(poh);
+	D_ASSERT(vos_pool != NULL);
+
+	return dlck_dbtree_check(vos_pool->vp_cont_th, array);
 }

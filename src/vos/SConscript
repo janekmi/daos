@@ -14,7 +14,7 @@ def build_vos(env, standalone):
     denv = env.Clone()
 
     if standalone:
-        denv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
+        denv.Append(CPPDEFINES=['-DVOS_STANDALONE', '-DDLCK_ENABLED'])
         denv.Append(OBJPREFIX="s_")
         libname = 'vos'
     else:

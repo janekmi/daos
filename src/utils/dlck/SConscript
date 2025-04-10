@@ -1,0 +1,28 @@
+"""Build tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    denv = env.Clone()
+
+    libs = ['vos', 'daos_common_pmem', 'bio', 'uuid']
+
+    src = ['dlck_main.c']
+
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+
+    denv.Append(CPPDEFINES={'DAOS_PMEM_BUILD': '1'})
+
+    prereqs.require(denv, 'argobots')
+
+    dlck = denv.d_program('dlck', src, LIBS=libs)
+    env.Install('$PREFIX/bin', dlck)
+
+
+if __name__ == "SCons.Script":
+    scons()

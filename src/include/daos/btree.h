@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -673,5 +674,8 @@ enum {
  */
 int dbtree_overhead_get(int alloc_overhead, unsigned int tclass, uint64_t feats,
 			int tree_order, struct daos_tree_overhead *ovhd);
+
+/** backtrace depth */
+#define BTR_TRACE_MAX 40
 
 #endif /* __DAOS_BTREE_H__ */

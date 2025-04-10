@@ -15,6 +15,7 @@
 #include <daos/btree_class.h>
 #include <daos/mem.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/dlck.h>
 #include "vos_internal.h"
 
 enum {
@@ -1490,6 +1491,36 @@ gc_close_bkt(struct vos_gc_info *gc_info)
 	gc_info->gi_last_pinned = UMEM_DEFAULT_MBKT_ID;
 }
 
+#ifdef DLCK_ENABLED
+static int
+gc_open_bkt_check(umem_off_t *pd_ext_off, struct vos_pool_ext_df **pd_ext_ptr)
+{
+	struct vos_pool_ext_df *pd_ext = *pd_ext_ptr;
+	bool                    fix;
+
+	if (!DLCK_Callbacks->dc_check_offset(*pd_ext_off)) {
+		fix = DLCK_Callbacks->dc_ask_yes_no("XXX");
+		if (fix) {
+			return -DER_AGAIN;
+		} else {
+			/** TBD */
+		}
+	} else if (!DLCK_CHECK_ARRAY_ZERO(pd_ext->ped_paddings)) {
+		/** TBD */
+	} else if (pd_ext->ped_reserve != 0) {
+		/** TBD */
+	}
+	/**
+	 * TBD Check pd_ext->ped_gc_bkt.gd_bins_root in exactly the same way as
+	 * pool_df->pd_cont_root:
+	 * - DBTREE_CLASS_IFV
+	 * - BTR_FEAT_UINT_KEY
+	 * - tree_order == 12 (create a define)
+	 */
+	return DER_SUCCESS;
+}
+#endif /* DLCK_ENABLED */
+
 static inline int
 gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct vos_gc_info *gc_info)
 {
@@ -1512,8 +1543,10 @@ gc_open_pool(struct vos_pool *pool)
 {
 	struct vos_pool_ext_df	*pd_ext = umem_off2ptr(&pool->vp_umm, pool->vp_pool_df->pd_ext);
 
-	if (pd_ext != NULL)
+	if (pd_ext != NULL) {
+		DLCK_CALL_CHECK_RETURN(gc_open_bkt_check, &pool->vp_pool_df->pd_ext, &pd_ext);
 		return gc_open_bkt(&pool->vp_uma, &pd_ext->ped_gc_bkt, &pool->vp_gc_info);
+	}
 	return 0;
 }
 
