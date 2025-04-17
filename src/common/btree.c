@@ -4666,14 +4666,14 @@ dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array
 {
 	(void)toh;
 	(void)array;
-	// struct btr_context *tcx;
+	struct btr_context *tcx;
 	// int		     rc;
 
-	// tcx = btr_hdl2tcx(toh);
+	tcx = btr_hdl2tcx(toh);
 
-	// if (btr_root_empty(tcx)) {
-	// 	return DER_SUCCESS;
-	// }
+	if (btr_root_empty(tcx)) {
+		return DER_SUCCESS;
+	}
 
 	/** DLCK: TBD */
 	// if (btr_has_embedded_value(tcx)) {
@@ -4688,60 +4688,62 @@ dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array
 	// struct ik_rec *irec = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	// }
 
-	// umem_off_t       nd_off;
-	// struct btr_node *nd;
-	// int              start;
-	// int              end;
-	// int              level = -1;
-	// bool             next_level;
+	umem_off_t       nd_off;
+	struct btr_node *nd;
+	int              start;
+	int              end;
+	int              level      = -1;
+	bool             next_level = true;
 
-	// nd_off = tcx->tc_tins.ti_root->tr_node;
+	nd_off = tcx->tc_tins.ti_root->tr_node;
 
-	// for (start = end = 0, level = 0, next_level = true;;) {
-	// 	if (next_level) { /* search a new level of the tree */
-	// 		next_level = false;
-	// 		start      = 0;
-	// 		end        = nd->tn_keyn - 1;
-	// 		nd         = btr_off2ptr(tcx, nd_off);
-	// 	}
+	for (start = end = 0, level = 0, next_level = true;;) {
+		if (next_level) { /* search a new level of the tree */
+			next_level = false;
+			start      = 0;
+			nd         = btr_off2ptr(tcx, nd_off);
+			end        = nd->tn_keyn - 1;
+		}
 
-	// 	(void)start;
+		(void)start;
+		(void)end;
+		(void)level;
 
-	// if (probe_opc == BTR_PROBE_FIRST) {
-	// 	at = start = end = 0;
-	// 	cmp = BTR_CMP_GT;
+		// if (probe_opc == BTR_PROBE_FIRST) {
+		// 	at = start = end = 0;
+		// 	cmp = BTR_CMP_GT;
 
-	// } else if (probe_opc == BTR_PROBE_LAST) {
-	// 	at = start = end;
-	// 	cmp = BTR_CMP_LT;
-	// } else {
-	// 	D_ASSERT(probe_opc & BTR_PROBE_SPEC);
-	// 	/* binary search */
-	// 	at = (start + end) / 2;
-	// 	cmp = btr_cmp(tcx, nd_off, at, hkey, key);
-	// }
+		// } else if (probe_opc == BTR_PROBE_LAST) {
+		// 	at = start = end;
+		// 	cmp = BTR_CMP_LT;
+		// } else {
+		// 	D_ASSERT(probe_opc & BTR_PROBE_SPEC);
+		// 	/* binary search */
+		// 	at = (start + end) / 2;
+		// 	cmp = btr_cmp(tcx, nd_off, at, hkey, key);
+		// }
 
-	// if (cmp != BTR_CMP_EQ && start < end) {
-	// 	/* continue the binary search in current level */
-	// 	if (cmp & BTR_CMP_LT)
-	// 		start = at + 1;
-	// 	else
-	// 		end = at - 1;
-	// 	continue;
-	// }
+		// if (cmp != BTR_CMP_EQ && start < end) {
+		// 	/* continue the binary search in current level */
+		// 	if (cmp & BTR_CMP_LT)
+		// 		start = at + 1;
+		// 	else
+		// 		end = at - 1;
+		// 	continue;
+		// }
 
-	// if (btr_node_is_leaf(tcx, nd_off))
-	// 	break;
+		// if (btr_node_is_leaf(tcx, nd_off))
+		// 	break;
 
-	// at += !(cmp & BTR_CMP_GT);
-	// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
+		// at += !(cmp & BTR_CMP_GT);
+		// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
 
-	/* Search the next level. */
-	// nd_off = btr_node_child_at(tcx, nd_off, at);
+		/* Search the next level. */
+		// nd_off = btr_node_child_at(tcx, nd_off, at);
 
-	// 	next_level = true;
-	// 	level++;
-	// }
+		// 	next_level = true;
+		// 	level++;
+	}
 	/* leaf node */
 	// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
 
