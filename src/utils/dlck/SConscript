@@ -23,6 +23,8 @@ def scons():
     dlck = denv.d_program('dlck', src, LIBS=libs)
     env.Install('$PREFIX/bin', dlck)
 
+    SConscript('tests/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()
