@@ -147,14 +147,41 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec)
+{
+	struct vos_cont_df *cont_df;
+	char                uuid_str[UUID_STR_LEN];
+	// struct vos_cont_ext_df *cont_ext_df;
+
+	/**
+	 * - check rec->rec_off
+	 */
+	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	uuid_unparse(cont_df->cd_id, uuid_str);
+	printf("%s\n", uuid_str);
+	/**
+	 * - check cont_df->cd_ext
+	 */
+	// cont_ext_df = umem_off2ptr(&tins->ti_umm, cont_df->cd_ext);
+
+	/**
+	 * - check GC tree?
+	 * - check other elements necessary to open the container?
+	 */
+
+	return 0;
+}
+
 static btr_ops_t vct_ops = {
-	.to_rec_msize	= cont_df_rec_msize,
-	.to_hkey_size	= cont_df_hkey_size,
-	.to_hkey_gen	= cont_df_hkey_gen,
-	.to_rec_alloc	= cont_df_rec_alloc,
-	.to_rec_free	= cont_df_rec_free,
-	.to_rec_fetch	= cont_df_rec_fetch,
-	.to_rec_update  = cont_df_rec_update,
+    .to_rec_msize  = cont_df_rec_msize,
+    .to_hkey_size  = cont_df_hkey_size,
+    .to_hkey_gen   = cont_df_hkey_gen,
+    .to_rec_alloc  = cont_df_rec_alloc,
+    .to_rec_free   = cont_df_rec_free,
+    .to_rec_fetch  = cont_df_rec_fetch,
+    .to_rec_update = cont_df_rec_update,
+    .to_rec_check  = cont_df_rec_check,
 };
 
 static int

@@ -688,6 +688,12 @@ btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 					   buf_len);
 }
 
+static int
+btr_rec_check(struct btr_context *tcx, struct btr_record *rec)
+{
+	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, rec);
+}
+
 static inline uint32_t
 btr_rec_size(struct btr_context *tcx)
 {
@@ -4653,6 +4659,8 @@ done:
 	return 0;
 }
 
+#define DLCK_ARRAY_GROWBY 2
+
 /**
  * DLCK: there is no safeguards in the currently existing records structure
  * potentially a room for improvement
@@ -4664,7 +4672,6 @@ done:
 int
 dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array)
 {
-	(void)toh;
 	(void)array;
 	struct btr_context *tcx;
 	// int		     rc;
@@ -4675,77 +4682,86 @@ dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array
 		return DER_SUCCESS;
 	}
 
-	/** DLCK: TBD */
-	// if (btr_has_embedded_value(tcx)) {
-	// rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
-	// return rc;
-
-	// /** Use the fake record since only the user allocated part is stored
-	//  *  in the tree root.
-	//  */
-	// rec->rec_off = tcx->tc_tins.ti_root->tr_node;
-
-	// struct ik_rec *irec = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	// }
+	if (btr_has_embedded_value(tcx)) {
+		/** DLCK: TBD */
+		return -DER_NOTSUPPORTED;
+	}
 
 	umem_off_t       nd_off;
+	umem_off_t         child_nd_off;
 	struct btr_node *nd;
-	int              start;
-	int              end;
-	int              level      = -1;
-	bool             next_level = true;
+	/**
+	 * The array below functions as a LIFO queue. This design choice is made because it is
+	 * easier to append to and consume from the end of the array, and the order of processing
+	 * the nodes is not significant as long as all nodes along the path from the root have been
+	 * validated. The array expands as needed.
+	 */
+	umem_off_t        *nd_off_array      = NULL;
+	int                nd_off_array_cnt  = 0;
+	int                nd_off_array_size = 0;
+	bool               appended          = false;
+	struct btr_record *rec;
 
 	nd_off = tcx->tc_tins.ti_root->tr_node;
+	/**
+	 * - if tr_node is faulty
+	 * -- add to the faulty nodes array
+	 * -- return
+	 */
 
-	for (start = end = 0, level = 0, next_level = true;;) {
-		if (next_level) { /* search a new level of the tree */
-			next_level = false;
-			start      = 0;
-			nd         = btr_off2ptr(tcx, nd_off);
-			end        = nd->tn_keyn - 1;
+	D_ALLOC_ARRAY(nd_off_array, DLCK_ARRAY_GROWBY);
+	if (nd_off_array == NULL) {
+		return -DER_NOMEM;
+	}
+	nd_off_array_size                = DLCK_ARRAY_GROWBY;
+	nd_off_array[nd_off_array_cnt++] = nd_off;
+
+	for (int i = nd_off_array_cnt - 1; i >= 0; --i) {
+		nd_off = nd_off_array[i];
+		nd_off_array_cnt -= 1;
+
+		nd = btr_off2ptr(tcx, nd_off);
+
+		if (btr_node_is_leaf(tcx, nd_off)) {
+			for (int at = 0; at < nd->tn_keyn; ++at) {
+				rec = btr_node_rec_at(tcx, nd_off, at);
+				btr_rec_check(tcx, rec);
+			}
+			continue;
 		}
 
-		(void)start;
-		(void)end;
-		(void)level;
+		for (int at = 0; at <= nd->tn_keyn; ++at) {
+			/* Search the next level. */
+			child_nd_off = btr_node_child_at(tcx, nd_off, at);
+			/**
+			 * - if tr_node is faulty
+			 * -- add to the faulty nodes array
+			 */
 
-		// if (probe_opc == BTR_PROBE_FIRST) {
-		// 	at = start = end = 0;
-		// 	cmp = BTR_CMP_GT;
+			/** grow the array if necessary */
+			if (nd_off_array_cnt == nd_off_array_size) {
+				umem_off_t *array_new;
+				D_REALLOC_ARRAY(array_new, nd_off_array, nd_off_array_size,
+						nd_off_array_size + DLCK_ARRAY_GROWBY);
+				if (array_new == NULL) {
+					return -DER_NOMEM;
+				}
+				nd_off_array = array_new;
+				nd_off_array_size += DLCK_ARRAY_GROWBY;
+			}
 
-		// } else if (probe_opc == BTR_PROBE_LAST) {
-		// 	at = start = end;
-		// 	cmp = BTR_CMP_LT;
-		// } else {
-		// 	D_ASSERT(probe_opc & BTR_PROBE_SPEC);
-		// 	/* binary search */
-		// 	at = (start + end) / 2;
-		// 	cmp = btr_cmp(tcx, nd_off, at, hkey, key);
-		// }
+			/** append the offset to the array */
+			nd_off_array[nd_off_array_cnt++] = child_nd_off;
+			appended                         = true;
+		}
 
-		// if (cmp != BTR_CMP_EQ && start < end) {
-		// 	/* continue the binary search in current level */
-		// 	if (cmp & BTR_CMP_LT)
-		// 		start = at + 1;
-		// 	else
-		// 		end = at - 1;
-		// 	continue;
-		// }
+		if (appended) {
+			/** jump to the end of the array if appended */
+			i = nd_off_array_cnt;
 
-		// if (btr_node_is_leaf(tcx, nd_off))
-		// 	break;
-
-		// at += !(cmp & BTR_CMP_GT);
-		// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
-
-		/* Search the next level. */
-		// nd_off = btr_node_child_at(tcx, nd_off, at);
-
-		// 	next_level = true;
-		// 	level++;
+			appended = false;
+		}
 	}
-	/* leaf node */
-	// btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
 
 	return DER_SUCCESS;
 }

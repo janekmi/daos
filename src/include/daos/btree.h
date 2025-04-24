@@ -410,6 +410,15 @@ typedef struct {
 	 */
 	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
 
+	/**
+	 * TBD
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
+	 * \param rec	[IN]	Record to be read from.
+	 */
+	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec);
+
 } btr_ops_t;
 
 /**

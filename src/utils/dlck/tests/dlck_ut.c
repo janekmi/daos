@@ -21,6 +21,11 @@
 
 static const char co_uuid_str_tmpl[] = "a367beed-8857-461c-a532-92ca618e589_";
 
+struct cont_df_args {
+	struct vos_cont_df *ca_cont_df;
+	struct vos_pool    *ca_pool;
+};
+
 static void
 setup(daos_handle_t *poh)
 {
@@ -56,6 +61,29 @@ setup(daos_handle_t *poh)
 		rc = vos_cont_create(*poh, co_uuid);
 		assert_int_equal(rc, 0);
 	}
+
+	/**
+	 * XXX should be used to validate the containers' tree after the tree is validated and
+	 * fixed.
+	 */
+	daos_handle_t       ih;
+	d_iov_t             val;
+	struct cont_df_args args;
+	char                uuid_str[UUID_STR_LEN];
+	rc = dbtree_iter_prepare(pool.vp_cont_th, 0, &ih);
+	assert_int_equal(rc, 0);
+	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_DEFAULT, NULL, NULL);
+	assert_int_equal(rc, 0);
+	val.iov_buf = &args;
+	do {
+		rc = dbtree_iter_fetch(ih, NULL, &val, NULL);
+		assert_int_equal(rc, 0);
+		uuid_unparse(args.ca_cont_df->cd_id, uuid_str);
+		printf("%s\n", uuid_str);
+		rc = dbtree_iter_next(ih);
+	} while (rc == 0);
+	rc = dbtree_iter_finish(ih);
+	assert_int_equal(rc, 0);
 }
 
 int
