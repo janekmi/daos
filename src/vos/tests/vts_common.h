@@ -87,9 +87,6 @@ int
 vts_alloc_gen_fname(char **fname);
 
 int
-vts_alloc_gen_fname_with_path(char **fname, char *path);
-
-int
 vts_pool_fallocate(char **fname);
 
 /**
