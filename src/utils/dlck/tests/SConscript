@@ -26,6 +26,24 @@ def scons():
     dlck_ut = tenv.d_test_program('dlck_ut', dlck_ut_src + vos_src, LIBS=libraries)
     tenv.Install('$PREFIX/bin/', dlck_ut)
 
+    # build and install the ut helper
+    henv = env.Clone()
+
+    henv.Append(OBJPREFIX="dlck_ut_helper_")
+    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+
+    libraries = ['vos', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx']
+
+    henv.require('argobots')
+    helper_src = ['dlck_ut_helper.c',
+                  '../../../dtx/tests/sched_mock.c',
+                  '../../../dtx/tests/srv_mock.c',
+                  '../../../dtx/tests/pl_map_mock.c',
+                  '../../../dtx/tests/ult_mock.c',
+                  ]
+    helper = henv.d_test_program('dlck_ut_helper', helper_src, LIBS=libraries)
+    henv.Install('$PREFIX/bin/', helper)
+
 
 if __name__ == "SCons.Script":
     scons()

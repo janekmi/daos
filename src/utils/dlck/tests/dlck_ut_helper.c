@@ -1,0 +1,210 @@
+/**
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+#define D_LOGFAC DD_FAC(telem)
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <cmocka.h>
+#include <getopt.h>
+#include <sys/stat.h>
+#include <daos/dtx.h>
+#include <daos_srv/vos.h>
+#include <daos_srv/dtx_srv.h>
+
+struct vos_test_ctx {
+	char         *tc_po_name;
+	uuid_t        tc_po_uuid;
+	uuid_t        tc_co_uuid;
+	daos_handle_t tc_po_hdl;
+	daos_handle_t tc_co_hdl;
+	int           tc_step;
+};
+
+struct io_test_args {
+	// char			 fname[VTS_BUF_SIZE];
+	struct vos_test_ctx ctx;
+	daos_unit_oid_t     oid;
+	/* Optional addn container create params */
+	uuid_t              addn_co_uuid;
+	daos_handle_t       addn_co;
+	/* testing flags, see vts_test_flags */
+	daos_epoch_t        epr_lo;
+	unsigned long       ta_flags;
+	const char         *dkey;
+	const char         *akey;
+	void               *custom;
+	enum daos_otype_t   otype;
+	int                 akey_size;
+	int                 dkey_size;
+	int                 co_create_step;
+	bool                checkpoint;
+	bool                no_replay;
+	bool                fail_replay;
+	bool                fail_checkpoint;
+};
+
+#define SRAND_SEED       1743171631
+
+#define VPOOL_SIZE       (1024 * 1024 * 10)
+
+#define STORAGE_PATH_LEN 96
+
+static char       vos_path[] = "/mnt/daos";
+
+static const char Po_uuid_str[]  = "a367beed-8857-461c-a532-92ca618e589c";
+static const char Co_uuid_str[]  = "0faccb2b-d498-49d4-aeef-0668e929e919";
+static const char Dti_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
+
+static void
+run_all_tests(void)
+{
+	daos_size_t          psize     = VPOOL_SIZE;
+	daos_size_t          meta_size = 0;
+	daos_epoch_t         epoch     = d_hlc_get();
+	uint64_t             dkey_buf  = 1;
+	daos_key_t           dkey;
+	daos_iod_t           iod      = {0};
+	uint64_t             akey_buf = 2;
+	daos_key_t           akey;
+	char                *value = "Aloha";
+	d_sg_list_t          sgl;
+	int                  rc;
+	char                *path;
+
+	struct io_test_args  args;
+	struct vos_test_ctx *tcx = &args.ctx;
+	srand(SRAND_SEED);
+
+	rc = uuid_parse(Po_uuid_str, tcx->tc_po_uuid);
+	assert_int_equal(rc, 0);
+	rc = uuid_parse(Co_uuid_str, tcx->tc_co_uuid);
+	assert_int_equal(rc, 0);
+
+	rc = asprintf(&path, "%s/%s", vos_path, Po_uuid_str);
+	assert_int_not_equal(rc, -1);
+
+	rc = mkdir(path, 0777);
+	assert_int_equal(rc, 0);
+
+	rc = asprintf(&tcx->tc_po_name, "%s/%s/vpool.0", vos_path, Po_uuid_str);
+	assert_int_not_equal(rc, -1);
+
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, meta_size,
+			     0 /* flags */, 0 /* version */, &tcx->tc_po_hdl);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid, &tcx->tc_co_hdl);
+	assert_int_equal(rc, 0);
+
+	// struct dtx_leader_handle *dlh;
+	struct dtx_handle *dth;
+	struct dtx_id      dti        = {0};
+	daos_unit_oid_t    leader_oid = {0};
+	struct dtx_epoch   epoch2     = {0};
+	epoch2.oe_value               = d_hlc_get();
+	uint32_t flags                = 0;
+
+	rc = uuid_parse(Dti_uuid_str, dti.dti_uuid);
+	assert_int_equal(rc, 0);
+	dti.dti_hlc = d_hlc_get();
+
+	rc =
+	    dtx_begin(tcx->tc_co_hdl, &dti, &epoch2, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+	assert_int_equal(rc, 0);
+
+	// rc = dtx_leader_begin(tcx->tc_co_hdl, &dti, &epoch2, 1, 0, &leader_oid, NULL, 0, NULL, 0,
+	// 0, NULL, NULL, &dlh); assert_int_equal(rc, 0);
+
+	// dth = &dlh->dlh_handle;
+
+	d_iov_set(&dkey, (void *)&dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&akey, (void *)&akey_buf, sizeof(akey_buf));
+	iod.iod_name  = akey;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_recxs = NULL;
+	iod.iod_nr    = 1;
+	iod.iod_size  = strlen(value);
+	rc            = d_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+	d_iov_set(&sgl.sg_iovs[0], (void *)value, iod.iod_size);
+
+	rc = dtx_sub_init(dth, &args.oid, 0);
+	assert_int_equal(rc, 0);
+
+	// daos_handle_t ioh;
+	// vos_update_begin(args.ctx.tc_co_hdl, args.oid, epoch)
+
+	rc = vos_obj_update_ex(args.ctx.tc_co_hdl, args.oid, epoch, 0, 0, &dkey, 1, &iod, NULL,
+			       &sgl, dth);
+	assert_int_equal(rc, 0);
+
+	// vos_dtx_mark_committable(dth);
+
+	// rc = vos_update_end(ioh, 0, &dkey, DER_SUCCESS, 0, dth);
+	// assert_int_equal(rc, 0);
+	// vos_tx_end
+
+	rc = dtx_end(dth, NULL, DER_SUCCESS);
+	assert_int_equal(rc, 0);
+
+	// rc = vos_dtx_commit(args.ctx.tc_co_hdl, &dti, 1, true, NULL);
+	// assert_int_equal(rc, 1); /** total number of committed */
+
+	d_sgl_fini(&sgl, false);
+
+	rc = vos_cont_close(tcx->tc_co_hdl);
+	assert_int_equal(rc, 0);
+
+	rc = vos_pool_close(tcx->tc_po_hdl);
+	assert_int_equal(rc, 0);
+}
+
+int
+main(int argc, char **argv)
+{
+	int rc;
+
+	d_register_alt_assert(mock_assert);
+
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		print_error("Error initializing debug system\n");
+		return rc;
+	}
+
+	/** XXX */
+	rc = unlink("/mnt/daos/a367beed-8857-461c-a532-92ca618e589c/vpool.0");
+	assert_int_equal(rc, 0);
+	rc = rmdir("/mnt/daos/a367beed-8857-461c-a532-92ca618e589c");
+	assert_int_equal(rc, 0);
+	rc = unlink("/mnt/daos/daos_sys/sys_db");
+	assert_int_equal(rc, 0);
+	rc = rmdir("/mnt/daos/daos_sys");
+	assert_int_equal(rc, 0);
+	/** XXX */
+
+	rc = vos_self_init(vos_path, true, BIO_STANDALONE_TGT_ID);
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
+	}
+
+	run_all_tests();
+
+	vos_self_fini();
+
+exit_0:
+	daos_debug_fini();
+
+	return 0;
+}
