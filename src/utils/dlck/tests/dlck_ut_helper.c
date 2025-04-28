@@ -28,7 +28,6 @@ struct vos_test_ctx {
 };
 
 struct io_test_args {
-	// char			 fname[VTS_BUF_SIZE];
 	struct vos_test_ctx ctx;
 	daos_unit_oid_t     oid;
 	/* Optional addn container create params */
@@ -50,24 +49,45 @@ struct io_test_args {
 	bool                fail_checkpoint;
 };
 
-#define SRAND_SEED       1743171631
+#define SRAND_SEED  1743171631
 
-#define VPOOL_SIZE       (1024 * 1024 * 10)
+#define VPOOL_SIZE  (1024 * 1024 * 10)
 
-#define STORAGE_PATH_LEN 96
+#define PO_UUID_STR "a367beed-8857-461c-a532-92ca618e589c"
 
-static char       vos_path[] = "/mnt/daos";
-
-static const char Po_uuid_str[]  = "a367beed-8857-461c-a532-92ca618e589c";
+static const char vos_path[]      = "/mnt/daos";
+static const char Po_uuid_str[]   = PO_UUID_STR;
 static const char Co_uuid_str[]  = "0faccb2b-d498-49d4-aeef-0668e929e919";
-static const char Dti_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
+static const char Dti1_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
+static const char Dti2_uuid_str[] = "525c6a15-8bc9-4918-a8fa-98b959ce6575";
+
+static void
+test_cleanup()
+{
+	int rc;
+
+	rc = unlink("/mnt/daos/" PO_UUID_STR "/vpool.0");
+	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
+	rc = rmdir("/mnt/daos/" PO_UUID_STR);
+	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
+	rc = unlink("/mnt/daos/daos_sys/sys_db");
+	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
+	rc = rmdir("/mnt/daos/daos_sys");
+	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
+}
+
+int
+iter_cb_nop(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	return 0;
+}
 
 static void
 run_all_tests(void)
 {
 	daos_size_t          psize     = VPOOL_SIZE;
 	daos_size_t          meta_size = 0;
-	daos_epoch_t         epoch     = d_hlc_get();
 	uint64_t             dkey_buf  = 1;
 	daos_key_t           dkey;
 	daos_iod_t           iod      = {0};
@@ -106,26 +126,26 @@ run_all_tests(void)
 	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid, &tcx->tc_co_hdl);
 	assert_int_equal(rc, 0);
 
-	// struct dtx_leader_handle *dlh;
 	struct dtx_handle *dth;
-	struct dtx_id      dti        = {0};
+	struct dtx_id      dti1       = {0};
+	struct dtx_id      dti2       = {0};
 	daos_unit_oid_t    leader_oid = {0};
-	struct dtx_epoch   epoch2     = {0};
-	epoch2.oe_value               = d_hlc_get();
+	struct dtx_epoch   epoch      = {0};
+	epoch.oe_value                = d_hlc_get();
 	uint32_t flags                = 0;
 
-	rc = uuid_parse(Dti_uuid_str, dti.dti_uuid);
+	rc = uuid_parse(Dti_uuid_str, dti1.dti_uuid);
 	assert_int_equal(rc, 0);
-	dti.dti_hlc = d_hlc_get();
+	dti1.dti_hlc = d_hlc_get();
+
+	Dti_uuid_str[UUID_STR_LEN - 2] = '1';
+	rc                             = uuid_parse(Dti_uuid_str, dti2.dti_uuid);
+	assert_int_equal(rc, 0);
+	dti2.dti_hlc = d_hlc_get();
 
 	rc =
-	    dtx_begin(tcx->tc_co_hdl, &dti, &epoch2, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+	    dtx_begin(tcx->tc_co_hdl, &dti1, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
 	assert_int_equal(rc, 0);
-
-	// rc = dtx_leader_begin(tcx->tc_co_hdl, &dti, &epoch2, 1, 0, &leader_oid, NULL, 0, NULL, 0,
-	// 0, NULL, NULL, &dlh); assert_int_equal(rc, 0);
-
-	// dth = &dlh->dlh_handle;
 
 	d_iov_set(&dkey, (void *)&dkey_buf, sizeof(dkey_buf));
 	d_iov_set(&akey, (void *)&akey_buf, sizeof(akey_buf));
@@ -141,24 +161,46 @@ run_all_tests(void)
 	rc = dtx_sub_init(dth, &args.oid, 0);
 	assert_int_equal(rc, 0);
 
-	// daos_handle_t ioh;
-	// vos_update_begin(args.ctx.tc_co_hdl, args.oid, epoch)
-
-	rc = vos_obj_update_ex(args.ctx.tc_co_hdl, args.oid, epoch, 0, 0, &dkey, 1, &iod, NULL,
-			       &sgl, dth);
+	rc = vos_obj_update_ex(args.ctx.tc_co_hdl, args.oid, 0, 0, 0, &dkey, 1, &iod, NULL, &sgl,
+			       dth);
 	assert_int_equal(rc, 0);
-
-	// vos_dtx_mark_committable(dth);
-
-	// rc = vos_update_end(ioh, 0, &dkey, DER_SUCCESS, 0, dth);
-	// assert_int_equal(rc, 0);
-	// vos_tx_end
 
 	rc = dtx_end(dth, NULL, DER_SUCCESS);
 	assert_int_equal(rc, 0);
 
-	// rc = vos_dtx_commit(args.ctx.tc_co_hdl, &dti, 1, true, NULL);
+	/** XXX */
+	rc =
+	    dtx_begin(tcx->tc_co_hdl, &dti2, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+	assert_int_equal(rc, 0);
+
+	rc = dtx_sub_init(dth, &args.oid, 0);
+	assert_int_equal(rc, 0);
+
+	args.oid.id_pub.lo = 1;
+
+	rc = vos_obj_update_ex(args.ctx.tc_co_hdl, args.oid, 0, 0, 0, &dkey, 1, &iod, NULL, &sgl,
+			       dth);
+	assert_int_equal(rc, 0);
+
+	rc = dtx_end(dth, NULL, DER_SUCCESS);
+	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_commit(args.ctx.tc_co_hdl, &dti1, 1, true, NULL);
+	assert_int_equal(rc, 1); /** total number of committed */
+	/** XXX */
+
+	// rc = vos_dtx_commit(args.ctx.tc_co_hdl, &dti2, 1, true, NULL);
 	// assert_int_equal(rc, 1); /** total number of committed */
+
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = args.ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, iter_cb_nop, iter_cb_nop, NULL,
+			 NULL);
+	assert_int_equal(rc, 0);
 
 	d_sgl_fini(&sgl, false);
 
@@ -182,16 +224,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	/** XXX */
-	rc = unlink("/mnt/daos/a367beed-8857-461c-a532-92ca618e589c/vpool.0");
-	assert_int_equal(rc, 0);
-	rc = rmdir("/mnt/daos/a367beed-8857-461c-a532-92ca618e589c");
-	assert_int_equal(rc, 0);
-	rc = unlink("/mnt/daos/daos_sys/sys_db");
-	assert_int_equal(rc, 0);
-	rc = rmdir("/mnt/daos/daos_sys");
-	assert_int_equal(rc, 0);
-	/** XXX */
+	test_cleanup();
 
 	rc = vos_self_init(vos_path, true, BIO_STANDALONE_TGT_ID);
 	if (rc) {
