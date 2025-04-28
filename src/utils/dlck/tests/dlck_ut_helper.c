@@ -19,7 +19,6 @@
 #include <daos_srv/dtx_srv.h>
 
 struct vos_test_ctx {
-	// char         *tc_po_name;
 	uuid_t        tc_po_uuid;
 	uuid_t        tc_co_uuid;
 	daos_handle_t tc_po_hdl;
@@ -59,7 +58,6 @@ test_setup(struct vos_test_ctx *tcx)
 {
 	daos_size_t psize     = VPOOL_SIZE;
 	daos_size_t meta_size = 0;
-	// char       *path;
 	int         rc;
 
 	rc = uuid_parse(Po_uuid_str, tcx->tc_po_uuid);
@@ -67,14 +65,8 @@ test_setup(struct vos_test_ctx *tcx)
 	rc = uuid_parse(Co_uuid_str, tcx->tc_co_uuid);
 	assert_int_equal(rc, 0);
 
-	// rc = asprintf(&path, "%s/%s", vos_path, Po_uuid_str);
-	// assert_int_not_equal(rc, -1);
-
 	rc = mkdir(VOS_PATH "/" PO_UUID_STR, 0777);
 	assert_int_equal(rc, 0);
-
-	// rc = asprintf(&tcx->tc_po_name, "%s/%s/vpool.0", vos_path, Po_uuid_str);
-	// assert_int_not_equal(rc, -1);
 
 	rc = vos_pool_create(POOL_PATH, tcx->tc_po_uuid, psize, psize, meta_size, 0 /* flags */,
 			     0 /* version */, &tcx->tc_po_hdl);
