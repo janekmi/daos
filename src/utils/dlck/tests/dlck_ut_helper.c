@@ -98,7 +98,8 @@ simple_dtx(daos_handle_t coh, const char *dti_uuid_str, daos_unit_oid_t oid, dao
 	struct dtx_id      dti        = {0};
 	struct dtx_epoch   epoch      = {0};
 	daos_unit_oid_t    leader_oid = {0};
-	uint32_t           flags      = 0;
+	// uint32_t           flags      = 0;
+	struct dtx_leader_handle *dlh;
 	struct dtx_handle *dth;
 	int                rc;
 
@@ -108,8 +109,14 @@ simple_dtx(daos_handle_t coh, const char *dti_uuid_str, daos_unit_oid_t oid, dao
 
 	epoch.oe_value = d_hlc_get();
 
-	rc = dtx_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+	// rc = dtx_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+	// assert_int_equal(rc, 0);
+
+	rc = dtx_leader_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, NULL, 0, 0, NULL, NULL,
+			      &dlh);
 	assert_int_equal(rc, 0);
+
+	dth = &dlh->dlh_handle;
 
 	rc = dtx_sub_init(dth, &oid, 0);
 	assert_int_equal(rc, 0);
@@ -196,6 +203,8 @@ run_all_tests(void)
 	test_teardown(&tcx);
 }
 
+extern struct dss_module dtx_module;
+
 int
 main(int argc, char **argv)
 {
@@ -216,6 +225,10 @@ main(int argc, char **argv)
 		print_error("Error initializing VOS instance\n");
 		goto exit_0;
 	}
+
+	daos_register_key(dtx_module.sm_key);
+
+	(void)dc_tls_init(DAOS_TGT_TAG, 0);
 
 	run_all_tests();
 
