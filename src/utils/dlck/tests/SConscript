@@ -10,7 +10,7 @@ def scons():
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
     tenv.Append(CPPPATH=[Dir('../../../vos').srcnode()])
     tenv.Append(OBJPREFIX="dlck_ut_")
-    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDLCK_ENABLED'])
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DVOS_STANDALONE', '-DDLCK_ENABLED'])
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=gc_init_cont'])

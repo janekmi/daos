@@ -25,6 +25,9 @@ int
 dlck_vos_pool_containers_check(daos_handle_t poh, struct DLCK_btree_faulty_nodes_array *array);
 
 int
+dlck_vos_cont_dtx_recover(daos_handle_t coh);
+
+int
 dlck_dbtree_check(daos_handle_t toh, struct DLCK_btree_faulty_nodes_array *array);
 
 bool

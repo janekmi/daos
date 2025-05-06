@@ -1052,3 +1052,16 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 
 	return 0;
 }
+
+int
+dlck_vos_cont_dtx_recover(daos_handle_t coh)
+{
+	struct vos_container *cont;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	// vos_iterate();
+
+	return 0;
+}

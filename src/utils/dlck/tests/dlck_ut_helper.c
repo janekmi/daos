@@ -18,6 +18,8 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 
+#include "dlck_ut.h"
+
 struct vos_test_ctx {
 	uuid_t        tc_po_uuid;
 	uuid_t        tc_co_uuid;
@@ -27,11 +29,6 @@ struct vos_test_ctx {
 };
 
 #define VPOOL_SIZE  (1024 * 1024 * 10) /** 10MiB */
-
-#define VOS_PATH    "/mnt/daos"
-#define PO_UUID_STR "a367beed-8857-461c-a532-92ca618e589c"
-#define POOL_NAME   "vpool.0"
-#define POOL_PATH   VOS_PATH "/" PO_UUID_STR "/" POOL_NAME
 
 static const char Po_uuid_str[]   = PO_UUID_STR;
 static const char Co_uuid_str[]   = "0faccb2b-d498-49d4-aeef-0668e929e919";
@@ -228,7 +225,7 @@ main(int argc, char **argv)
 
 	daos_register_key(dtx_module.sm_key);
 
-	(void)dss_tls_init(DAOS_TGT_TAG, 0, 0);
+	(void)dss_tls_init(DAOS_TGT_TAG, 0, BIO_STANDALONE_TGT_ID);
 
 	run_all_tests();
 

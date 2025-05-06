@@ -13,6 +13,11 @@
 
 #include <vos_internal.h>
 
+#include "dlck_ut.h"
+
+static const char Po_uuid_str[] = PO_UUID_STR;
+static const char Co_uuid_str[] = "0faccb2b-d498-49d4-aeef-0668e929e919";
+
 /**
  * The smaller tree order allows the creation of more complex tree structures using a smaller number
  * of records.
@@ -86,17 +91,70 @@ setup(daos_handle_t *poh)
 	assert_int_equal(rc, 0);
 }
 
+static bool
+ut_check_offset(umem_off_t off)
+{
+	return true;
+}
+
+struct DLCK_callbacks callbacks = {
+    .dc_ask_yes_no = NULL, .dc_ask_value = NULL, .dc_check_offset = ut_check_offset};
+
 int
 main(int argc, char **argv)
 {
-	struct DLCK_btree_faulty_nodes_array array;
-	daos_handle_t                        poh;
-	int                                  rc;
+	uuid_t        po_uuid;
+	daos_handle_t poh;
+	uuid_t        co_uuid;
+	daos_handle_t coh;
+	int           rc;
 
-	setup(&poh);
+	DLCK_Callbacks = &callbacks;
 
-	rc = dlck_vos_pool_containers_check(poh, &array);
+	d_register_alt_assert(mock_assert);
+
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		print_error("Error initializing debug system\n");
+		return rc;
+	}
+
+	rc = vos_standalone_tls_init(DAOS_TGT_TAG);
 	assert_int_equal(rc, 0);
+
+	rc = vos_self_init(VOS_PATH, true, BIO_STANDALONE_TGT_ID);
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
+	}
+
+	rc = uuid_parse(Po_uuid_str, po_uuid);
+	assert_int_equal(rc, 0);
+	rc = uuid_parse(Co_uuid_str, co_uuid);
+	assert_int_equal(rc, 0);
+
+	rc = vos_pool_open(POOL_PATH, po_uuid, 0, &poh);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_open(poh, co_uuid, &coh);
+	assert_int_equal(rc, 0);
+
+	// setup(&poh);
+	(void)setup;
+
+	rc = dlck_vos_cont_dtx_recover(coh);
+	assert_int_equal(rc, 0);
+
+	rc = vos_cont_close(coh);
+	assert_int_equal(rc, 0);
+
+	rc = vos_pool_close(poh);
+	assert_int_equal(rc, 0);
+
+	vos_self_fini();
+
+exit_0:
+	daos_debug_fini();
 
 	return 0;
 }
