@@ -228,7 +228,7 @@ main(int argc, char **argv)
 
 	daos_register_key(dtx_module.sm_key);
 
-	(void)dc_tls_init(DAOS_TGT_TAG, 0);
+	(void)dss_tls_init(DAOS_TGT_TAG, 0, 0);
 
 	run_all_tests();
 
