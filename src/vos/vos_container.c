@@ -1064,6 +1064,7 @@ iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	case VOS_ITER_OBJ:
 		return dlck_obj_xxx(iter, coh);
 	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
 		return dlck_irec_xxx(iter, coh);
 	default:
 		return 0; /** skip */
