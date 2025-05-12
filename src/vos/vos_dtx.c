@@ -2712,6 +2712,8 @@ do_dtx_rec_discard_invalid(struct umem_instance *umm, struct vos_dtx_act_ent *da
 	if (UMOFF_IS_NULL(*rec))
 		return;
 
+	printf("umoff=0x" UMOFF_PF "\n", *rec);
+
 	switch (dtx_umoff_flag2type(*rec)) {
 	case DTX_RT_ILOG: {
 		valid = ilog_is_valid(umm, *rec, DAE_LID(dae), DAE_EPOCH(dae));
@@ -2748,6 +2750,8 @@ vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_
 	int                   discarded_inline    = 0;
 	int                   count               = min(DAE_REC_CNT(dae), DTX_INLINE_REC_CNT);
 	int                   i;
+
+	printf("lid=%" PRIu32 "\n", DAE_LID(dae));
 
 	/* go through the inlined records */
 	for (i = 0; i < count; i++) {
