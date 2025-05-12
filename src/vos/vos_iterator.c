@@ -1132,7 +1132,7 @@ vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors
 }
 
 #ifdef DLCK_ENABLED
-#define ITERATE_SHOW_UNCOMMITTED true
+#define ITERATE_SHOW_UNCOMMITTED false
 #else
 #define ITERATE_SHOW_UNCOMMITTED false
 #endif /* DLCK_ENABLED */
