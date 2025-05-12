@@ -705,6 +705,14 @@ vos_cont_tab_register();
 int
 vos_obj_tab_register();
 
+struct vos_iterator;
+
+/**
+ * XXX
+ */
+int
+dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh);
+
 /**
  * DTX table destroy
  * Called from vos_cont_destroy

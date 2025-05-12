@@ -1057,14 +1057,14 @@ static int
 iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	       vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	daos_handle_t        coh  = *(daos_handle_t *)cb_arg;
+
 	if (type != VOS_ITER_OBJ) {
 		return -DER_NOTSUPPORTED;
 	}
 
-	printf("- oid=(lo=%" PRIu64 ", hi=%" PRIu64 ")\n", entry->ie_oid.id_pub.lo,
-	       entry->ie_oid.id_pub.hi);
-
-	return 0;
+	return dlck_obj_xxx(iter, coh);
 }
 
 int
@@ -1082,7 +1082,7 @@ dlck_vos_cont_dtx_recover(daos_handle_t coh)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, iter_cb_printf, NULL, NULL, NULL);
+	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, iter_cb_printf, NULL, &coh, NULL);
 
 	return rc;
 }
