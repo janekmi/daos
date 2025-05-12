@@ -1055,10 +1055,6 @@ dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh)
 	struct vos_oi_iter   *oiter = iter2oiter(iter);
 	struct vos_obj_df    *obj_df;
 	d_iov_t               iov;
-	struct ilog_entries   entries = {0};
-	struct ilog_desc_cbs  cbs     = {0};
-	struct umem_instance *umm     = vos_cont2umm(vos_hdl2cont(coh));
-	struct ilog_entry     e;
 	int                   rc;
 
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
@@ -1067,27 +1063,5 @@ dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh)
 	D_ASSERT(iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj_df = (struct vos_obj_df *)iov.iov_buf;
 
-	ilog_fetch_init(&entries);
-
-	vos_ilog_desc_cbs_init(&cbs, coh);
-	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
-	if (rc == -DER_NONEXIST) /* no entries exist ... not an error */
-		return 0;
-	if (rc != DER_SUCCESS)
-		return rc;
-
-	uint32_t   lid   = 0;
-	umem_off_t umoff = 0;
-
-	ilog_foreach_entry(&entries, &e)
-	{
-		uint32_t tx_id = e.ie_id.id_tx_id;
-		if (tx_id != DTX_LID_COMMITTED && tx_id != DTX_LID_ABORTED) {
-			lid   = tx_id;
-			umoff = ilog_umoff_by_idx(umm, &obj_df->vo_ilog, e.ie_idx);
-			printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", lid, umoff);
-		}
-	}
-
-	return 0;
+	return dlck_ilog_xxx(coh, &obj_df->vo_ilog);
 }

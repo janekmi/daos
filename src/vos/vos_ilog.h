@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -365,5 +366,11 @@ vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone);
 void
 vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
 		     bool standalone);
+
+/**
+ * XXX
+ */
+int
+dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df);
 
 #endif /* __VOS_ILOG_H__ */

@@ -1060,11 +1060,14 @@ iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	daos_handle_t        coh  = *(daos_handle_t *)cb_arg;
 
-	if (type != VOS_ITER_OBJ) {
-		return -DER_NOTSUPPORTED;
+	switch (type) {
+	case VOS_ITER_OBJ:
+		return dlck_obj_xxx(iter, coh);
+	case VOS_ITER_DKEY:
+		return dlck_irec_xxx(iter, coh);
+	default:
+		return 0; /** skip */
 	}
-
-	return dlck_obj_xxx(iter, coh);
 }
 
 int
@@ -1082,7 +1085,7 @@ dlck_vos_cont_dtx_recover(daos_handle_t coh)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, iter_cb_printf, NULL, &coh, NULL);
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, iter_cb_printf, NULL, &coh, NULL);
 
 	return rc;
 }

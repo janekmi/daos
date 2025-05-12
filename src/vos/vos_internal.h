@@ -714,6 +714,12 @@ int
 dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh);
 
 /**
+ * XXX
+ */
+int
+dlck_irec_xxx(struct vos_iterator *iter, daos_handle_t coh);
+
+/**
  * DTX table destroy
  * Called from vos_cont_destroy
  *
