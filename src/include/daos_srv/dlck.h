@@ -83,4 +83,20 @@ extern struct DLCK_callbacks *DLCK_Callbacks;
 #define DLCK_CALL_CHECK_RETURN(check_func, ...)
 #endif
 
+struct dlck_dtx_rec {
+	uint32_t   lid;
+	umem_off_t umoff;
+};
+
+struct dlck_dtx_rec_array {
+	uint32_t             dda_len;     /** Current length of array */
+	uint32_t             dda_max_len; /** Allocated length of array */
+	struct dlck_dtx_rec *dda_rec;     /** Entries in array */
+};
+
+#define DLCK_DTX_REC_ARRAY_GROW_BY 10
+
+int
+dlck_dtx_rec_array_append(struct dlck_dtx_rec_array *dda, struct dlck_dtx_rec *rec);
+
 #endif /* __DAOS_DLCK_H__ */

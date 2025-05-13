@@ -696,7 +696,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc, boo
 }
 
 int
-dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df)
+dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df, struct dlck_dtx_rec_array *dda)
 {
 	struct ilog_entries   entries = {0};
 	struct ilog_desc_cbs  cbs     = {0};
@@ -713,16 +713,15 @@ dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df)
 	if (rc != DER_SUCCESS)
 		return rc;
 
-	uint32_t   lid   = 0;
-	umem_off_t umoff = 0;
+	struct dlck_dtx_rec rec = {0};
 
 	ilog_foreach_entry(&entries, &e)
 	{
 		uint32_t tx_id = e.ie_id.id_tx_id;
 		if (tx_id != DTX_LID_COMMITTED && tx_id != DTX_LID_ABORTED) {
-			lid   = tx_id;
-			umoff = ilog_umoff_by_idx(umm, root_df, e.ie_idx);
-			printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", lid, umoff);
+			rec.lid   = tx_id;
+			rec.umoff = ilog_umoff_by_idx(umm, root_df, e.ie_idx);
+			dlck_dtx_rec_array_append(dda, &rec);
 		}
 	}
 

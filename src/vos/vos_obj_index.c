@@ -1050,7 +1050,7 @@ vos_obj_tab_register()
 }
 
 int
-dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh)
+dlck_obj_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda)
 {
 	struct vos_oi_iter   *oiter = iter2oiter(iter);
 	struct vos_obj_df    *obj_df;
@@ -1063,5 +1063,5 @@ dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh)
 	D_ASSERT(iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj_df = (struct vos_obj_df *)iov.iov_buf;
 
-	return dlck_ilog_xxx(coh, &obj_df->vo_ilog);
+	return dlck_ilog_xxx(coh, &obj_df->vo_ilog, dda);
 }

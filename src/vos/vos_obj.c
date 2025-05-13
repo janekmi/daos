@@ -2738,7 +2738,7 @@ struct vos_iter_ops vos_obj_ev_iter_ops = {
  */
 
 int
-dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh)
+dlck_sv_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda)
 {
 	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
 	d_iov_t               val;
@@ -2746,8 +2746,7 @@ dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh)
 	struct bio_iov        biov  = {0};
 	struct umem_instance *umm   = vos_cont2umm(vos_hdl2cont(coh));
 	struct vos_irec_df   *irec_df;
-	uint32_t              lid;
-	umem_off_t            umoff;
+	struct dlck_dtx_rec   rec = {0};
 	int                   rc;
 
 	tree_rec_bundle2iov(&rbund, &val);
@@ -2757,16 +2756,16 @@ dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh)
 	D_ASSERT(rc == 0);
 
 	irec_df = umem_off2ptr(umm, rbund.rb_off);
-	lid     = irec_df->ir_dtx;
+	rec.lid = irec_df->ir_dtx;
 
-	if (lid == DTX_LID_COMMITTED || lid == DTX_LID_ABORTED) {
+	if (rec.lid == DTX_LID_COMMITTED || rec.lid == DTX_LID_ABORTED) {
 		return DER_SUCCESS;
 	}
 
-	umoff = umem_off2offset(rbund.rb_off);
-	umem_off_set_flags(&umoff, DTX_UMOFF_SVT);
+	rec.umoff = umem_off2offset(rbund.rb_off);
+	umem_off_set_flags(&rec.umoff, DTX_UMOFF_SVT);
 
-	printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", lid, umoff);
+	dlck_dtx_rec_array_append(dda, &rec);
 
 	return DER_SUCCESS;
 }

@@ -1053,21 +1053,28 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 	return 0;
 }
 
+struct dlck_iter_bundle {
+	daos_handle_t              coh;
+	struct dlck_dtx_rec_array *dda;
+};
+
 static int
-iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	       vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+dlck_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
-	daos_handle_t        coh  = *(daos_handle_t *)cb_arg;
+	struct dlck_iter_bundle   *bundle = (struct dlck_iter_bundle *)cb_arg;
+	daos_handle_t              coh    = bundle->coh;
+	struct dlck_dtx_rec_array *dda    = bundle->dda;
 
 	switch (type) {
 	case VOS_ITER_OBJ:
-		return dlck_obj_xxx(iter, coh);
+		return dlck_obj_xxx(coh, iter, dda);
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-		return dlck_irec_xxx(iter, coh);
+		return dlck_irec_xxx(coh, iter, dda);
 	case VOS_ITER_SINGLE:
-		return dlck_sv_xxx(iter, coh);
+		return dlck_sv_xxx(coh, iter, dda);
 	case VOS_ITER_RECX:
 		return -DER_NOTSUPPORTED;
 	default:
@@ -1078,19 +1085,28 @@ iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 int
 dlck_vos_cont_dtx_recover(daos_handle_t coh)
 {
-	struct vos_container *cont;
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
+	struct dlck_dtx_rec_array dda     = {0};
+	struct dlck_iter_bundle   bundle;
 	int                     rc;
-
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
 
 	param.ip_hdl        = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, iter_cb_printf, NULL, &coh, NULL);
+	bundle.coh = coh;
+	bundle.dda = &dda;
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, dlck_iter_cb, NULL, &bundle, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	for (uint32_t i = 0; i < dda.dda_len; ++i) {
+		struct dlck_dtx_rec *rec = &dda.dda_rec[i];
+		printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", rec->lid, rec->umoff);
+	}
 
 	return rc;
 }

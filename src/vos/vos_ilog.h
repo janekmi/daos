@@ -15,6 +15,7 @@
 #define __VOS_ILOG_H__
 
 #include <daos/common.h>
+#include <daos_srv/dlck.h>
 #include "ilog.h"
 #include "vos_ts.h"
 
@@ -371,6 +372,6 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
  * XXX
  */
 int
-dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df);
+dlck_ilog_xxx(daos_handle_t coh, struct ilog_df *root_df, struct dlck_dtx_rec_array *dda);
 
 #endif /* __VOS_ILOG_H__ */

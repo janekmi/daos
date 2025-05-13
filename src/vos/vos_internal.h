@@ -711,13 +711,13 @@ struct vos_iterator;
  * XXX
  */
 int
-dlck_obj_xxx(struct vos_iterator *iter, daos_handle_t coh);
+dlck_obj_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda);
 
 /**
  * XXX
  */
 int
-dlck_irec_xxx(struct vos_iterator *iter, daos_handle_t coh);
+dlck_irec_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda);
 
 /**
  * DTX table destroy
@@ -1531,7 +1531,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
  * XXX
  */
 int
-dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh);
+dlck_sv_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda);
 
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator

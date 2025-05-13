@@ -1367,7 +1367,7 @@ vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid)
 }
 
 int
-dlck_irec_xxx(struct vos_iterator *iter, daos_handle_t coh)
+dlck_irec_xxx(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda)
 {
 	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
 	d_iov_t               iov;
@@ -1382,5 +1382,5 @@ dlck_irec_xxx(struct vos_iterator *iter, daos_handle_t coh)
 
 	krec_df = rbund.rb_krec;
 
-	return dlck_ilog_xxx(coh, &krec_df->kr_ilog);
+	return dlck_ilog_xxx(coh, &krec_df->kr_ilog, dda);
 }
