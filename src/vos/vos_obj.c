@@ -2736,3 +2736,37 @@ struct vos_iter_ops vos_obj_ev_iter_ops = {
 /**
  * @} vos_obj_iters
  */
+
+int
+dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh)
+{
+	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
+	d_iov_t               val;
+	struct vos_rec_bundle rbund = {0};
+	struct bio_iov        biov  = {0};
+	struct umem_instance *umm   = vos_cont2umm(vos_hdl2cont(coh));
+	struct vos_irec_df   *irec_df;
+	uint32_t              lid;
+	umem_off_t            umoff;
+	int                   rc;
+
+	tree_rec_bundle2iov(&rbund, &val);
+	rbund.rb_biov = &biov;
+
+	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &val, NULL);
+	D_ASSERT(rc == 0);
+
+	irec_df = umem_off2ptr(umm, rbund.rb_off);
+	lid     = irec_df->ir_dtx;
+
+	if (lid == DTX_LID_COMMITTED || lid == DTX_LID_ABORTED) {
+		return DER_SUCCESS;
+	}
+
+	umoff = umem_off2offset(rbund.rb_off);
+	umem_off_set_flags(&umoff, DTX_UMOFF_SVT);
+
+	printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", lid, umoff);
+
+	return DER_SUCCESS;
+}

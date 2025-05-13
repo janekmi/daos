@@ -1527,6 +1527,12 @@ vos_obj_iter_check_punch(daos_handle_t ih);
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 
+/**
+ * XXX
+ */
+int
+dlck_sv_xxx(struct vos_iterator *iter, daos_handle_t coh);
+
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator
  *
