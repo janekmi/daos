@@ -2134,4 +2134,10 @@ dtx_type2umoff_flag(umem_off_t *rec, uint32_t type)
 	umem_off_set_flags(rec, flag);
 }
 
+/**
+ * XXX
+ */
+int
+dlck_dtx_recover(daos_handle_t coh, struct dlck_dtx_rec_array *dda);
+
 #endif /* __VOS_INTERNAL_H__ */

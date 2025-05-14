@@ -2741,6 +2741,23 @@ do_dtx_rec_discard_invalid(struct umem_instance *umm, struct vos_dtx_act_ent *da
 	}
 }
 
+/**
+ * XXX
+ */
+static inline int
+dae_rec_df_cpy(struct umem_instance *umm, umem_off_t *dst, umem_off_t *src, int count)
+{
+	size_t size = sizeof(umem_off_t) * count;
+	int    rc   = umem_tx_add_ptr(umm, dst, size);
+	if (rc != 0) {
+		return rc;
+	}
+
+	memcpy(dst, src, size);
+
+	return DER_SUCCESS;
+}
+
 static int
 vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 				 int *discarded)
@@ -2761,12 +2778,7 @@ vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_
 	if (discarded_inline > 0) {
 		/* copy the whole array to durable format */
 		struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
-		size_t                     size   = sizeof(umem_off_t) * count;
-		int                        rc = umem_tx_add_ptr(umm, &dae_df->dae_rec_inline, size);
-		if (rc != 0) {
-			return rc;
-		}
-		memcpy(&dae_df->dae_rec_inline, &DAE_REC_INLINE(dae), size);
+		dae_rec_df_cpy(umm, dae_df->dae_rec_inline, DAE_REC_INLINE(dae), count);
 	}
 
 	/* go through the non-inlined records if present */
@@ -2781,13 +2793,8 @@ vos_dtx_discard_invalid_internal(struct vos_container *cont, struct vos_dtx_act_
 
 		if (discarded_noninline > 0) {
 			/* copy the whole array to the durable format */
-			size_t size   = sizeof(umem_off_t) * count;
 			void  *rec_df = umem_off2ptr(umm, DAE_REC_OFF(dae));
-			int    rc     = umem_tx_add_ptr(umm, rec_df, size);
-			if (rc != 0) {
-				return rc;
-			}
-			memcpy(rec_df, dae->dae_records, size);
+			dae_rec_df_cpy(umm, rec_df, dae->dae_records, count);
 		}
 	}
 
@@ -3851,4 +3858,119 @@ vos_dtx_local_end(struct dtx_handle *dth, int result)
 	dth->dth_local_oid_cap = 0;
 
 	return result;
+}
+
+/**
+ * XXX
+ */
+static int
+dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
+{
+	int                        count  = min(DAE_REC_CNT(dae), DTX_INLINE_REC_CNT);
+	struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
+	int                        rc;
+
+	if (count == 0) {
+		return DER_SUCCESS;
+	}
+
+	/** zero out the inlined records */
+	memset(DAE_REC_INLINE(dae), 0, sizeof(umem_off_t) * count);
+
+	rc = dae_rec_df_cpy(umm, dae_df->dae_rec_inline, DAE_REC_INLINE(dae), count);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** zero out the non-inlined records */
+	if (dae->dae_records != NULL) {
+		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+
+		D_FREE(dae->dae_records);
+		dae->dae_records = NULL;
+
+		umem_free(umm, DAE_REC_OFF(dae));
+
+		rc = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_off);
+		if (rc != DER_SUCCESS) {
+			return rc;
+		}
+		dae_df->dae_rec_off = UMOFF_NULL;
+	}
+
+	/** set the overall number of records to 0 */
+	DAE_REC_CNT(dae) = 0;
+	rc               = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_cnt);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+	dae_df->dae_rec_cnt = 0;
+
+	return DER_SUCCESS;
+}
+
+struct dlck_dtx_recover_bundle {
+	struct umem_instance      *umm;
+	struct dlck_dtx_rec_array *dda;
+};
+
+static int
+dlck_dtx_recover_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+{
+	struct dlck_dtx_recover_bundle *bundle = arg;
+	struct umem_instance           *umm    = bundle->umm;
+	struct dlck_dtx_rec_array      *dda    = bundle->dda;
+	struct dlck_dtx_rec            *rec;
+	struct dlck_dtx_rec_array       dda_new = {0};
+	struct vos_dtx_act_ent         *dae;
+	int                             rc;
+
+	D_ASSERT(val->iov_buf_len == sizeof(*dae));
+	dae = val->iov_buf;
+
+	rc = dlck_dtx_ent_recs_remove(umm, dae);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	for (int i = 0; i < dda->dda_len; ++i) {
+		rec = &dda->dda_rec[i];
+
+		if (rec->lid != DAE_LID(dae)) {
+			dlck_dtx_rec_array_append(&dda_new, rec);
+			continue;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_dtx_recover(daos_handle_t coh, struct dlck_dtx_rec_array *dda)
+{
+	struct vos_container *cont = vos_hdl2cont(coh);
+	int                   rc;
+
+	D_ASSERT(cont != NULL);
+
+	struct umem_instance          *umm    = vos_cont2umm(cont);
+	struct dlck_dtx_recover_bundle bundle = {
+	    .umm = umm,
+	    .dda = dda,
+	};
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc == DER_SUCCESS) {
+		rc = dbtree_iterate(cont->vc_dtx_active_hdl, DAOS_INTENT_DEFAULT, false,
+				    dlck_dtx_recover_cb, &bundle);
+		if (rc == DER_SUCCESS) {
+			rc = umem_tx_commit(umm);
+		} else {
+			rc = umem_tx_abort(umm, rc);
+		}
+	}
+
+	/** dda not empty? */
+
+	return rc;
 }

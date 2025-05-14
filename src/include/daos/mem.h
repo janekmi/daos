@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -974,6 +975,8 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 	else
 		return 0;
 }
+
+#define UMEM_TX_ADD_VAR(UMM, VAR) umem_tx_add_ptr((UMM), &(VAR), sizeof((VAR)))
 
 static inline int
 umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,

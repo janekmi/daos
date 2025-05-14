@@ -1103,10 +1103,5 @@ dlck_vos_cont_dtx_recover(daos_handle_t coh)
 		return rc;
 	}
 
-	for (uint32_t i = 0; i < dda.dda_len; ++i) {
-		struct dlck_dtx_rec *rec = &dda.dda_rec[i];
-		printf("lid=%" PRIu32 ", umoff=0x" UMOFF_PF "\n", rec->lid, rec->umoff);
-	}
-
-	return rc;
+	return dlck_dtx_recover(coh, &dda);
 }
