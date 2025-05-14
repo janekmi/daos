@@ -3890,6 +3890,7 @@ dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 		dae->dae_records = NULL;
 
 		umem_free(umm, DAE_REC_OFF(dae));
+		DAE_REC_OFF(dae) = UMOFF_NULL;
 
 		rc = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_off);
 		if (rc != DER_SUCCESS) {
@@ -3900,7 +3901,8 @@ dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 	/** set the overall number of records to 0 */
 	DAE_REC_CNT(dae) = 0;
-	rc               = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_cnt);
+
+	rc = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_cnt);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
