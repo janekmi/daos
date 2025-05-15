@@ -3874,7 +3874,7 @@ dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 		return DER_SUCCESS;
 	}
 
-	/** zero out the inlined records */
+	/** Zero out the inlined records. Both volatile and persistent. */
 	memset(DAE_REC_INLINE(dae), 0, sizeof(umem_off_t) * count);
 
 	rc = dae_rec_df_cpy(umm, dae_df->dae_rec_inline, DAE_REC_INLINE(dae), count);
@@ -3882,33 +3882,113 @@ dlck_dtx_ent_recs_remove(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 		return rc;
 	}
 
-	/** zero out the non-inlined records */
+	/** Zero out the non-inlined records. */
 	if (dae->dae_records != NULL) {
 		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
 
+		/** Free both the volatile and persistent allocations. */
 		D_FREE(dae->dae_records);
 		dae->dae_records = NULL;
 
 		umem_free(umm, DAE_REC_OFF(dae));
 		DAE_REC_OFF(dae) = UMOFF_NULL;
 
-		rc = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_off);
+		/** Set the persistent pointer (offset) to NULL. */
+		UMEM_TX_SET(umm, dae_df->dae_rec_off, UMOFF_NULL, rc);
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}
-		dae_df->dae_rec_off = UMOFF_NULL;
 	}
 
-	/** set the overall number of records to 0 */
+	/** Set the overall number of records to 0. Both volatile and persistent. */
 	DAE_REC_CNT(dae) = 0;
 
-	rc = UMEM_TX_ADD_VAR(umm, dae_df->dae_rec_cnt);
+	UMEM_TX_SET(umm, dae_df->dae_rec_cnt, 0, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
-	dae_df->dae_rec_cnt = 0;
 
 	return DER_SUCCESS;
+}
+
+static int
+dlck_dtx_ent_recs_cpy(struct umem_instance *umm, struct vos_dtx_act_ent *dae,
+		      struct dlck_dtx_rec_array *dda)
+{
+	int                        count  = min(dda->dda_len, DTX_INLINE_REC_CNT);
+	struct vos_dtx_act_ent_df *dae_df = umem_off2ptr(umm, dae->dae_df_off);
+	umem_off_t                *recs;
+	umem_off_t                 recs_off;
+	umem_off_t                *recs_df;
+	int                        rc;
+
+	if (count == 0) {
+		return DER_SUCCESS;
+	}
+
+	/** Make sure DAE is empty. */
+	D_ASSERT(DAE_REC_CNT(dae) == 0);
+	D_ASSERT(dae->dae_records == NULL);
+
+	/** Set the inlined records. Both volatile and persistent. */
+	for (int i = 0; i < count; ++i) {
+		DAE_REC_INLINE(dae)[i] = dda->dda_rec[i].umoff;
+	}
+
+	rc = dae_rec_df_cpy(umm, dae_df->dae_rec_inline, DAE_REC_INLINE(dae), count);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** Set the non-inlined records. */
+	if (dda->dda_len > DTX_INLINE_REC_CNT) {
+		count = dda->dda_len - DTX_INLINE_REC_CNT;
+
+		/** Allocate both volatile and persistent arrays. */
+		D_ALLOC_ARRAY_NZ(recs, count);
+		if (recs == NULL) {
+			return -DER_NOMEM;
+		}
+
+		recs_off = umem_alloc(umm, sizeof(*recs_df) * count);
+		if (recs_off == UMOFF_NULL) {
+			D_FREE(recs);
+			return -DER_NOMEM;
+		}
+		recs_df = umem_off2ptr(umm, recs_off);
+
+		/** Populate the volatile array. */
+		for (int i = 0; i < count; ++i) {
+			recs[i] = dda->dda_rec[i + DTX_INLINE_REC_CNT].umoff;
+		}
+
+		/** Copy the array to persistence. */
+		rc = dae_rec_df_cpy(umm, recs_df, recs, count);
+		if (rc != DER_SUCCESS) {
+			D_FREE(recs);
+			return rc;
+		}
+
+		/** Attach the persistent array to DAE. */
+		UMEM_TX_SET(umm, dae_df->dae_rec_off, recs_off, rc);
+		if (rc != DER_SUCCESS) {
+			D_FREE(recs);
+			return rc;
+		}
+
+		/** Attached the volatile array to DAE. */
+		dae->dae_records = recs;
+	}
+
+	/** Set the overall number of records. Both volatile and persistent. */
+	DAE_REC_CNT(dae) = dda->dda_len;
+
+	UMEM_TX_SET(umm, dae_df->dae_rec_cnt, dda->dda_len, rc);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	return rc;
 }
 
 struct dlck_dtx_recover_bundle {
@@ -3922,9 +4002,10 @@ dlck_dtx_recover_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	struct dlck_dtx_recover_bundle *bundle = arg;
 	struct umem_instance           *umm    = bundle->umm;
 	struct dlck_dtx_rec_array      *dda    = bundle->dda;
-	struct dlck_dtx_rec            *rec;
-	struct dlck_dtx_rec_array       dda_new = {0};
 	struct vos_dtx_act_ent         *dae;
+	struct dlck_dtx_rec            *rec;
+	struct dlck_dtx_rec_array       dda_cur = {0};
+	struct dlck_dtx_rec_array       dda_new = {0};
 	int                             rc;
 
 	D_ASSERT(val->iov_buf_len == sizeof(*dae));
@@ -3938,13 +4019,36 @@ dlck_dtx_recover_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	for (int i = 0; i < dda->dda_len; ++i) {
 		rec = &dda->dda_rec[i];
 
-		if (rec->lid != DAE_LID(dae)) {
+		if (rec->lid == DAE_LID(dae)) {
+			dlck_dtx_rec_array_append(&dda_cur, rec);
+		} else {
 			dlck_dtx_rec_array_append(&dda_new, rec);
-			continue;
 		}
 	}
 
-	return DER_SUCCESS;
+	if (dda_cur.dda_len == 0) {
+		/**
+		 * No records related to the current DAE has been found.
+		 * It will be left empty.
+		 */
+
+		/**
+		 * The number of records in the new array should match the number of records in the
+		 * source array, as none of them has been consumed.
+		 */
+		D_ASSERT(dda_new.dda_len == dda->dda_len);
+
+		return DER_SUCCESS;
+	}
+
+	/** Only pass on records that have not been consumed. */
+	dlck_dtx_rec_array_move(dda, &dda_new);
+
+	rc = dlck_dtx_ent_recs_cpy(umm, dae, &dda_cur);
+
+	dlck_dtx_rec_array_free(&dda_cur);
+
+	return rc;
 }
 
 int

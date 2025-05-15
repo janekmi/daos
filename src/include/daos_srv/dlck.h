@@ -96,7 +96,22 @@ struct dlck_dtx_rec_array {
 
 #define DLCK_DTX_REC_ARRAY_GROW_BY 10
 
+/**
+ * XXX
+ */
 int
 dlck_dtx_rec_array_append(struct dlck_dtx_rec_array *dda, struct dlck_dtx_rec *rec);
+
+/**
+ * XXX
+ */
+void
+dlck_dtx_rec_array_move(struct dlck_dtx_rec_array *dst, struct dlck_dtx_rec_array *src);
+
+/**
+ * XXX
+ */
+void
+dlck_dtx_rec_array_free(struct dlck_dtx_rec_array *dda);
 
 #endif /* __DAOS_DLCK_H__ */

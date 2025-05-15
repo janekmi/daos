@@ -39,3 +39,26 @@ dlck_dtx_rec_array_append(struct dlck_dtx_rec_array *dda, struct dlck_dtx_rec *r
 
 	return DER_SUCCESS;
 }
+
+void
+dlck_dtx_rec_array_move(struct dlck_dtx_rec_array *dst, struct dlck_dtx_rec_array *src)
+{
+	D_FREE(dst->dda_rec);
+
+	dst->dda_rec     = src->dda_rec;
+	dst->dda_len     = src->dda_len;
+	dst->dda_max_len = src->dda_max_len;
+
+	src->dda_rec     = NULL;
+	src->dda_len     = 0;
+	src->dda_max_len = 0;
+}
+
+void
+dlck_dtx_rec_array_free(struct dlck_dtx_rec_array *dda)
+{
+	D_FREE(dda->dda_rec);
+	dda->dda_rec     = NULL;
+	dda->dda_len     = 0;
+	dda->dda_max_len = 0;
+}
