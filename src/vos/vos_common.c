@@ -32,6 +32,9 @@ struct vos_self_mode {
 	pthread_mutex_t		 self_lock;
 	bool			 self_nvme_init;
 	int			 self_ref;
+#ifdef VOS_STANDALONE
+	standalone_tls_get_cb self_tls_get_cb;
+#endif /** VOS_STANDALONE */
 };
 
 struct vos_self_mode		 self_mode = {
@@ -54,11 +57,23 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 			 NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
+#ifdef VOS_STANDALONE
+void
+vos_tls_getter_set(standalone_tls_get_cb cb)
+{
+	self_mode.self_tls_get_cb = cb;
+}
+#endif /** VOS_STANDALONE */
+
 struct vos_tls *
 vos_tls_get(bool standalone)
 {
 #ifdef VOS_STANDALONE
-	return self_mode.self_tls;
+	if (self_mode.self_tls_get_cb) {
+		return self_mode.self_tls_get_cb();
+	} else {
+		return self_mode.self_tls;
+	}
 #else
 	if (standalone)
 		return self_mode.self_tls;
@@ -496,7 +511,7 @@ void
 vos_standalone_tls_fini(void)
 {
 	if (self_mode.self_tls) {
-		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
+		vos_standalone_tls_free(self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
 }
@@ -608,10 +623,22 @@ failed:
 	return NULL;
 }
 
+void *
+vos_standalone_tls_alloc(int tags)
+{
+	return vos_tls_init(tags, 0, -1);
+}
+
+void
+vos_standalone_tls_free(void *tls)
+{
+	vos_tls_fini(DAOS_TGT_TAG, tls);
+}
+
 int
 vos_standalone_tls_init(int tags)
 {
-	self_mode.self_tls = vos_tls_init(tags, 0, -1);
+	self_mode.self_tls = vos_standalone_tls_alloc(tags);
 	if (!self_mode.self_tls)
 		return -DER_NOMEM;
 

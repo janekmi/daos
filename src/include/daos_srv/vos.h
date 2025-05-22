@@ -1746,4 +1746,38 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 
+#ifdef VOS_STANDALONE
+typedef struct vos_tls *(*standalone_tls_get_cb)(void);
+
+/**
+ * Establish a callback function for VOS to retrieve its TLS data, which will take priority over the
+ * TLS that is statically allocated within VOS.
+ *
+ * To disable the callback and revert to using the statically allocated VOS, set the value to NULL.
+ *
+ * \param[in]	cb	Function for VOS to call to get its TLS data.
+ */
+void
+vos_tls_getter_set(standalone_tls_get_cb cb);
+#endif /** VOS_STANDALONE */
+
+/**
+ * Allocate, initialize, and return an instance of VOS TLS data.
+ *
+ * \param[in]	tags	A bitmask indicating the types of execution streams or threads for which the
+ *			data is intended. Please refer to daos_module_tag for more information.
+ *
+ * \return an instance of VOS TLS data.
+ */
+void *
+vos_standalone_tls_alloc(int tags);
+
+/**
+ * Release the resources allocated for the VOS TLS data instance.
+ *
+ * \param[in]	tls	VOS TLS data instance.
+ */
+void
+vos_standalone_tls_free(void *tls);
+
 #endif /* __VOS_API_H */
