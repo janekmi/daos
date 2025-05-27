@@ -2738,7 +2738,7 @@ struct vos_iter_ops vos_obj_ev_iter_ops = {
  */
 
 int
-dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_dtx_rec_array *dda)
+dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_array *da)
 {
 	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
 	d_iov_t               val;
@@ -2765,7 +2765,7 @@ dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_
 	rec.umoff = umem_off2offset(rbund.rb_off);
 	umem_off_set_flags(&rec.umoff, DTX_UMOFF_SVT);
 
-	dlck_dtx_rec_array_append(dda, &rec);
+	dlck_array_append(da, &rec);
 
 	return DER_SUCCESS;
 }

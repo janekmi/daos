@@ -1028,7 +1028,8 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 
 struct dlck_iter_bundle {
 	daos_handle_t              coh;
-	struct dlck_dtx_rec_array *dda;
+	struct dlck_array         *da;
+	struct dlck_stats         *ds;
 };
 
 static int
@@ -1038,16 +1039,21 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 	struct vos_iterator       *iter   = vos_hdl2iter(ih);
 	struct dlck_iter_bundle   *bundle = (struct dlck_iter_bundle *)cb_arg;
 	daos_handle_t              coh    = bundle->coh;
-	struct dlck_dtx_rec_array *dda    = bundle->dda;
+	struct dlck_array         *da     = bundle->da;
+	struct dlck_stats         *ds     = bundle->ds;
+
+	if (ds != NULL) {
+		ds->touched += 1;
+	}
 
 	switch (type) {
 	case VOS_ITER_OBJ:
-		return dlck_obj_get_active(coh, iter, dda);
+		return dlck_obj_get_active(coh, iter, da);
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-		return dlck_irec_get_active(coh, iter, dda);
+		return dlck_irec_get_active(coh, iter, da);
 	case VOS_ITER_SINGLE:
-		return dlck_sv_add_if_active(coh, iter, dda);
+		return dlck_sv_add_if_active(coh, iter, da);
 	case VOS_ITER_RECX:
 		return -DER_NOTSUPPORTED;
 	default:
@@ -1056,7 +1062,7 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 }
 
 int
-dlck_vos_cont_rec_get_active(daos_handle_t coh, struct dlck_dtx_rec_array *dda)
+dlck_vos_cont_rec_get_active(daos_handle_t coh, struct dlck_array *da, struct dlck_stats *ds)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
@@ -1067,7 +1073,8 @@ dlck_vos_cont_rec_get_active(daos_handle_t coh, struct dlck_dtx_rec_array *dda)
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
 	bundle.coh = coh;
-	bundle.dda = dda;
+	bundle.da  = da;
+	bundle.ds  = ds;
 
 	return vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, dlck_rec_get_active_cb, NULL,
 			   &bundle, NULL);

@@ -376,12 +376,12 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
  *
  * \param[in]	coh	Parent container.
  * \param[in]	root_df	ILOG root to process.
- * \param[out]	dda	Array for storing the foudn active ILOG entries.
+ * \param[out]	da	Array for storing the foudn active ILOG entries.
  *
  * \retval 0		Success.
  * \retval -DER_*	Error when ilog_fetch fails.
  */
 int
-dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_dtx_rec_array *dda);
+dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_array *da);
 
 #endif /* __VOS_ILOG_H__ */

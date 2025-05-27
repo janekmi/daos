@@ -696,7 +696,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc, boo
 }
 
 int
-dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_dtx_rec_array *dda)
+dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_array *da)
 {
 	struct ilog_entries   entries = {0};
 	struct ilog_desc_cbs  cbs     = {0};
@@ -723,7 +723,7 @@ dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_dtx
 		if (tx_id != DTX_LID_COMMITTED && tx_id != DTX_LID_ABORTED) {
 			rec.lid   = tx_id;
 			rec.umoff = ilog_umoff_by_idx(umm, root_df, e.ie_idx);
-			dlck_dtx_rec_array_append(dda, &rec);
+			dlck_array_append(da, &rec);
 		}
 	}
 

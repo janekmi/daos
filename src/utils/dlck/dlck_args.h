@@ -7,18 +7,25 @@
 #ifndef __DLCK_ARGS__
 #define __DLCK_ARGS__
 
+#include <uuid/uuid.h>
+
 enum dlck_cmd { DLCK_CMD_NOT_SET, DLCK_CMD_UNKNOWN, DLCK_CMD_DTX_ACT_RECOVER };
 
 #define DLCK_CMD_DTX_ACT_RECOVER_STR "dtx_act_recs_recover"
 
 struct dlck_args_common {
-	bool          write_mode; /** false for a dry run (default) */
+	uuid_t        co_uuid;
+	bool          write_mode; /** false by default (dry run) */
+	unsigned      jobs;
 	enum dlck_cmd cmd;
 };
 
 struct dlck_args {
 	struct dlck_args_common common;
-	/** Hint: Command-specific options should be placed here. */
+
+	char                  **files;
+	unsigned                files_num;
+	unsigned                files_num_max;
 };
 
 /**
