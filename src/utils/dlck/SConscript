@@ -9,7 +9,7 @@ def scons():
 
     libs = ['vos', 'daos_common_pmem', 'bio', 'uuid', 'gurt']
 
-    src = ['dlck_main.c', 'dlck_args.c']
+    src = ['dlck_main.c', 'dlck_args.c', 'dlck_dtx_act_recs_recover.c']
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=[Dir('.')])

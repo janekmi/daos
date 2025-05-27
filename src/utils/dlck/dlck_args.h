@@ -9,9 +9,7 @@
 
 #include <uuid/uuid.h>
 
-enum dlck_cmd { DLCK_CMD_NOT_SET, DLCK_CMD_UNKNOWN, DLCK_CMD_DTX_ACT_RECOVER };
-
-#define DLCK_CMD_DTX_ACT_RECOVER_STR "dtx_act_recs_recover"
+#include "dlck_cmds.h"
 
 struct dlck_args_common {
 	uuid_t        co_uuid;
