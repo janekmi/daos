@@ -328,8 +328,9 @@ smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info)
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		rc = smd_db_fetch(TABLE_POOLS[st], &id, sizeof(id), &pools[st], sizeof(pools[st]));
 		/* META and WAL are optional */
-		rc = (rc == -DER_NONEXIST && st > SMD_DEV_TYPE_DATA) ? 0 : rc;
-		if (rc) {
+		/** XXX this is odd but required to go forward; maybe my md-on-ssd configuration is uncommon? */
+		// rc = (rc == -DER_NONEXIST && st > SMD_DEV_TYPE_DATA) ? 0 : rc;
+		if (rc != 0 && rc != -DER_NONEXIST) {
 			D_ERROR("Fetch pool "DF_UUID" failed: "DF_RC"\n",
 				DP_UUID(&id.uuid), DP_RC(rc));
 			goto out;

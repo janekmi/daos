@@ -1749,16 +1749,28 @@ vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
 #ifdef VOS_STANDALONE
 typedef struct vos_tls *(*standalone_tls_get_cb)(void);
 
+typedef struct bio_xs_context *(*standalone_xsctxt_get_cb)(void);
+
 /**
  * Establish a callback function for VOS to retrieve its TLS data, which will take priority over the
  * TLS that is statically allocated within VOS.
  *
- * To disable the callback and revert to using the statically allocated VOS, set the value to NULL.
+ * \p tls has to be provided to store the statically allocated TLS while the callback is set
+ * To disable the callback and restore the statically allocated TLS, set the \p cb to NULL.
+ * The new value for the statically allocated TLS has to be provided via \p tls.
  *
- * \param[in]	cb	Function for VOS to call to get its TLS data.
+ * \param[in]		cb	Function for VOS to call to get its TLS data.
+ * \param[in,out]	tls	Pointer to store/restore the statically allocated TLS.
  */
 void
-vos_tls_getter_set(standalone_tls_get_cb cb);
+vos_tls_getter_set(standalone_tls_get_cb cb, void **tls);
+
+
+/**
+ * XXX as above but for the XSCTXT state.
+ */
+void
+vos_xsctxt_getter_set(standalone_xsctxt_get_cb cb, struct bio_xs_context **xs_ctxt);
 #endif /** VOS_STANDALONE */
 
 /**

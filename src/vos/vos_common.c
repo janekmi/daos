@@ -34,6 +34,7 @@ struct vos_self_mode {
 	int			 self_ref;
 #ifdef VOS_STANDALONE
 	standalone_tls_get_cb self_tls_get_cb;
+	standalone_xsctxt_get_cb self_xsctxt_get_cb;
 #endif /** VOS_STANDALONE */
 };
 
@@ -59,9 +60,43 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 
 #ifdef VOS_STANDALONE
 void
-vos_tls_getter_set(standalone_tls_get_cb cb)
+vos_tls_getter_set(standalone_tls_get_cb cb, void **tls)
 {
-	self_mode.self_tls_get_cb = cb;
+	D_ASSERT(tls != NULL);
+
+	if (cb != NULL) {
+		/** set callback, return existing TLS */
+		D_ASSERT(*tls == NULL);
+		*tls = self_mode.self_tls;
+		self_mode.self_tls = NULL;
+		self_mode.self_tls_get_cb = cb;
+	} else {
+		/** unset callback, restore TLS */
+		D_ASSERT(*tls != NULL);
+		self_mode.self_tls = *tls;
+		*tls = NULL;
+		self_mode.self_tls_get_cb = NULL;
+	}
+}
+
+void
+vos_xsctxt_getter_set(standalone_xsctxt_get_cb cb, struct bio_xs_context **xs_ctxt)
+{
+	D_ASSERT(xs_ctxt != NULL);
+
+	if (cb != NULL) {
+		/** set callback, return existing XS_CTXT */
+		D_ASSERT(*xs_ctxt == NULL);
+		*xs_ctxt = self_mode.self_xs_ctxt;
+		self_mode.self_xs_ctxt = NULL;
+		self_mode.self_xsctxt_get_cb = cb;
+	} else {
+		/** unset callback, restore XS_CTXT */
+		D_ASSERT(*xs_ctxt != NULL);
+		self_mode.self_xs_ctxt = *xs_ctxt;
+		*xs_ctxt = NULL;
+		self_mode.self_xsctxt_get_cb = NULL;
+	}
 }
 #endif /** VOS_STANDALONE */
 
@@ -122,7 +157,11 @@ struct bio_xs_context *
 vos_xsctxt_get(void)
 {
 #ifdef VOS_STANDALONE
-	return self_mode.self_xs_ctxt;
+	if (self_mode.self_xsctxt_get_cb) {
+		return self_mode.self_xsctxt_get_cb();
+	} else {
+		return self_mode.self_xs_ctxt;
+	}
 #else
 	/* main thread doesn't have TLS and XS context*/
 	if (dss_tls_get() == NULL)
