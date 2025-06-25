@@ -851,7 +851,8 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		return 0;
 
 	/* Wait for blob open done */
-	blob_wait_completion(xs_ctxt, ba);
+	// blob_wait_completion(xs_ctxt, ba);
+	blob_wait_completion(bbs->bb_owner_xs, ba);
 	rc = ba->bca_rc;
 	ctxt->bic_opening = 0;
 
