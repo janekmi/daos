@@ -147,7 +147,7 @@ out:
 const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
 const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
-static void *
+static void
 nvme_polling(void *unused)
 {
 	do {
@@ -160,18 +160,27 @@ nvme_polling(void *unused)
 			bio_nvme_poll(xsctx);
 		}
 	} while(true);
-
-	return NULL;
 }
 
 static int
 start_nvme_polling(void)
 {
-	pthread_t thread_id;
+	// pthread_t thread_id;
 	int rc;
 	
-	rc = pthread_create(&thread_id, NULL, nvme_polling, NULL);
-        assert(rc == 0);
+	// rc = pthread_create(&thread_id, NULL, nvme_polling, NULL);
+        // assert(rc == 0);
+
+	ABT_xstream xstream;
+	ABT_pool pool;
+	ABT_thread thread;
+
+	rc = ABT_xstream_create(ABT_SCHED_NULL, &xstream);
+	assert(rc == 0);
+	ABT_xstream_get_main_pools(xstream, 1, &pool);
+	assert(rc == 0);
+	ABT_thread_create(pool, nvme_polling, NULL, ABT_THREAD_ATTR_NULL, &thread);
+	assert(rc == 0);
 
         return 0;
 }
@@ -242,6 +251,46 @@ xstream_test(const char *path, int tgt_id)
 	return 0;
 }
 
+static void
+xstream_all_ult(void *arg)
+{
+	struct dlck_args *args = arg;
+	int rc;
+
+	rc = xstream_test(args->files[0], 0);
+	assert(rc == 0);
+
+	rc = xstream_test(args->files[1], 1);
+	assert(rc == 0);
+}
+
+static int
+xstream_wait(void *args)
+{
+	ABT_xstream xstream;
+	ABT_pool pool;
+	ABT_thread thread;
+	int rc;
+
+	rc = ABT_xstream_create(ABT_SCHED_NULL, &xstream);
+	assert(rc == 0);
+	ABT_xstream_get_main_pools(xstream, 1, &pool);
+	assert(rc == 0);
+	ABT_thread_create(pool, xstream_all_ult, args, ABT_THREAD_ATTR_NULL, &thread);
+	assert(rc == 0);
+	
+        rc = ABT_thread_join(thread);
+	assert(rc == 0);
+        rc = ABT_thread_free(&thread);
+	assert(rc == 0);
+        rc = ABT_xstream_join(xstream);
+	assert(rc == 0);
+        rc = ABT_xstream_free(&xstream);
+	assert(rc == 0);
+
+	return 0;
+}
+
 static uint64_t
 dlck_metrics_region_size(int num_tgts)
 {
@@ -256,10 +305,6 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 {
 	const char *nvme_conf = "/var/daos/config/daos_control/engine0/daos_nvme.conf";
 	const char *sys_db_path = "/var/daos/config/daos_control/engine0/";
-	// daos_handle_t poh0     = DAOS_HDL_INVAL;
-	// daos_handle_t poh1     = DAOS_HDL_INVAL;
-	// daos_handle_t coh = DAOS_HDL_INVAL;
-	// int tgt_id = 0;
 	int           rc;
 
 	rc = env_prep();
@@ -312,11 +357,10 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	vos_xsctxt_getter_set(dlck_xsctx_get, &XSCTXS[XSTREAM_SYS]);
 	
 	/** try xstream 0 and 1 */
+	
+	// xstream_all_ult(args);
 
-	rc = xstream_test(args->files[0], 0);
-	assert(rc == 0);
-
-	rc = xstream_test(args->files[1], 1);
+	rc = xstream_wait(args);
 	assert(rc == 0);
 
 	// db_path = temp_db_path_init();
