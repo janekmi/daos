@@ -17,6 +17,8 @@
 
 #include "dlck_args.h"
 
+#define LONG_SLEEP (60 * 30) /** 30 minutes */
+
 int
 xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
@@ -91,36 +93,26 @@ out:
 const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
 const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
-#define XSTREAM_MAX 4 /** targets */
-
-struct bio_xs_context *XSCTXS[XSTREAM_MAX] = {NULL};
-
-struct ult {
+struct xstream_t {
 	ABT_xstream xstream;
 	ABT_pool pool;
 	ABT_thread thread;
+	void *thread_arg;
 };
 
-#define ULT_MAX 10
+#define XSTREAMS_MAX 10
 
-struct ult ULTs[ULT_MAX];
-int ult_id;
+struct xstream_t Xstreams[XSTREAMS_MAX];
+int xstream_id;
 
 #define DSS_DEEP_STACK_SZ 65536
 
 static void
-start_ult(void (*thread_func)(void *), void *arg, bool deep_stack)
+start_ult_in_existing_pool(void (*ult_func)(void *), void *arg, ABT_pool pool, bool deep_stack, ABT_thread *ult)
 {
-	assert(ult_id < ULT_MAX);
-	struct ult *ult = &ULTs[ult_id++];
 	ABT_thread_attr attr;
 	int rc;
 
-	rc = ABT_xstream_create(ABT_SCHED_NULL, &ult->xstream);
-	assert(rc == 0);
-	rc = ABT_xstream_get_main_pools(ult->xstream, 1, &ult->pool);
-	assert(rc == 0);
-	
 	if (deep_stack) {
 		rc = ABT_thread_attr_create(&attr);
 		assert(rc == 0);
@@ -130,45 +122,46 @@ start_ult(void (*thread_func)(void *), void *arg, bool deep_stack)
 		attr = ABT_THREAD_ATTR_NULL;
 	}
 
-	rc = ABT_thread_create(ult->pool, thread_func, arg, attr, &ult->thread);
+	rc = ABT_thread_create(pool, ult_func, arg, attr, ult);
 	assert(rc == 0);
 	
 	if (deep_stack) {
 		ABT_thread_attr_free(&attr);
 		assert(rc == 0);
-	}
+	}	
 }
 
 static void
-nvme_polling(void *unused)
+start_ult(void (*thread_func)(void *), void *arg, bool deep_stack)
 {
+	assert(xstream_id < XSTREAMS_MAX);
+	struct xstream_t *xs = &Xstreams[xstream_id++];
+	
+	int rc;
+
+	xs->thread_arg = arg;
+
+	rc = ABT_xstream_create(ABT_SCHED_NULL, &xs->xstream);
+	assert(rc == 0);
+	rc = ABT_xstream_get_main_pools(xs->xstream, 1, &xs->pool);
+	assert(rc == 0);
+
+	start_ult_in_existing_pool(thread_func, xs, xs->pool, deep_stack, &xs->thread);
+}
+
+static void
+nvme_polling(void *arg)
+{
+	struct bio_xs_context *xsctx = arg;
 	int rc;
 
 	do {
-		for (int i = 0; i < XSTREAM_MAX; ++i) {
-			struct bio_xs_context *xsctx = XSCTXS[i];
-			if (xsctx == NULL) {
-				continue;
-			}
-
-			rc = bio_nvme_poll(xsctx);
-			if (rc != 0) {
-				printf("nvme_polling: bio_nvme_poll -> %d\n", rc);
-			}
+		rc = bio_nvme_poll(xsctx);
+		if (rc != 0) {
+			printf("nvme_polling: bio_nvme_poll -> %d\n", rc);
 		}
+		ABT_thread_yield();
 	} while(true);
-}
-
-static int
-start_nvme_polling(void)
-{
-	// pthread_t thread_id;
-	// rc = pthread_create(&thread_id, NULL, nvme_polling, NULL);
-        // assert(rc == 0);
-	
-	start_ult(nvme_polling, NULL, true);
-
-        return 0;
 }
 
 ABT_mutex ULT_mutex;
@@ -270,7 +263,7 @@ unsigned int dss_sys_xs_nr = 3;
 /** main XS id of (vos) tgt_id */
 #define DSS_MAIN_XS_ID(tgt_id) ((tgt_id) + dss_sys_xs_nr)
 
-struct xstream_args {
+struct thread_args {
 	char *path;
 	int tgt_id;
 };
@@ -278,7 +271,8 @@ struct xstream_args {
 static void
 xstream_test(void *arg)
 {
-	struct xstream_args *xargs = arg;
+	struct xstream_t *xs = arg;
+	struct thread_args *targs = xs->thread_arg;
 	uuid_t uuid = {0};
 	daos_handle_t poh     = DAOS_HDL_INVAL;
 	int rc;
@@ -291,10 +285,11 @@ xstream_test(void *arg)
 
 	struct dss_module_info *dmi;
 	int tag = DAOS_SERVER_TAG;
-	int xs_id = DSS_MAIN_XS_ID(0);
-	int tgt_id = xargs->tgt_id;
+	int xs_id = DSS_MAIN_XS_ID(targs->tgt_id);
+	int tgt_id = targs->tgt_id;
 
 	(void) dss_tls_init(tag, xs_id, tgt_id);
+
 
 	pthread_setname_np(pthread_self(), "daos_io_0/1");
 
@@ -303,38 +298,46 @@ xstream_test(void *arg)
 
 	rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
 	assert(rc == 0);
-	XSCTXS[tgt_id] = dmi->dmi_nvme_ctxt;
+
+	start_ult_in_existing_pool(nvme_polling, dmi->dmi_nvme_ctxt, xs->pool, true, NULL);
 	
 	/** attempt opening the pool */
 	rc = uuid_parse(pool_uuid, uuid);
 	assert(rc == 0);
 	
-	rc = dlck_recreate(xargs->path, uuid);
+	rc = dlck_recreate(targs->path, uuid);
 	assert(rc == 0);
 
-	rc = vos_pool_open(xargs->path, uuid, flags, &poh);
+	rc = vos_pool_open(targs->path, uuid, flags, &poh);
 	assert(rc == 0);
+
+	if ()
 
 	xxx(poh);
 
 	abt_signal();
 
-	sleep(60 * 30); /** 30 minutes */
+	sleep(LONG_SLEEP);
 }
 
 static void
 xstream_all_ult(struct dlck_args *args)
 {
-	struct xstream_args xargs;
+	struct thread_args targs;
 
-	xargs.path = args->files[0];
-	xargs.tgt_id = 0;
-	start_ult(xstream_test, &xargs, true);
+	targs.path = args->files[0];
+	targs.tgt_id = 0;
+	start_ult(xstream_test, &targs, true);
 	abt_wait();
 
-	xargs.path = args->files[1];
-	xargs.tgt_id = 1;
-	start_ult(xstream_test, &xargs, true);
+	targs.path = args->files[1];
+	targs.tgt_id = 1;
+	start_ult(xstream_test, &targs, true);
+	abt_wait();
+
+	targs.path = args->files[2];
+	targs.tgt_id = 2;
+	start_ult(xstream_test, &targs, true);
 	abt_wait();
 }
 
@@ -403,11 +406,6 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	
 	rc = dlck_sys_db_init(sys_db_path);
 	assert(rc == 0);
-	
-	/** NVMe polling thread */
-	rc = start_nvme_polling();
-	assert(rc == 0);
-	(void) start_nvme_polling;
 
 	/** start system service XS */
 	start_system_service();
@@ -416,6 +414,8 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	
 	xstream_all_ult(args);
 	(void) xstream_all_ult;
+
+	sleep(LONG_SLEEP);
 
 	return 0;
 }
