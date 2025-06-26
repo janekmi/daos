@@ -91,6 +91,7 @@ out:
 }
 
 const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
+const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
 const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
 struct xstream_t {
@@ -247,7 +248,7 @@ void xxx(daos_handle_t poh)
 	    vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list, NULL, &co_uuids, NULL);
 	assert(rc == 0);
 
-	assert(co_uuids.da_len > 0);
+	// assert(co_uuids.da_len > 0);
 
 	// char uuid_str[UUID_STR_LEN];
 	// uuid_unparse(dlck_array_entry(&co_uuids, 0), uuid_str);
@@ -277,6 +278,7 @@ xstream_test(void *arg)
 	struct thread_args *targs = xs->thread_arg;
 	uuid_t uuid = {0};
 	daos_handle_t poh     = DAOS_HDL_INVAL;
+	daos_handle_t poh2     = DAOS_HDL_INVAL;
 	int rc;
 
 	/**
@@ -300,6 +302,7 @@ xstream_test(void *arg)
 	dmi = dss_get_module_info();
 	assert(dmi != NULL);
 
+	// if dss_xstream_has_nvme
 	rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
 	assert(rc == 0);
 
@@ -325,6 +328,26 @@ xstream_test(void *arg)
 
 	xxx(poh);
 
+	/** 2nd pool */
+
+	char path2[1024];
+	snprintf(path2, 1024, "%s-2", targs->path);
+
+	rc = uuid_parse(pool2_uuid, uuid);
+	assert(rc == 0);
+	
+	rc = dlck_recreate(path2, uuid);
+	assert(rc == 0);
+
+	rc = vos_pool_open(path2, uuid, flags, &poh2);
+	assert(rc == 0);
+
+	xxx(poh);
+
+	xxx(poh2);
+
+	/** --- */
+
 	abt_signal();
 
 	sleep(LONG_SLEEP);
@@ -335,20 +358,20 @@ xstream_all_ult(struct dlck_args *args)
 {
 	struct thread_args targs;
 
-	targs.path = args->files[0];
+	targs.path = args->common.storage_path;
 	targs.tgt_id = 0;
 	start_ult(xstream_test, &targs, true);
 	abt_wait();
 
-	targs.path = args->files[1];
-	targs.tgt_id = 1;
-	start_ult(xstream_test, &targs, true);
-	abt_wait();
+	// targs.path = args->files[1];
+	// targs.tgt_id = 1;
+	// start_ult(xstream_test, &targs, true);
+	// abt_wait();
 
-	targs.path = args->files[2];
-	targs.tgt_id = 2;
-	start_ult(xstream_test, &targs, true);
-	abt_wait();
+	// targs.path = args->files[2];
+	// targs.tgt_id = 2;
+	// start_ult(xstream_test, &targs, true);
+	// abt_wait();
 }
 
 static uint64_t
