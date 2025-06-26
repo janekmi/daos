@@ -38,6 +38,7 @@ struct dlck_file {
 	d_list_t link;
 	char *desc;
 	uuid_t po_uuid;
+	int targets;
 };
 
 struct dlck_args_common {

@@ -27,6 +27,12 @@ args_init(struct dlck_args *args)
 	args->common.targets = DLCK_DEFAULT_TARGETS;
 }
 
+#define FAIL(STATE, RC, ERRNUM, ...)                                                            \
+do { \
+	argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                          \
+	RC = ERRNUM; \
+} while(0)
+
 #define RETURN_FAIL(STATE, ERRNUM, ...)                                                            \
 do { \
 	argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                          \
@@ -76,19 +82,59 @@ parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
 	return 0;
 }
 
+#define FILE_SEPARATOR ","
+
 static int
 parse_file(const char *arg, struct dlck_args *args, struct argp_state *state)
 {
+	char *arg_copy;
+	char *token;
+	char *saveptr;
 	struct dlck_file *file;
+	unsigned target;
+	int rc;
+
+	D_STRNDUP(arg_copy, arg, 1024);
+	if (arg_copy == NULL) {
+		RETURN_FAIL(state, ENOMEM, "Out of memory");
+	}
 
 	D_ALLOC_PTR(file);
 	if (file == NULL) {
-		RETURN_FAIL(state, ENOMEM, "Cannot append more files");
+		FAIL(state, rc, ENOMEM, "Cannot append more files");
+		goto free_arg_copy;
+	}
+
+	token = strtok_r(arg_copy, FILE_SEPARATOR, &saveptr);
+	if (token == NULL) {
+		FAIL(state, rc, EINVAL, "No pool UUID provided");
+		goto fail;
+	}
+	rc = uuid_parse(token, file->po_uuid);
+	if (rc != 0) {
+		FAIL(state, rc, EINVAL, "Malformed uuid: %s", arg);
+	}
+
+	while ((token = strtok_r(NULL, FILE_SEPARATOR, &saveptr))) {
+		rc = parse_unsigned(token, &target, state);
+		if (rc != 0) {
+			goto fail;
+		}
+		file->targets |= (1 << target);
 	}
 
 	d_list_add_tail(&file->link, &args->common.files);
 
+	D_FREE(arg_copy);
+
 	return 0;
+
+fail:
+	D_FREE(file);
+free_arg_copy:
+	D_FREE(arg_copy);
+
+	return rc;
 }
 
 error_t
