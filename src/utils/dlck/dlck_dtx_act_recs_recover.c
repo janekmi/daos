@@ -311,8 +311,6 @@ xstream_test(void *arg)
 	rc = vos_pool_open(targs->path, uuid, flags, &poh);
 	assert(rc == 0);
 
-	if ()
-
 	xxx(poh);
 
 	abt_signal();
@@ -332,11 +330,6 @@ xstream_all_ult(struct dlck_args *args)
 
 	targs.path = args->files[1];
 	targs.tgt_id = 1;
-	start_ult(xstream_test, &targs, true);
-	abt_wait();
-
-	targs.path = args->files[2];
-	targs.tgt_id = 2;
 	start_ult(xstream_test, &targs, true);
 	abt_wait();
 }
