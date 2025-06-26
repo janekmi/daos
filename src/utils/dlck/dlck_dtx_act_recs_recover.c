@@ -9,7 +9,6 @@
 #include <daos/mem.h>
 #include <daos/btree_class.h>
 #include <gurt/telemetry_producer.h>
-#define VOS_STANDALONE
 #include <daos_srv/vos.h>
 #include <daos_srv/dlck.h>
 #include <daos_version.h>
@@ -21,65 +20,10 @@
 int
 xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
-#define DB_PATH_TEMPLATE "/tmp/dlck_XXXXXX"
 #define CO_UUIDS_GROW_BY 10
 
 static unsigned int flags =
     VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_FOR_FEATURE_FLAG;
-
-/**
- * Just add the container's UUID to the provided array.
- */
-static int
-cont_list(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
-	  void *cb_arg, unsigned int *acts)
-{
-	struct dlck_array *co_uuids = cb_arg;
-	return dlck_array_append(co_uuids, entry->ie_couuid);
-}
-
-
-#define XSTREAM_MAX 5 /** 4 + sys */
-
-#define XSTREAM_SYS (XSTREAM_MAX - 1)
-
-int Tgt_id = 0;
-struct bio_xs_context *XSCTXS[XSTREAM_MAX] = {NULL};
-void *TLSS[XSTREAM_MAX] = {NULL};
-
-struct vos_tls *
-dlck_tls_get()
-{
-	return TLSS[Tgt_id];
-}
-
-struct bio_xs_context *
-dlck_xsctx_get()
-{
-	return XSCTXS[Tgt_id];
-}
-
-// void *
-// thread_function(void *arg)
-// {
-// 	struct dlck_array da  = {0};
-// 	struct dlck_stats ds  = {0};
-// 	daos_handle_t    *coh = (daos_handle_t *)arg;
-// 	int               rc;
-
-// 	dlck_array_init(sizeof(struct dlck_dtx_rec), 10, &da);
-
-// 	TLSS[0] = vos_standalone_tls_alloc(DAOS_TGT_TAG);
-
-// 	rc = dlck_vos_cont_rec_get_active(*coh, &da, &ds);
-// 	assert(rc == 0);
-
-// 	printf("dda.touched = %u\n", ds.touched);
-
-// 	vos_standalone_tls_free(TLSS[0]);
-
-// 	return NULL;
-// }
 
 #define PMEMOBJ_CTL_SDS_AT_CREATE_NAME "sds.at_create"
 
@@ -147,9 +91,59 @@ out:
 const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
 const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
+#define XSTREAM_MAX 4 /** targets */
+
+struct bio_xs_context *XSCTXS[XSTREAM_MAX] = {NULL};
+
+struct ult {
+	ABT_xstream xstream;
+	ABT_pool pool;
+	ABT_thread thread;
+};
+
+#define ULT_MAX 10
+
+struct ult ULTs[ULT_MAX];
+int ult_id;
+
+#define DSS_DEEP_STACK_SZ 65536
+
+static void
+start_ult(void (*thread_func)(void *), void *arg, bool deep_stack)
+{
+	assert(ult_id < ULT_MAX);
+	struct ult *ult = &ULTs[ult_id++];
+	ABT_thread_attr attr;
+	int rc;
+
+	rc = ABT_xstream_create(ABT_SCHED_NULL, &ult->xstream);
+	assert(rc == 0);
+	rc = ABT_xstream_get_main_pools(ult->xstream, 1, &ult->pool);
+	assert(rc == 0);
+	
+	if (deep_stack) {
+		rc = ABT_thread_attr_create(&attr);
+		assert(rc == 0);
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+		assert(rc == 0);
+	} else {
+		attr = ABT_THREAD_ATTR_NULL;
+	}
+
+	rc = ABT_thread_create(ult->pool, thread_func, arg, attr, &ult->thread);
+	assert(rc == 0);
+	
+	if (deep_stack) {
+		ABT_thread_attr_free(&attr);
+		assert(rc == 0);
+	}
+}
+
 static void
 nvme_polling(void *unused)
 {
+	int rc;
+
 	do {
 		for (int i = 0; i < XSTREAM_MAX; ++i) {
 			struct bio_xs_context *xsctx = XSCTXS[i];
@@ -157,7 +151,10 @@ nvme_polling(void *unused)
 				continue;
 			}
 
-			bio_nvme_poll(xsctx);
+			rc = bio_nvme_poll(xsctx);
+			if (rc != 0) {
+				printf("nvme_polling: bio_nvme_poll -> %d\n", rc);
+			}
 		}
 	} while(true);
 }
@@ -166,23 +163,77 @@ static int
 start_nvme_polling(void)
 {
 	// pthread_t thread_id;
-	int rc;
-	
 	// rc = pthread_create(&thread_id, NULL, nvme_polling, NULL);
         // assert(rc == 0);
-
-	ABT_xstream xstream;
-	ABT_pool pool;
-	ABT_thread thread;
-
-	rc = ABT_xstream_create(ABT_SCHED_NULL, &xstream);
-	assert(rc == 0);
-	ABT_xstream_get_main_pools(xstream, 1, &pool);
-	assert(rc == 0);
-	ABT_thread_create(pool, nvme_polling, NULL, ABT_THREAD_ATTR_NULL, &thread);
-	assert(rc == 0);
+	
+	start_ult(nvme_polling, NULL, true);
 
         return 0;
+}
+
+ABT_mutex ULT_mutex;
+ABT_cond ULT_barrier;
+
+static void
+abt_signal(void)
+{
+	ABT_mutex_lock(ULT_mutex);
+	ABT_cond_signal(ULT_barrier);
+	ABT_mutex_unlock(ULT_mutex);
+}
+
+static void
+abt_wait(void)
+{
+	ABT_mutex_lock(ULT_mutex);
+	ABT_cond_wait(ULT_barrier, ULT_mutex);
+	ABT_mutex_unlock(ULT_mutex);
+}
+
+static void
+system_service_ult(void *unused)
+{
+	struct dss_module_info *dmi;
+	int tag = DAOS_SERVER_TAG - DAOS_TGT_TAG;
+	int xs_id = 0;
+	int tgt_id = -1;
+	int rc;
+
+	(void) dss_tls_init(tag, xs_id, tgt_id);
+
+	pthread_setname_np(pthread_self(), "daos_sys_0");
+
+	dmi = dss_get_module_info();
+	assert(dmi != NULL);
+
+	rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, BIO_SYS_TGT_ID, false);
+	assert(rc == 0);
+
+	abt_signal();
+
+	do {
+		rc = bio_nvme_poll(dmi->dmi_nvme_ctxt);
+		assert(rc != 1); /** work was done? */
+	} while(true);
+}
+
+static void
+start_system_service()
+{
+	start_ult(system_service_ult, NULL, true);
+
+	abt_wait();
+}
+
+/**
+ * Just add the container's UUID to the provided array.
+ */
+static int
+cont_list(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
+	  void *cb_arg, unsigned int *acts)
+{
+	struct dlck_array *co_uuids = cb_arg;
+	return dlck_array_append(co_uuids, entry->ie_couuid);
 }
 
 void xxx(daos_handle_t poh)
@@ -214,9 +265,20 @@ extern struct dss_module vos_srv_module;
 
 extern struct dss_module_key vos_module_key;
 
-static int
-xstream_test(const char *path, int tgt_id)
+unsigned int dss_sys_xs_nr = 3;
+
+/** main XS id of (vos) tgt_id */
+#define DSS_MAIN_XS_ID(tgt_id) ((tgt_id) + dss_sys_xs_nr)
+
+struct xstream_args {
+	char *path;
+	int tgt_id;
+};
+
+static void
+xstream_test(void *arg)
 {
+	struct xstream_args *xargs = arg;
 	uuid_t uuid = {0};
 	daos_handle_t poh     = DAOS_HDL_INVAL;
 	int rc;
@@ -227,68 +289,53 @@ xstream_test(const char *path, int tgt_id)
 	 * - bio_xsctxt_alloc
 	 */
 
-	/** prepare global state (TLS + XSCTXT) */
-	TLSS[tgt_id] = vos_module_key.dmk_init(DAOS_SERVER_TAG, tgt_id, tgt_id);
-	if (TLSS[tgt_id] == NULL) {
-		return -1;
-	}
+	struct dss_module_info *dmi;
+	int tag = DAOS_SERVER_TAG;
+	int xs_id = DSS_MAIN_XS_ID(0);
+	int tgt_id = xargs->tgt_id;
 
-	rc = bio_xsctxt_alloc(&XSCTXS[tgt_id], tgt_id, false);
+	(void) dss_tls_init(tag, xs_id, tgt_id);
+
+	pthread_setname_np(pthread_self(), "daos_io_0/1");
+
+	dmi = dss_get_module_info();
+	assert(dmi != NULL);
+
+	rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
 	assert(rc == 0);
-	
-	Tgt_id = tgt_id;
+	XSCTXS[tgt_id] = dmi->dmi_nvme_ctxt;
 	
 	/** attempt opening the pool */
 	rc = uuid_parse(pool_uuid, uuid);
 	assert(rc == 0);
 	
-	rc = dlck_recreate(path, uuid);
+	rc = dlck_recreate(xargs->path, uuid);
 	assert(rc == 0);
 
-	rc = vos_pool_open(path, uuid, flags, &poh);
+	rc = vos_pool_open(xargs->path, uuid, flags, &poh);
 	assert(rc == 0);
 
-	return 0;
+	xxx(poh);
+
+	abt_signal();
+
+	sleep(60 * 30); /** 30 minutes */
 }
 
 static void
-xstream_all_ult(void *arg)
+xstream_all_ult(struct dlck_args *args)
 {
-	struct dlck_args *args = arg;
-	int rc;
+	struct xstream_args xargs;
 
-	rc = xstream_test(args->files[0], 0);
-	assert(rc == 0);
+	xargs.path = args->files[0];
+	xargs.tgt_id = 0;
+	start_ult(xstream_test, &xargs, true);
+	abt_wait();
 
-	rc = xstream_test(args->files[1], 1);
-	assert(rc == 0);
-}
-
-static int
-xstream_wait(void *args)
-{
-	ABT_xstream xstream;
-	ABT_pool pool;
-	ABT_thread thread;
-	int rc;
-
-	rc = ABT_xstream_create(ABT_SCHED_NULL, &xstream);
-	assert(rc == 0);
-	ABT_xstream_get_main_pools(xstream, 1, &pool);
-	assert(rc == 0);
-	ABT_thread_create(pool, xstream_all_ult, args, ABT_THREAD_ATTR_NULL, &thread);
-	assert(rc == 0);
-	
-        rc = ABT_thread_join(thread);
-	assert(rc == 0);
-        rc = ABT_thread_free(&thread);
-	assert(rc == 0);
-        rc = ABT_xstream_join(xstream);
-	assert(rc == 0);
-        rc = ABT_xstream_free(&xstream);
-	assert(rc == 0);
-
-	return 0;
+	xargs.path = args->files[1];
+	xargs.tgt_id = 1;
+	start_ult(xstream_test, &xargs, true);
+	abt_wait();
 }
 
 static uint64_t
@@ -318,9 +365,13 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	 * dss_module_init_all -> vos init?
 	 * vos_standalone_tls_init
 	 * dss_sys_db_init
+	 * dss_xstreams_init:
+	 * - start system service XS
+	 * - start main IO service XS
 	 */
 
 	const unsigned int instance_idx = 0;
+	int tag = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	unsigned int targets = 4;
 	rc = d_tm_init(instance_idx, dlck_metrics_region_size(targets), D_TM_SERVER_PROCESS);
 	assert(rc == 0);
@@ -330,6 +381,10 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 
 	rc = ABT_init(0, NULL);
 	assert(rc == ABT_SUCCESS);
+	rc = ABT_mutex_create(&ULT_mutex);
+	assert(rc == ABT_SUCCESS);
+	rc = ABT_cond_create(&ULT_barrier);
+	assert(rc == ABT_SUCCESS);
 	
 	int numa_node = 0;
 	int mem_size = 5120;
@@ -338,10 +393,12 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	rc = bio_nvme_init(nvme_conf, numa_node, mem_size, hugepage_size, targets, bypass_health_chk);
 	assert(rc == 0);
 	
+	dss_register_key(&daos_srv_modkey);
+	dss_register_key(&vos_module_key);
 	rc = vos_srv_module.sm_init();
 	assert(rc == 0);
 	
-	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);
+	rc = vos_standalone_tls_init(tag);
 	assert(rc == 0);
 	
 	rc = dlck_sys_db_init(sys_db_path);
@@ -350,131 +407,15 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	/** NVMe polling thread */
 	rc = start_nvme_polling();
 	assert(rc == 0);
-	
-	/** detach global state */
-	
-	vos_tls_getter_set(dlck_tls_get, &TLSS[XSTREAM_SYS]);
-	vos_xsctxt_getter_set(dlck_xsctx_get, &XSCTXS[XSTREAM_SYS]);
+	(void) start_nvme_polling;
+
+	/** start system service XS */
+	start_system_service();
 	
 	/** try xstream 0 and 1 */
 	
-	// xstream_all_ult(args);
-
-	rc = xstream_wait(args);
-	assert(rc == 0);
-
-	// db_path = temp_db_path_init();
-	// if (db_path == NULL) {
-	// 	return -1;
-	// }
-
-	// rc = vos_self_init(db_path, true, tgt_id);
-	// if (rc) {
-	// 	D_ERROR("Error initializing VOS instance");
-	// 	return rc;
-	// }
-
-	// bio_nvme_fini();
-
-	// rc = bio_nvme_init(args->files[0], 0, 5120, 2, 1, false);
-	// if (rc != 0) {
-	// 	return rc;
-	// }
-
-	// rc = bio_xsctxt_alloc(&XSCTX, BIO_SYS_TGT_ID, true);
-	// if (rc) {
-	// 	return rc;
-	// }
-
-	// void bio_xsctxt_free(struct bio_xs_context *ctxt);
-
-	// vos_xsctxt_getter_set(dlck_xsctx_get);
-
-	// rc = uuid_parse(pool_uuid, uuid);
-	// if (rc != 0) {
-	// 	return rc;
-	// }
-	
-	// rc = vos_pool_open(args->files[0], uuid, flags, &poh);
-	// const char *path = "/tmp/vos-1";
-	// const char *path = "/mnt/daos/20d1ef00-c89b-4f10-9fdb-31b9b086a0b7/vos-1";
-
-	// rc = dlck_recreate(args->files[0], uuid);
-	// if (rc != 0) {
-	// 	return rc;
-	// }
-	// (void) dlck_recreate;
-
-	// rc = vos_pool_open(args->files[0], uuid, flags, &poh0);
-	// assert(rc == 0);
-	
-	/** XXX */
-	// rc = uuid_parse(cont2_uuid, uuid);
-	// assert(rc == 0);
-	
-	// rc = vos_cont_create(poh, uuid);
-	// assert(rc == 0);
-	/** XXX */
-	
-	// xxx(poh0);
-	
-	
-	/** -- */
-	
-
-	
-	// TLSS[1] = vos_standalone_tls_alloc(DAOS_TGT_TAG);
-	// assert(TLSS[1] != NULL);
-
-	// rc = bio_xsctxt_alloc(&XSCTXS[1], 1, true);
-	// if (rc) {
-	// 	return rc;
-	// }
-	
-	// Tgt_id = 1;
-	
-	// rc = dlck_recreate(args->files[1], uuid);
-	// if (rc != 0) {
-	// 	return rc;
-	// }
-	// (void) dlck_recreate;
-	
-	// rc = vos_pool_open(args->files[1], uuid, flags, &poh1);
-	// assert(rc == 0);
-	
-	// xxx(poh1);
-	
-	// Tgt_id = 0;
-	// xxx(poh0);
-
-	// Tgt_id = 1;
-	// xxx(poh1);
-
-
-
-	// assert(uuid_is_null(args.common.co_uuid) == 0);
-
-	// rc = vos_cont_open(poh, args.common.co_uuid, &coh);
-	// assert(rc == 0);
-
-	// vos_tls_getter_set(dlck_tls_get);
-
-	// pthread_t thread;
-
-	// if (pthread_create(&thread, NULL, thread_function, &coh) != 0) {
-	// 	perror("Failed to create thread");
-	// 	return 1;
-	// }
-
-	// Wait for the thread to complete
-	// pthread_join(thread, NULL);
-
-	// struct dlck_dtx_rec_array dda = {0};
-
-	// rc = dlck_vos_cont_rec_get_active(coh, &dda);
-	// assert(rc == 0);
-
-	// printf("dda.touched = %u\n", dda.touched);
+	xstream_all_ult(args);
+	(void) xstream_all_ult;
 
 	return 0;
 }

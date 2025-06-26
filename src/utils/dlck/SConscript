@@ -8,9 +8,9 @@ def scons():
     denv = env.Clone()
     denv.Append(OBJPREFIX="dlck_")
 
-    libs = ['vos', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt']
+    libs = ['vos_srv', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt']
 
-    src = ['dlck_main.c', 'dlck_args.c', 'dlck_dtx_act_recs_recover.c', '../../mgmt/srv_util_simple.c']
+    src = ['dlck_main.c', 'dlck_args.c', 'dlck_tls.c', 'dlck_sched.c', 'dlck_dtx_act_recs_recover.c', '../../mgmt/srv_util_simple.c']
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=[Dir('.')])
