@@ -268,6 +268,8 @@ struct thread_args {
 	int tgt_id;
 };
 
+#define DSS_IO_XS_NAME_FMT "daos_io_%d"
+
 static void
 xstream_test(void *arg)
 {
@@ -290,8 +292,10 @@ xstream_test(void *arg)
 
 	(void) dss_tls_init(tag, xs_id, tgt_id);
 
-
-	pthread_setname_np(pthread_self(), "daos_io_0/1");
+	char name[DSS_XS_NAME_LEN];
+	rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
+	assert(rc >= 0);
+	pthread_setname_np(pthread_self(), name);
 
 	dmi = dss_get_module_info();
 	assert(dmi != NULL);
@@ -310,6 +314,14 @@ xstream_test(void *arg)
 
 	rc = vos_pool_open(targs->path, uuid, flags, &poh);
 	assert(rc == 0);
+
+	/** one of the pools will get an additional container */
+	if (tgt_id == 1) {
+		rc = uuid_parse(cont2_uuid, uuid);
+		assert(rc == 0);
+		rc = vos_cont_create(poh, uuid);
+		assert(rc == 0);
+	}
 
 	xxx(poh);
 
@@ -330,6 +342,11 @@ xstream_all_ult(struct dlck_args *args)
 
 	targs.path = args->files[1];
 	targs.tgt_id = 1;
+	start_ult(xstream_test, &targs, true);
+	abt_wait();
+
+	targs.path = args->files[2];
+	targs.tgt_id = 2;
 	start_ult(xstream_test, &targs, true);
 	abt_wait();
 }
