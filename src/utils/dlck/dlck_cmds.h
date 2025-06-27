@@ -22,4 +22,7 @@ typedef int (*dlck_cmd_func)(struct dlck_args *args);
 int
 dlck_dtx_act_recs_recover(struct dlck_args *args);
 
+#define DLCK_CMDS_FUNCS \
+{dlck_dtx_act_recs_recover}
+
 #endif /** __DLCK_CMDS__ */

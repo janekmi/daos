@@ -9,11 +9,10 @@
 
 #include <gurt/common.h>
 
+#include "dlck_cmds.h"
 #include "dlck_args.h"
 
-#define DB_PATH_TEMPLATE "/tmp/dlck_XXXXXX"
-
-static const dlck_cmd_func dlck_cmds[] = {dlck_dtx_act_recs_recover};
+static const dlck_cmd_func dlck_cmds[] = DLCK_CMDS_FUNCS;
 
 int
 main(int argc, char *argv[])
