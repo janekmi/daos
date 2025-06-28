@@ -25,9 +25,10 @@
 // const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
 // const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
-
-
-
+struct entry {
+	d_list_t link;
+	uuid_t   uuid;
+};
 
 /**
  * Just add the container's UUID to the provided array.
@@ -36,12 +37,23 @@ static int
 cont_list(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
 	  void *cb_arg, unsigned int *acts)
 {
-	struct dlck_array *co_uuids = cb_arg;
-	return dlck_array_append(co_uuids, entry->ie_couuid);
+	d_list_t     *co_uuids = cb_arg;
+	struct entry *ent;
+	D_ALLOC_PTR(ent);
+	if (ent == NULL) {
+		return ENOMEM;
+	}
+	uuid_copy(ent->uuid, entry->ie_couuid);
+	d_list_add(&ent->link, co_uuids);
+	return 0;
 }
 
 void test(daos_handle_t poh)
 {
+	d_list_t                co_uuids = D_LIST_HEAD_INIT(co_uuids);
+	struct entry           *ent;
+	int                     num = 0;
+
 	/** loop over containers */
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
@@ -51,12 +63,14 @@ void test(daos_handle_t poh)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
-	struct dlck_array co_uuids = {0};
-	dlck_array_init(sizeof(uuid_t), 10, &co_uuids);
-
 	rc =
 	    vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list, NULL, &co_uuids, NULL);
 	assert(rc == 0);
+
+	d_list_for_each_entry(ent, &co_uuids, link) {
+		++num;
+	}
+	assert(num > 0);
 
 	// assert(co_uuids.da_len > 0);
 
