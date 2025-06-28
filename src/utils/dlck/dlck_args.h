@@ -36,7 +36,7 @@
 
 struct dlck_file {
 	d_list_t link;
-	char *desc;
+	const char *desc;
 	uuid_t po_uuid;
 	int targets;
 };

@@ -14,20 +14,8 @@
 #include <daos_srv/dlck.h>
 #include <daos_version.h>
 
-#include <libpmemobj.h>
-
 #include "dlck_args.h"
 #include "dlck_engine.h"
-
-#define LONG_SLEEP (60 * 30) /** 30 minutes */
-
-int
-xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
-
-// #define CO_UUIDS_GROW_BY 10
-
-// static unsigned int flags =
-//     VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_FOR_FEATURE_FLAG;
 
 static int
 dlck_engine_alloc(struct dlck_args *args, struct dlck_engine **engine_ptr)
@@ -57,7 +45,7 @@ dlck_engine_alloc(struct dlck_args *args, struct dlck_engine **engine_ptr)
  * XXX should be shared with the DAOS engine.
  */
 static int
-register_dbtree_classes(void)
+dlck_register_dbtree_classes(void)
 {
 	int rc;
 
@@ -70,47 +58,10 @@ register_dbtree_classes(void)
 	return DER_SUCCESS;
 }
 
-/** XXX should be shared with the DAOS engine */
-#define DSS_DEEP_STACK_SZ 65536
-
-static int
-abt_attr_default_create(ABT_thread_attr *attr)
-{
-	int rc;
-
-	rc = ABT_thread_attr_create(attr);
-	if (rc != 0) {
-		/** XXX translate ABT return code */
-		return rc;
-	}
-	
-	rc = ABT_thread_attr_set_stacksize(*attr, DSS_DEEP_STACK_SZ);
-	if (rc != 0) {
-		/** XXX translate ABT return code */
-		return rc;
-	}
-
-	return 0;
-}
-
-static int
-dlck_abt_init(struct dlck_engine *engine)
-{
-	int rc;
-
-	rc = ABT_init(0, NULL);
-	if(rc != ABT_SUCCESS) {
-		/** XXX translate ABT return code */
-		return rc;
-	}
-
-	return 0;
-}
-
 /**
  * XXX should be shared with dss_sys_db_init().
  */
-int
+static int
 dlck_sys_db_init(struct dlck_args *args)
 {
 	int	 rc;
@@ -147,97 +98,26 @@ out:
 	return rc;
 }
 
-// static int
-// dlck_recreate(const char *path, uuid_t uuid)
-// {
-// 	struct smd_pool_info *pool_info = NULL;
-// 	int rc;
-
-// 	rc = smd_pool_get_info(uuid, &pool_info);
-// 	if (rc != 0) {
-// 		return rc;
-// 	}
-
-// 	rc = xxx_vos_preallocate(path, uuid, pool_info->spi_scm_sz);
-// 	if (rc != 0) {
-// 		goto out;
-// 	}
-	
-// out:
-// 	smd_pool_free_info(pool_info);
-
-// 	return rc;
-// }
-
-const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
-const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
-const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
-
-struct xstream_t {
-	ABT_xstream xstream;
-	ABT_pool pool;
-	ABT_thread thread;
-	void *thread_arg;
-};
-
-static int
-xstream_create(struct dlck_xstream *xs)
-{
-	int rc;
-
-	rc = ABT_xstream_create(ABT_SCHED_NULL, &xs->xstream);
-	if (rc != ABT_SUCCESS) {
-		/** XXX translate ABT error */
-		return rc;
-	}
-	rc = ABT_xstream_get_main_pools(xs->xstream, 1, &xs->pool);
-	if (rc != ABT_SUCCESS) {
-		/** XXX translate ABT error */
-		return rc;
-	}
-	rc = ABT_eventual_create(sizeof(int), &xs->rc_init);
-	if (rc != ABT_SUCCESS) {
-		/** XXX translate ABT error */
-		return rc;
-	}
-
-	return 0;
-}
-
-/**
- * XXX missing teardown
- */
-static int
-xstream_ult_create(ABT_pool pool, void (*func)(void *), void *arg, struct dlck_ult *ult)
-{
-	ABT_thread_attr attr;
-	int rc;
-
-	rc = abt_attr_default_create(&attr);
-	if (rc) {
-		return rc;
-	}
-
-	rc = ABT_thread_create(pool, func, arg, attr, &ult->thread);
-	if (rc != ABT_SUCCESS) {
-		/** XXX translate ABT error */
-		return rc;
-	}
-
-	/** XXX teardown attr */
-
-	return DER_SUCCESS;
-}
-
 static void
 nvme_polling(void *arg)
 {
-	struct bio_xs_context *xsctx = arg;
+	ABT_eventual *done = arg;
+	ABT_bool is_ready;
+	struct dss_module_info *dmi;
+	int rc;
+	
+	dmi = dss_get_module_info();
+	D_ASSERT(dmi != NULL);
 
 	do {
-		(void) bio_nvme_poll(xsctx);
+		(void) bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
-	} while(true);
+
+		rc = ABT_eventual_test(*done, NULL, &is_ready);
+		if (rc != 0) {
+			return;
+		}
+	} while(is_ready == ABT_FALSE);
 }
 
 unsigned int dss_sys_xs_nr = 3;
@@ -249,10 +129,12 @@ unsigned int dss_sys_xs_nr = 3;
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT "daos_io_%d"
 
-static void
-xstream_init_ult(void *arg)
+/**
+ * XXX teardown
+ */
+int
+dlck_engine_xstream_init(struct dlck_xstream *xs)
 {
-	struct dlck_xstream *xs = arg;
 	struct dss_module_info *dmi;
 	int tag;
 	int xs_id;
@@ -265,16 +147,16 @@ xstream_init_ult(void *arg)
 		xs_id = 0;
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT, 0);
-		if (rc != 0) {
-			goto fail;
+		if (rc < 0) {
+			return ENOMEM;
 		}
 	} else {
 		tag = DAOS_SERVER_TAG;
 		xs_id = DSS_MAIN_XS_ID(tgt_id);
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
-		if (rc != 0) {
-			goto fail;
+		if (rc < 0) {
+			return ENOMEM;
 		}
 	}
 
@@ -293,54 +175,55 @@ xstream_init_ult(void *arg)
 	D_ASSERT(dmi != NULL);
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
+		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
 		if (rc != 0) {
-			goto fail;
+			return rc;
 		}
 
-		xstream_ult_create(xs->pool, nvme_polling, dmi->dmi_nvme_ctxt, &xs->nvme_poll);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
+		if (rc != 0) {
+			return rc;
+		}
+
+		dlck_ult_create(xs->pool, nvme_polling, &xs->nvme_poll_done, &xs->nvme_poll);
 	}
 
-fail:
-	ABT_eventual_set(xs->rc_init, &rc, sizeof(int));
+	return 0;
+}
+
+static void
+dlck_engine_xstream_init_ult(void *arg)
+{
+	struct dlck_xstream *xs = arg;
+
+	int rc = dlck_engine_xstream_init(xs);
+	D_ASSERT(rc == 0);
 }
 
 /**
- * XXX missing teardown
+ * XXX bits missing
  */
-static int
-xstream_start(struct dlck_xstream *xs)
+int
+dlck_engine_xstream_fini(struct dlck_xstream *xs)
 {
-	struct dlck_ult ult;
 	int rc;
-	int *rc_ptr;
 
-	rc = xstream_create(xs);
+	rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
 	if (rc != 0) {
-		return rc;
-	}
-
-	rc = xstream_ult_create(xs->pool, xstream_init_ult, NULL, &ult);
-	if (rc != 0) {
-		return rc;
-	}
-	
-	ABT_eventual_wait(xs->rc_init, (void **)&rc_ptr);
-	rc = *rc_ptr;
-	if (rc != 0) {
-		/** XXX translate ABT return code */
-		return rc;
-	}
-	
-	rc = ABT_thread_join(ult.thread);
-	if (rc != 0) {
-		/** XXX translate ABT return code */
 		return rc;
 	}
 
-	/** ABT_thread free */
-	
-	return rc;
+	rc = ABT_thread_join(xs->nvme_poll.thread);
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = ABT_thread_free(&xs->nvme_poll.thread);
+	if (rc != 0) {
+		return rc;
+	}
+
+	return 0;
 }
 
 extern struct dss_module vos_srv_module;
@@ -354,12 +237,18 @@ static int
 xstream_start_all(struct dlck_args *args, struct dlck_engine *engine)
 {
 	struct dlck_xstream *xs;
+	struct dlck_ult daos_sys_init;
 	int rc;
 
 	/** start daos_sys_0 */
 	xs = &engine->xss[engine->targets]; /** there is one more XS than targets */
 	xs->tgt_id = -1;
-	rc = xstream_start(xs);
+	rc = dlck_xstream_start(xs);
+	if (rc != 0) {
+		return rc;
+	}
+	
+	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &daos_sys_init);
 	if (rc != 0) {
 		return rc;
 	}
@@ -368,12 +257,22 @@ xstream_start_all(struct dlck_args *args, struct dlck_engine *engine)
 
 	/** start daos_io_X */
 	for (int i = 0; i < engine->targets; ++i) {
-		xs = &engine->xss[engine->targets];
+		xs = &engine->xss[i];
 		xs->tgt_id = i;
-		rc = xstream_start(xs);
+		rc = dlck_xstream_start(xs);
 		if (rc != 0) {
 			return rc;
 		}
+	}
+
+	rc = ABT_thread_join(daos_sys_init.thread);
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = ABT_thread_free(&daos_sys_init.thread);
+	if (rc != 0) {
+		return rc;
 	}
 
 	return 0;
@@ -427,7 +326,7 @@ dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
 		return rc;
 	}
 
-	rc = register_dbtree_classes();
+	rc = dlck_register_dbtree_classes();
 	if (rc != 0) {
 		return rc;
 	}
@@ -460,6 +359,32 @@ dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
 	}
 
 	rc = xstream_start_all(args, engine);
+	if (rc != 0) {
+		return rc;
+	}
+
+	*engine_ptr = engine;
+
+	return 0;
+}
+
+int
+dlck_engine_stop(struct dlck_engine *engine)
+{
+	struct dlck_xstream *xs = &engine->xss[engine->targets];
+	int rc;
+
+	rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
+	if (rc != 0) {
+		return rc;
+	}
+	
+	rc = ABT_thread_join(xs->nvme_poll.thread);
+	if (rc != 0) {
+		return rc;
+	}
+	
+	rc = ABT_thread_free(&xs->nvme_poll.thread);
 	if (rc != 0) {
 		return rc;
 	}

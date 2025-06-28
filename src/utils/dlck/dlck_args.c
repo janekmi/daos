@@ -52,11 +52,11 @@ static struct argp_option common_options[] = {
      "UUID of a container to process. If not provided all containers are processed."},
     {"cmd", KEY_COMMON_CMD, "CMD", 0, "Command (Required). Please see available commands below."},
     {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0, "Bind to cores within the specified NUMA node."},
-    {"mem_size", KEY_COMMON_MEM_SIZE, 0, 0, "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
-    {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, 0, 0, "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
-    {"targets", KEY_COMMON_TARGETS, 0, 0, "Number of targets to use. Default: " STRINGIFY(DLCK_DEFAULT_TARGETS) "."},
-    {"storage", KEY_COMMON_STORAGE, 0, 0, "Storage path."},
-    {"nvme", KEY_COMMON_NVME, "CMD", 0, "NVMe config file."},
+    {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0, "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
+    {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, "N", 0, "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
+    {"targets", KEY_COMMON_TARGETS, "N", 0, "Number of targets to use. Default: " STRINGIFY(DLCK_DEFAULT_TARGETS) "."},
+    {"storage", KEY_COMMON_STORAGE, "PATH", 0, "Storage path."},
+    {"nvme", KEY_COMMON_NVME, "PATH", 0, "NVMe config file."},
     {0}};
 
 static struct argp_option _cmds_list[] = {

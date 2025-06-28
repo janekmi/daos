@@ -94,15 +94,17 @@ parse_file(const char *arg, struct dlck_args *args, struct argp_state *state)
 	unsigned target;
 	int rc;
 
-	D_STRNDUP(arg_copy, arg, 1024);
-	if (arg_copy == NULL) {
-		RETURN_FAIL(state, ENOMEM, "Out of memory");
-	}
-
 	D_ALLOC_PTR(file);
 	if (file == NULL) {
 		FAIL(state, rc, ENOMEM, "Cannot append more files");
 		goto free_arg_copy;
+	}
+
+	file->desc = arg;
+
+	D_STRNDUP(arg_copy, arg, 1024);
+	if (arg_copy == NULL) {
+		RETURN_FAIL(state, ENOMEM, "Out of memory");
 	}
 
 	token = strtok_r(arg_copy, FILE_SEPARATOR, &saveptr);
