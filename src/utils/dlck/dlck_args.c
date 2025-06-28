@@ -26,13 +26,13 @@ const char *argp_program_version = "dlck " DAOS_VERSION_STR;
 
 /** documentation groups */
 
-#define GROUP_COMMON              1
-#define GROUP_AVAILABLE_CMDS      2
-#define GROUP_AUTOMAGIC           (-1) /** yes, -1 is the last group */
+#define GROUP_COMMON                 1
+#define GROUP_AVAILABLE_CMDS         2
+#define GROUP_AUTOMAGIC              (-1) /** yes, -1 is the last group */
 
 /** helper definitions */
 
-#define OPT_HEADER(HEADER, GROUP) {0, 0, 0, 0, HEADER, GROUP}
+#define OPT_HEADER(HEADER, GROUP)    {0, 0, 0, 0, HEADER, GROUP}
 
 #define POSITIONAL(ARG, DESC, GROUP) {ARG, 0, 0, OPTION_DOC, DESC, GROUP}
 
@@ -41,20 +41,26 @@ const char *argp_program_version = "dlck " DAOS_VERSION_STR;
 /** complete help list (in order) */
 
 /** XXX provide more details here. */
-static char               doc[]   = "\nDAOS Local Consistency Checker (dlck)";
+static char               doc[] = "\nDAOS Local Consistency Checker (dlck)";
 
 static struct argp_option common_options[] = {
     OPT_HEADER("Common options:", GROUP_COMMON),
     /** entries below inherits the group number of the header entry */
     {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
-    {"file", KEY_COMMON_FILE, "UUID,TARGET", 0, "Pool UUID and set of targets. Can be used more than once."},
+    {"file", KEY_COMMON_FILE, "UUID,TARGET", 0,
+     "Pool UUID and set of targets. Can be used more than once."},
     {"co_uuid", KEY_COMMON_CO_UUID, "UUID", 0,
      "UUID of a container to process. If not provided all containers are processed."},
     {"cmd", KEY_COMMON_CMD, "CMD", 0, "Command (Required). Please see available commands below."},
-    {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0, "Bind to cores within the specified NUMA node."},
-    {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0, "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
-    {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, "N", 0, "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
-    {"targets", KEY_COMMON_TARGETS, "N", 0, "Number of targets to use. Default: " STRINGIFY(DLCK_DEFAULT_TARGETS) "."},
+    {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0,
+     "Bind to cores within the specified NUMA node."},
+    {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0,
+     "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
+    {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, "N", 0,
+     "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(
+	 DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
+    {"targets", KEY_COMMON_TARGETS, "N", 0,
+     "Number of targets to use. Default: " STRINGIFY(DLCK_DEFAULT_TARGETS) "."},
     {"storage", KEY_COMMON_STORAGE, "PATH", 0, "Storage path."},
     {"nvme", KEY_COMMON_NVME, "PATH", 0, "NVMe config file."},
     {0}};

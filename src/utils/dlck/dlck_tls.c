@@ -31,8 +31,8 @@ dlck_srv_tls_fini(int tags, void *data)
 }
 
 struct dss_module_key daos_srv_modkey = {
-	.dmk_tags = DAOS_SERVER_TAG,
-	.dmk_index = -1,
-	.dmk_init = dlck_srv_tls_init,
-	.dmk_fini = dlck_srv_tls_fini,
+    .dmk_tags  = DAOS_SERVER_TAG,
+    .dmk_index = -1,
+    .dmk_init  = dlck_srv_tls_init,
+    .dmk_fini  = dlck_srv_tls_fini,
 };

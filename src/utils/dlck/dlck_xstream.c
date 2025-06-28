@@ -53,7 +53,7 @@ dlck_xstream_start(struct dlck_xstream *xs)
 	// if (rc != 0) {
 	// 	return rc;
 	// }
-	
+
 	// ABT_eventual_wait(xs->rc, (void **)&rc_ptr);
 	// rc = *rc_ptr;
 	// if (rc != 0) {
@@ -66,7 +66,7 @@ dlck_xstream_start(struct dlck_xstream *xs)
 	// 	/** XXX translate ABT return code */
 	// 	return rc;
 	// }
-	
+
 	// rc = ABT_thread_join(ult.thread);
 	// if (rc != 0) {
 	// 	/** XXX translate ABT return code */
@@ -74,6 +74,6 @@ dlck_xstream_start(struct dlck_xstream *xs)
 	// }
 
 	/** ABT_thread free */
-	
+
 	return rc;
 }

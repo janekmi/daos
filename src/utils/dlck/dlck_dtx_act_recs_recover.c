@@ -20,7 +20,6 @@
 #include "dlck_engine.h"
 #include "dlck_common.h"
 
-
 // const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
 // const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
 // const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
@@ -48,7 +47,8 @@ cont_list(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_i
 	return 0;
 }
 
-void test(daos_handle_t poh)
+void
+test(daos_handle_t poh)
 {
 	d_list_t                co_uuids = D_LIST_HEAD_INIT(co_uuids);
 	struct entry           *ent;
@@ -57,7 +57,7 @@ void test(daos_handle_t poh)
 	/** loop over containers */
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
-	int rc;
+	int                     rc;
 
 	param.ip_hdl        = poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
@@ -79,19 +79,19 @@ void test(daos_handle_t poh)
 	// printf("%s\n", uuid_str);
 }
 struct xstream_arg {
-	struct dlck_args *args;
+	struct dlck_args    *args;
 	struct dlck_xstream *xs;
-	ABT_mutex *open_mtx;
-	int rc;
+	ABT_mutex           *open_mtx;
+	int                  rc;
 };
 
 static void
 exec_one(void *arg)
 {
 	struct xstream_arg *xa = arg;
-	struct dlck_file *file;
-	daos_handle_t poh;
-	int rc;
+	struct dlck_file   *file;
+	daos_handle_t       poh;
+	int                 rc;
 
 	rc = dlck_engine_xstream_init(xa->xs);
 	if (rc != 0) {
@@ -111,7 +111,7 @@ exec_one(void *arg)
 			xa->rc = rc;
 			return;
 		}
-		
+
 		test(poh);
 
 		ABT_mutex_lock(*xa->open_mtx);
@@ -138,11 +138,11 @@ exec_one(void *arg)
 static int
 exec_all(struct dlck_args *args, struct dlck_engine *engine)
 {
-	ABT_mutex open_mtx;
-	struct dlck_ult *ults;
+	ABT_mutex           open_mtx;
+	struct dlck_ult    *ults;
 	struct xstream_arg *xargs;
 	struct xstream_arg *xa;
-	int rc;
+	int                 rc;
 
 	rc = ABT_mutex_create(&open_mtx);
 	if (rc != 0) {
@@ -161,9 +161,9 @@ exec_all(struct dlck_args *args, struct dlck_engine *engine)
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
-		xa = &xargs[i];
-		xa->args = args;
-		xa->xs = &engine->xss[i];
+		xa           = &xargs[i];
+		xa->args     = args;
+		xa->xs       = &engine->xss[i];
 		xa->open_mtx = &open_mtx;
 
 		/** start an ULT */
@@ -174,11 +174,11 @@ exec_all(struct dlck_args *args, struct dlck_engine *engine)
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
-		rc= ABT_thread_join(ults[i].thread);
+		rc = ABT_thread_join(ults[i].thread);
 		if (rc != 0) {
 			return rc;
 		}
-		
+
 		rc = ABT_thread_free(&ults[i].thread);
 		if (rc != 0) {
 			return rc;
@@ -203,7 +203,7 @@ static int
 pool_mkdir_all(struct dlck_args *args, struct dlck_engine *engine)
 {
 	struct dlck_file *file;
-	int rc;
+	int               rc;
 
 	d_list_for_each_entry(file, &args->common.files, link) {
 		rc = dlck_pool_mkdir(args->common.storage_path, file);
@@ -222,7 +222,7 @@ int
 dlck_dtx_act_recs_recover(struct dlck_args *args)
 {
 	struct dlck_engine *engine = NULL;
-	int rc;
+	int                 rc;
 
 	rc = dlck_engine_start(args, &engine);
 	if (rc != 0) {
@@ -233,12 +233,12 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	if (rc != 0) {
 		return rc;
 	}
-	
+
 	rc = exec_all(args, engine);
 	if (rc != 0) {
 		return rc;
 	}
-	
+
 	rc = dlck_engine_stop(engine);
 	if (rc != 0) {
 		return rc;

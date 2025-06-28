@@ -28,14 +28,14 @@ xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 int
 dlck_pool_mkdir(const char *storage_path, struct dlck_file *file)
 {
-	char po_uuid[UUID_STR_LEN];
+	char  po_uuid[UUID_STR_LEN];
 	char *path;
-	int rc;
+	int   rc;
 
 	uuid_unparse(file->po_uuid, po_uuid);
 
 	rc = asprintf(&path, "%s/%s/", storage_path, po_uuid);
-	if (rc < 0){
+	if (rc < 0) {
 		return rc;
 	}
 
@@ -52,7 +52,7 @@ static int
 dlck_recreate(const char *path, uuid_t uuid)
 {
 	struct smd_pool_info *pool_info = NULL;
-	int rc;
+	int                   rc;
 
 	rc = smd_pool_get_info(uuid, &pool_info);
 	if (rc != 0) {
@@ -63,7 +63,7 @@ dlck_recreate(const char *path, uuid_t uuid)
 	if (rc != 0) {
 		goto out;
 	}
-	
+
 out:
 	smd_pool_free_info(pool_info);
 
@@ -71,17 +71,17 @@ out:
 }
 
 int
-dlck_pool_open(	const char *storage_path, struct dlck_file *file, int tgt_id, daos_handle_t *poh)
+dlck_pool_open(const char *storage_path, struct dlck_file *file, int tgt_id, daos_handle_t *poh)
 {
-	char *path;
-	char po_uuid[UUID_STR_LEN];
+	char              *path;
+	char               po_uuid[UUID_STR_LEN];
 	const unsigned int flags = VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_FOR_FEATURE_FLAG;
-	int rc;
+	int                rc;
 
 	uuid_unparse(file->po_uuid, po_uuid);
 
 	rc = asprintf(&path, "%s/%s/" VOS_FILE "%d", storage_path, po_uuid, tgt_id);
-	if (rc < 0){
+	if (rc < 0) {
 		goto fail;
 	}
 

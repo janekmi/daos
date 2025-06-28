@@ -16,42 +16,42 @@
 
 /** all short options */
 
-#define KEY_COMMON_WRITE_MODE		'w'
-#define KEY_COMMON_FILE			'f'
-#define KEY_COMMON_CO_UUID		'q'
-#define KEY_COMMON_CMD			'c'
+#define KEY_COMMON_WRITE_MODE           'w'
+#define KEY_COMMON_FILE                 'f'
+#define KEY_COMMON_CO_UUID              'q'
+#define KEY_COMMON_CMD                  'c'
 /** the options below follow the daos_engine options */
-#define KEY_COMMON_NUMA_NODE		'p'
-#define KEY_COMMON_MEM_SIZE		'r'
-#define KEY_COMMON_HUGEPAGE_SIZE	'H'
-#define KEY_COMMON_TARGETS		't'
-#define KEY_COMMON_STORAGE		's'
-#define KEY_COMMON_NVME			'n'
+#define KEY_COMMON_NUMA_NODE            'p'
+#define KEY_COMMON_MEM_SIZE             'r'
+#define KEY_COMMON_HUGEPAGE_SIZE        'H'
+#define KEY_COMMON_TARGETS              't'
+#define KEY_COMMON_STORAGE              's'
+#define KEY_COMMON_NVME                 'n'
 
 /** defaults */
 
-#define DLCK_DEFAULT_NVME_MEM_SIZE 5120
+#define DLCK_DEFAULT_NVME_MEM_SIZE      5120
 #define DLCK_DEFAULT_NVME_HUGEPAGE_SIZE 2
-#define DLCK_DEFAULT_TARGETS 4
+#define DLCK_DEFAULT_TARGETS            4
 
 struct dlck_file {
-	d_list_t link;
+	d_list_t    link;
 	const char *desc;
-	uuid_t po_uuid;
-	int targets;
+	uuid_t      po_uuid;
+	int         targets;
 };
 
 struct dlck_args_common {
 	bool          write_mode; /** false by default (dry run) */
-	d_list_t	files;
+	d_list_t      files;
 	uuid_t        co_uuid;
 	enum dlck_cmd cmd;
-	unsigned numa_node;
-	unsigned nvme_mem_size;
-	unsigned nvme_hugepage_size;
-	unsigned targets;
-	char *storage_path;
-	char *nvme_conf;
+	unsigned      numa_node;
+	unsigned      nvme_mem_size;
+	unsigned      nvme_hugepage_size;
+	unsigned      targets;
+	char         *storage_path;
+	char         *nvme_conf;
 };
 
 struct dlck_args {

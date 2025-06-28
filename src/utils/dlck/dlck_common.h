@@ -19,6 +19,6 @@ dlck_pool_mkdir(const char *storage_path, struct dlck_file *file);
  * XXX
  */
 int
-dlck_pool_open(	const char *storage_path, struct dlck_file *file, int tgt_id, daos_handle_t *poh);
+dlck_pool_open(const char *storage_path, struct dlck_file *file, int tgt_id, daos_handle_t *poh);
 
 #endif /** __DLCK_COMMON__ */

@@ -20,24 +20,24 @@ args_init(struct dlck_args *args)
 	/** set defaults */
 	D_INIT_LIST_HEAD(&args->common.files);
 	uuid_clear(args->common.co_uuid);
-	args->common.write_mode = false; /** dry run */
-	args->common.cmd        = DLCK_CMD_NOT_SET;
-	args->common.nvme_mem_size = DLCK_DEFAULT_NVME_MEM_SIZE;
+	args->common.write_mode         = false; /** dry run */
+	args->common.cmd                = DLCK_CMD_NOT_SET;
+	args->common.nvme_mem_size      = DLCK_DEFAULT_NVME_MEM_SIZE;
 	args->common.nvme_hugepage_size = DLCK_DEFAULT_NVME_HUGEPAGE_SIZE;
-	args->common.targets = DLCK_DEFAULT_TARGETS;
+	args->common.targets            = DLCK_DEFAULT_TARGETS;
 }
 
-#define FAIL(STATE, RC, ERRNUM, ...)                                                            \
-do { \
-	argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                          \
-	RC = ERRNUM; \
-} while(0)
+#define FAIL(STATE, RC, ERRNUM, ...)                                                               \
+	do {                                                                                       \
+		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
+		RC = ERRNUM;                                                                       \
+	} while (0)
 
 #define RETURN_FAIL(STATE, ERRNUM, ...)                                                            \
-do { \
-	argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                          \
-	return ERRNUM; \
-} while(0)
+	do {                                                                                       \
+		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
+		return ERRNUM;                                                                     \
+	} while (0)
 
 static int
 args_check(struct argp_state *state, struct dlck_args *args)
@@ -64,7 +64,7 @@ parse_command(const char *arg)
 static int
 parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
 {
-	char *endptr = NULL;
+	char         *endptr = NULL;
 	unsigned long ret;
 
 	ret = strtoul(arg, &endptr, 0);
@@ -87,12 +87,12 @@ parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
 static int
 parse_file(const char *arg, struct dlck_args *args, struct argp_state *state)
 {
-	char *arg_copy;
-	char *token;
-	char *saveptr;
+	char             *arg_copy;
+	char             *token;
+	char             *saveptr;
 	struct dlck_file *file;
-	unsigned target;
-	int rc;
+	unsigned          target;
+	int               rc;
 
 	D_ALLOC_PTR(file);
 	if (file == NULL) {

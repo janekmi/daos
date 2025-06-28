@@ -23,7 +23,7 @@ int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult)
 {
 	ABT_thread_attr attr;
-	int rc;
+	int             rc;
 
 	rc = dlck_abt_attr_default_create(&attr);
 	if (rc) {
@@ -42,10 +42,11 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 }
 
 int
-dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *arg, struct dlck_ult *ult)
+dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *arg,
+			   struct dlck_ult *ult)
 {
 	ABT_thread_attr attr;
-	int rc;
+	int             rc;
 
 	rc = dlck_abt_attr_default_create(&attr);
 	if (rc) {
@@ -60,5 +61,5 @@ dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *ar
 
 	/** XXX teardown attr */
 
-	return DER_SUCCESS;	
+	return DER_SUCCESS;
 }

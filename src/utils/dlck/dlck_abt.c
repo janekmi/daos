@@ -16,7 +16,6 @@
 
 #include "dlck_engine.h"
 
-
 /** XXX should be shared with the DAOS engine */
 #define DSS_DEEP_STACK_SZ 65536
 
@@ -30,7 +29,7 @@ dlck_abt_attr_default_create(ABT_thread_attr *attr)
 		/** XXX translate ABT return code */
 		return rc;
 	}
-	
+
 	rc = ABT_thread_attr_set_stacksize(*attr, DSS_DEEP_STACK_SZ);
 	if (rc != 0) {
 		/** XXX translate ABT return code */
@@ -46,7 +45,7 @@ dlck_abt_init(struct dlck_engine *engine)
 	int rc;
 
 	rc = ABT_init(0, NULL);
-	if(rc != ABT_SUCCESS) {
+	if (rc != ABT_SUCCESS) {
 		/** XXX translate ABT return code */
 		return rc;
 	}

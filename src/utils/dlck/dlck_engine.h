@@ -15,16 +15,16 @@ struct dlck_ult {
 };
 
 struct dlck_xstream {
-	ABT_xstream xstream;
-	ABT_pool pool;
+	ABT_xstream     xstream;
+	ABT_pool        pool;
 
-	int tgt_id;
+	int             tgt_id;
 	struct dlck_ult nvme_poll;
-	ABT_eventual nvme_poll_done;
+	ABT_eventual    nvme_poll_done;
 };
 
 struct dlck_engine {
-	unsigned targets;
+	unsigned             targets;
 	struct dlck_xstream *xss;
 };
 
@@ -50,7 +50,8 @@ dlck_abt_init(struct dlck_engine *engine);
 int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
 int
-dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *arg, struct dlck_ult *ult);
+dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *arg,
+			   struct dlck_ult *ult);
 
 int
 dlck_xstream_create(struct dlck_xstream *xs);
