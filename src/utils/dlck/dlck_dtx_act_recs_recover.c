@@ -24,60 +24,72 @@
 // const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
 // const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
 
-struct entry {
-	d_list_t link;
-	uuid_t   uuid;
-};
-
-/**
- * Just add the container's UUID to the provided array.
- */
 static int
-cont_list(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
-	  void *cb_arg, unsigned int *acts)
+process_cont(daos_handle_t poh, uuid_t co_uuid)
 {
-	d_list_t     *co_uuids = cb_arg;
-	struct entry *ent;
-	D_ALLOC_PTR(ent);
-	if (ent == NULL) {
-		return ENOMEM;
+	daos_handle_t coh;
+	int           rc;
+
+	rc = vos_cont_open(poh, co_uuid, &coh);
+	if (rc != 0) {
+		return rc;
 	}
-	uuid_copy(ent->uuid, entry->ie_couuid);
-	d_list_add(&ent->link, co_uuids);
+
+	struct dlck_array da = {0};
+	dlck_array_init(sizeof(struct dlck_dtx_rec), 10, &da);
+
+	rc = dlck_vos_cont_rec_get_active(coh, &da, NULL);
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = dlck_dtx_act_recs_remove(coh);
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = dlck_dtx_act_recs_set(coh, &da);
+	if (rc != 0) {
+		return rc;
+	}
+
+	dlck_array_free(&da);
+
+	rc = vos_cont_close(coh);
+	if (rc != 0) {
+		return rc;
+	}
+
 	return 0;
 }
 
-void
-test(daos_handle_t poh)
+static int
+process_pool(daos_handle_t poh)
 {
-	d_list_t                co_uuids = D_LIST_HEAD_INIT(co_uuids);
-	struct entry           *ent;
-	int                     num = 0;
+	d_list_t                  co_uuids = D_LIST_HEAD_INIT(co_uuids);
+	struct co_uuid_list_elem *elm, *next;
+	int                       rc;
 
-	/** loop over containers */
-	vos_iter_param_t        param   = {0};
-	struct vos_iter_anchors anchors = {0};
-	int                     rc;
-
-	param.ip_hdl        = poh;
-	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_flags      = VOS_IT_FOR_CHECK;
-
-	rc =
-	    vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list, NULL, &co_uuids, NULL);
-	assert(rc == 0);
-
-	d_list_for_each_entry(ent, &co_uuids, link) {
-		++num;
+	rc = dlck_pool_cont_list(poh, &co_uuids);
+	if (rc != 0) {
+		return rc;
 	}
-	assert(num > 0);
 
-	// assert(co_uuids.da_len > 0);
+	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
+		rc = process_cont(poh, elm->uuid);
+		if (rc != 0) {
+			return rc;
+		}
 
-	// char uuid_str[UUID_STR_LEN];
-	// uuid_unparse(dlck_array_entry(&co_uuids, 0), uuid_str);
-	// printf("%s\n", uuid_str);
+		d_list_del(&elm->link);
+		D_FREE(elm);
+	}
+
+	D_ASSERT(d_list_empty(&co_uuids));
+
+	return 0;
 }
+
 struct xstream_arg {
 	struct dlck_args    *args;
 	struct dlck_xstream *xs;
@@ -112,7 +124,16 @@ exec_one(void *arg)
 			return;
 		}
 
-		test(poh);
+		if (uuid_is_null(xa->args->common.co_uuid)) {
+			rc = process_pool(poh);
+		} else {
+			rc = process_cont(poh, xa->args->common.co_uuid);
+		}
+
+		if (rc != 0) {
+			xa->rc = rc;
+			return;
+		}
 
 		ABT_mutex_lock(*xa->open_mtx);
 		rc = vos_pool_close(poh);

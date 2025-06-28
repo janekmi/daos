@@ -100,3 +100,46 @@ fail:
 
 	return rc;
 }
+
+/**
+ * Just add the container's UUID to the provided list.
+ */
+static int
+cont_list_append(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	d_list_t                 *co_uuids = cb_arg;
+	struct co_uuid_list_elem *elm;
+
+	D_ALLOC_PTR(elm);
+	if (elm == NULL) {
+		return ENOMEM;
+	}
+
+	uuid_copy(elm->uuid, entry->ie_couuid);
+	d_list_add(&elm->link, co_uuids);
+
+	return 0;
+}
+
+int
+dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids)
+{
+	/** loop over containers */
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	param.ip_hdl        = poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list_append, NULL, co_uuids,
+			 NULL);
+
+	if (rc != 0) {
+		return rc;
+	}
+
+	return rc;
+}
