@@ -244,7 +244,7 @@ xstream_start_all(struct dlck_args *args, struct dlck_engine *engine)
 	/** start daos_sys_0 */
 	xs         = &engine->xss[engine->targets]; /** there is one more XS than targets */
 	xs->tgt_id = -1;
-	rc         = dlck_xstream_start(xs);
+	rc         = dlck_xstream_create(xs);
 	if (rc != 0) {
 		return rc;
 	}
@@ -260,7 +260,7 @@ xstream_start_all(struct dlck_args *args, struct dlck_engine *engine)
 	for (int i = 0; i < engine->targets; ++i) {
 		xs         = &engine->xss[i];
 		xs->tgt_id = i;
-		rc         = dlck_xstream_start(xs);
+		rc         = dlck_xstream_create(xs);
 		if (rc != 0) {
 			return rc;
 		}

@@ -55,7 +55,5 @@ dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *ar
 
 int
 dlck_xstream_create(struct dlck_xstream *xs);
-int
-dlck_xstream_start(struct dlck_xstream *xs);
 
 #endif /** __DLCK_ENGINE__ */
