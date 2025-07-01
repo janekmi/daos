@@ -18,7 +18,7 @@
 #include "dlck_engine.h"
 
 static int
-dlck_engine_alloc(struct dlck_args *args, struct dlck_engine **engine_ptr)
+dlck_engine_alloc(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
 
@@ -28,13 +28,13 @@ dlck_engine_alloc(struct dlck_args *args, struct dlck_engine **engine_ptr)
 	}
 
 	/** each of the targets will get its own xstream + 1 for daos_sys */
-	D_ALLOC_ARRAY(engine->xss, args->common.targets + 1);
+	D_ALLOC_ARRAY(engine->xss, args->targets + 1);
 	if (engine->xss == NULL) {
 		D_FREE(engine);
 		return ENOMEM;
 	}
 
-	engine->targets = args->common.targets;
+	engine->targets = args->targets;
 
 	*engine_ptr = engine;
 
@@ -62,7 +62,7 @@ dlck_register_dbtree_classes(void)
  * XXX should be shared with dss_sys_db_init().
  */
 static int
-dlck_sys_db_init(struct dlck_args *args)
+dlck_sys_db_init(struct dlck_args_engine *args)
 {
 	int   rc;
 	char *sys_db_path    = NULL;
@@ -71,12 +71,12 @@ dlck_sys_db_init(struct dlck_args *args)
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		goto db_init;
 
-	if (args->common.nvme_conf == NULL) {
+	if (args->nvme_conf == NULL) {
 		D_ERROR("nvme conf path not set\n");
 		return -DER_INVAL;
 	}
 
-	D_STRNDUP(nvme_conf_path, args->common.nvme_conf, PATH_MAX);
+	D_STRNDUP(nvme_conf_path, args->nvme_conf, PATH_MAX);
 	if (nvme_conf_path == NULL)
 		return -DER_NOMEM;
 	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
@@ -85,8 +85,7 @@ dlck_sys_db_init(struct dlck_args *args)
 		return -DER_NOMEM;
 
 db_init:
-	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path
-								: args->common.storage_path);
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : args->storage_path);
 	if (rc)
 		goto out;
 
@@ -235,7 +234,7 @@ extern struct dss_module_key vos_module_key;
  * XXX teardown missing
  */
 static int
-xstream_start_all(struct dlck_args *args, struct dlck_engine *engine)
+xstream_start_all(struct dlck_engine *engine)
 {
 	struct dlck_xstream *xs;
 	struct dlck_ult      daos_sys_init;
@@ -293,10 +292,9 @@ dlck_metrics_region_size(int num_tgts)
  * - clean up on fail before return
  */
 int
-dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
+dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine            *engine;
-	const struct dlck_args_common *argsc             = &args->common;
 	const bool                     bypass_health_chk = false;
 	int                            tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	const unsigned                 instance_idx      = 0;
@@ -322,7 +320,7 @@ dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
 	 */
 
 	/** XXX is it still necessary? */
-	rc = d_tm_init(instance_idx, dlck_metrics_region_size(argsc->targets), D_TM_SERVER_PROCESS);
+	rc = d_tm_init(instance_idx, dlck_metrics_region_size(args->targets), D_TM_SERVER_PROCESS);
 	if (rc != 0) {
 		return rc;
 	}
@@ -337,8 +335,8 @@ dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
 		return rc;
 	}
 
-	rc = bio_nvme_init(argsc->nvme_conf, argsc->numa_node, argsc->nvme_mem_size,
-			   argsc->nvme_hugepage_size, argsc->targets, bypass_health_chk);
+	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->nvme_mem_size,
+			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
 	if (rc != 0) {
 		return rc;
 	}
@@ -360,7 +358,7 @@ dlck_engine_start(struct dlck_args *args, struct dlck_engine **engine_ptr)
 		return rc;
 	}
 
-	rc = xstream_start_all(args, engine);
+	rc = xstream_start_all(engine);
 	if (rc != 0) {
 		return rc;
 	}
@@ -390,6 +388,69 @@ dlck_engine_stop(struct dlck_engine *engine)
 	if (rc != 0) {
 		return rc;
 	}
+
+	rc = ABT_mutex_free(&engine->open_mtx);
+	if (rc != 0) {
+		return rc;
+	}
+
+	return 0;
+}
+
+/**
+ * XXX error handling
+ */
+int
+dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
+		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn)
+{
+	struct dlck_ult *ults;
+	void           **ult_args;
+	int              rc;
+
+	D_ALLOC_ARRAY(ults, engine->targets);
+	if (ults == NULL) {
+		return ENOMEM;
+	}
+
+	D_ALLOC_ARRAY(ult_args, engine->targets);
+	if (ult_args == NULL) {
+		return ENOMEM;
+	}
+
+	for (int i = 0; i < engine->targets; ++i) {
+		/** prepare arguments */
+		rc = arg_alloc_fn(engine, i, input_arg, &ult_args[i]);
+		if (rc != 0) {
+			return rc;
+		}
+
+		/** start an ULT */
+		rc = dlck_ult_create(engine->xss[i].pool, exec_one, ult_args[i], &ults[i]);
+		if (rc != 0) {
+			return rc;
+		}
+	}
+
+	for (int i = 0; i < engine->targets; ++i) {
+		rc = ABT_thread_join(ults[i].thread);
+		if (rc != 0) {
+			return rc;
+		}
+
+		rc = ABT_thread_free(&ults[i].thread);
+		if (rc != 0) {
+			return rc;
+		}
+
+		rc = arg_free_fn(&ult_args[i]);
+		if (rc != 0) {
+			return rc;
+		}
+	}
+
+	D_FREE(ult_args);
+	D_FREE(ults);
 
 	return 0;
 }

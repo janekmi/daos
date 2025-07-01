@@ -92,8 +92,8 @@ process_pool(daos_handle_t poh)
 
 struct xstream_arg {
 	struct dlck_args    *args;
+	struct dlck_engine  *engine;
 	struct dlck_xstream *xs;
-	ABT_mutex           *open_mtx;
 	int                  rc;
 };
 
@@ -116,9 +116,9 @@ exec_one(void *arg)
 			continue;
 		}
 
-		ABT_mutex_lock(*xa->open_mtx);
-		rc = dlck_pool_open(xa->args->common.storage_path, file, xa->xs->tgt_id, &poh);
-		ABT_mutex_unlock(*xa->open_mtx);
+		ABT_mutex_lock(xa->engine->open_mtx);
+		rc = dlck_pool_open(xa->args->engine.storage_path, file, xa->xs->tgt_id, &poh);
+		ABT_mutex_unlock(xa->engine->open_mtx);
 		if (rc != 0) {
 			xa->rc = rc;
 			return;
@@ -135,13 +135,13 @@ exec_one(void *arg)
 			return;
 		}
 
-		ABT_mutex_lock(*xa->open_mtx);
+		ABT_mutex_lock(xa->engine->open_mtx);
 		rc = vos_pool_close(poh);
 		if (rc != 0) {
 			xa->rc = rc;
 			return;
 		}
-		ABT_mutex_unlock(*xa->open_mtx);
+		ABT_mutex_unlock(xa->engine->open_mtx);
 	}
 
 	rc = dlck_engine_xstream_fini(xa->xs);
@@ -149,70 +149,32 @@ exec_one(void *arg)
 		xa->rc = rc;
 		return;
 	}
-
-	return;
 }
 
-/**
- * XXX error handling
- */
 static int
-exec_all(struct dlck_args *args, struct dlck_engine *engine)
+arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 {
-	ABT_mutex           open_mtx;
-	struct dlck_ult    *ults;
-	struct xstream_arg *xargs;
 	struct xstream_arg *xa;
-	int                 rc;
 
-	rc = ABT_mutex_create(&open_mtx);
-	if (rc != 0) {
-		return rc;
-	}
-
-	D_ALLOC_ARRAY(ults, engine->targets);
-	if (ults == NULL) {
+	D_ALLOC_PTR(xa);
+	if (xa == NULL) {
 		return ENOMEM;
 	}
 
-	D_ALLOC_ARRAY(xargs, engine->targets);
-	if (xargs == NULL) {
-		return ENOMEM;
-	}
+	xa->args   = args;
+	xa->engine = engine;
+	xa->xs     = &engine->xss[idx];
 
-	for (int i = 0; i < engine->targets; ++i) {
-		/** prepare arguments */
-		xa           = &xargs[i];
-		xa->args     = args;
-		xa->xs       = &engine->xss[i];
-		xa->open_mtx = &open_mtx;
+	*output_arg = xa;
 
-		/** start an ULT */
-		rc = dlck_ult_create(engine->xss[i].pool, exec_one, xa, &ults[i]);
-		if (rc != 0) {
-			return rc;
-		}
-	}
+	return 0;
+}
 
-	for (int i = 0; i < engine->targets; ++i) {
-		rc = ABT_thread_join(ults[i].thread);
-		if (rc != 0) {
-			return rc;
-		}
-
-		rc = ABT_thread_free(&ults[i].thread);
-		if (rc != 0) {
-			return rc;
-		}
-	}
-
-	D_FREE(xargs);
-	D_FREE(ults);
-
-	rc = ABT_mutex_free(&open_mtx);
-	if (rc != 0) {
-		return rc;
-	}
+static int
+arg_free(void **arg)
+{
+	D_FREE(*arg);
+	*arg = NULL;
 
 	return 0;
 }
@@ -227,7 +189,7 @@ pool_mkdir_all(struct dlck_args *args, struct dlck_engine *engine)
 	int               rc;
 
 	d_list_for_each_entry(file, &args->common.files, link) {
-		rc = dlck_pool_mkdir(args->common.storage_path, file);
+		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
 		if (rc != 0) {
 			return rc;
 		}
@@ -245,7 +207,7 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	struct dlck_engine *engine = NULL;
 	int                 rc;
 
-	rc = dlck_engine_start(args, &engine);
+	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != 0) {
 		return rc;
 	}
@@ -255,7 +217,7 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 		return rc;
 	}
 
-	rc = exec_all(args, engine);
+	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, args, arg_free);
 	if (rc != 0) {
 		return rc;
 	}

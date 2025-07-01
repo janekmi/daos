@@ -9,11 +9,13 @@
 
 #include <daos_types.h>
 
+#include "dlck_args.h"
+
 /**
  * XXX
  */
 int
-dlck_pool_mkdir(const char *storage_path, struct dlck_file *file);
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid);
 
 /**
  * XXX

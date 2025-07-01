@@ -14,6 +14,9 @@
 
 #include "dlck_cmds.h"
 
+#define _STRINGIFY(x)                   #x
+#define STRINGIFY(x)                    _STRINGIFY(x)
+
 /** all short options */
 
 #define KEY_COMMON_WRITE_MODE           'w'
@@ -41,11 +44,7 @@ struct dlck_file {
 	int         targets;
 };
 
-struct dlck_args_common {
-	bool          write_mode; /** false by default (dry run) */
-	d_list_t      files;
-	uuid_t        co_uuid;
-	enum dlck_cmd cmd;
+struct dlck_args_engine {
 	unsigned      numa_node;
 	unsigned      nvme_mem_size;
 	unsigned      nvme_hugepage_size;
@@ -53,10 +52,35 @@ struct dlck_args_common {
 	char         *storage_path;
 	char         *nvme_conf;
 };
+struct dlck_args_common {
+	bool          write_mode; /** false by default (dry run) */
+	d_list_t      files;
+	uuid_t        co_uuid;
+	enum dlck_cmd cmd;
+};
 
 struct dlck_args {
 	struct dlck_args_common common;
+	struct dlck_args_engine engine;
 };
+
+/** helper definitions */
+
+#define OPT_HEADER(HEADER, GROUP) {0, 0, 0, 0, HEADER, GROUP}
+
+#define LIST_ENTRY(CMD, DESC)     {CMD, 0, 0, OPTION_DOC, DESC}
+
+#define FAIL(STATE, RC, ERRNUM, ...)                                                               \
+	do {                                                                                       \
+		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
+		RC = ERRNUM;                                                                       \
+	} while (0)
+
+#define RETURN_FAIL(STATE, ERRNUM, ...)                                                            \
+	do {                                                                                       \
+		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
+		return ERRNUM;                                                                     \
+	} while (0)
 
 /**
  * \brief Parse provided argc/argv, validate and write down into \p args state.
@@ -77,5 +101,11 @@ dlck_args_parse(int argc, char *argv[], struct dlck_args *args);
  */
 error_t
 parser_common(int key, char *arg, struct argp_state *state);
+
+int
+parse_unsigned(const char *arg, unsigned *value, struct argp_state *state);
+
+int
+parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr);
 
 #endif /** __DLCK_ARGS__ */

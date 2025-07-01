@@ -12,7 +12,9 @@ def scons():
 
     src = [
         'dlck_abt.c',
-        'dlck_args_parser.c',
+        'dlck_args_common.c',
+        'dlck_args_engine.c',
+        'dlck_args_parse.c',
         'dlck_args.c',
         'dlck_common.c',
         'dlck_dtx_act_recs_recover.c',
@@ -20,8 +22,6 @@ def scons():
         'dlck_main.c',
         'dlck_sched.c',
         'dlck_tls.c',
-        'dlck_ult.c',
-        'dlck_xstream.c',
         '../../mgmt/srv_util_simple.c',
     ]
 

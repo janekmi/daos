@@ -10,31 +10,25 @@
 #include <sys/types.h>
 #include <daos/mem.h>
 #include <daos/btree_class.h>
-#include <gurt/telemetry_producer.h>
 #include <daos_srv/vos.h>
-#include <daos_srv/dlck.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_version.h>
 
-#include <libpmemobj.h>
-
-#include "dlck_args.h"
-#include "dlck_engine.h"
 #include "dlck_common.h"
 
 int
 xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
 int
-dlck_pool_mkdir(const char *storage_path, struct dlck_file *file)
+dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
 {
-	char  po_uuid[UUID_STR_LEN];
+	char  po_uuid_str[UUID_STR_LEN];
 	char *path;
 	int   rc;
 
-	uuid_unparse(file->po_uuid, po_uuid);
+	uuid_unparse(po_uuid, po_uuid_str);
 
-	rc = asprintf(&path, "%s/%s/", storage_path, po_uuid);
+	rc = asprintf(&path, "%s/%s/", storage_path, po_uuid_str);
 	if (rc < 0) {
 		return rc;
 	}
