@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     tenv = env.Clone()
 
@@ -32,15 +32,25 @@ def scons():
     henv.Append(OBJPREFIX="dlck_ut_helper_")
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    libraries = ['vos', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx']
+    libraries = ['vos_srv', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx', 'abt']
+
+    prereqs.require(henv, 'argobots')
 
     henv.require('argobots')
-    helper_src = ['dlck_ut_helper.c',
-                  '../../../dtx/tests/sched_mock.c',
-                  '../../../dtx/tests/srv_mock.c',
-                  '../../../dtx/tests/pl_map_mock.c',
-                  '../../../dtx/tests/ult_mock.c',
-                  ]
+    helper_src = [
+        'dlck_ut_helper.c',
+        '../dlck_abt.c',
+        '../dlck_tls.c',
+        '../dlck_args_engine.c',
+        '../dlck_args_parse.c',
+        '../dlck_common.c',
+        '../dlck_engine.c',
+        '../../../dtx/tests/srv_mock.c',
+        '../../../dtx/tests/ult_mock.c',
+        '../../../dtx/tests/pl_map_mock.c',
+        '../../../dtx/tests/sched_mock.c',
+        '../../../mgmt/srv_util_simple.c',
+    ]
     helper = henv.d_test_program('dlck_ut_helper', helper_src, LIBS=libraries)
     henv.Install('$PREFIX/bin/', helper)
 

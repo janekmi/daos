@@ -17,8 +17,12 @@
 #include <daos/dtx.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
+#include <argp.h>
 
 #include "dlck_ut.h"
+#include "../dlck_args.h"
+#include "../dlck_engine.h"
+#include "../dlck_common.h"
 
 struct vos_test_ctx {
 	uuid_t        tc_po_uuid;
@@ -35,38 +39,19 @@ static const char Co_uuid_str[]   = "0faccb2b-d498-49d4-aeef-0668e929e919";
 static const char Dti1_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
 static const char Dti2_uuid_str[] = "525c6a15-8bc9-4918-a8fa-98b959ce6575";
 
-static void
-test_cleanup()
-{
-	int rc;
-
-	rc = unlink(POOL_PATH);
-	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
-	rc = rmdir(VOS_PATH "/" PO_UUID_STR);
-	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
-	rc = unlink(VOS_PATH "/daos_sys/sys_db");
-	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
-	rc = rmdir(VOS_PATH "/daos_sys");
-	assert_true(rc == 0 || (rc == -1 && errno == ENOENT));
-}
+struct xstream_arg {
+	struct dlck_args_engine *args;
+	struct dlck_engine      *engine;
+	struct dlck_xstream     *xs;
+	struct dlck_file        *file;
+	int                      rc;
+};
 
 static void
 test_setup(struct vos_test_ctx *tcx)
 {
-	daos_size_t psize     = VPOOL_SIZE;
-	daos_size_t meta_size = 0;
-	int         rc;
-
-	rc = uuid_parse(Po_uuid_str, tcx->tc_po_uuid);
-	assert_int_equal(rc, 0);
+	int rc;
 	rc = uuid_parse(Co_uuid_str, tcx->tc_co_uuid);
-	assert_int_equal(rc, 0);
-
-	rc = mkdir(VOS_PATH "/" PO_UUID_STR, 0777);
-	assert_int_equal(rc, 0);
-
-	rc = vos_pool_create(POOL_PATH, tcx->tc_po_uuid, psize, psize, meta_size, 0 /* flags */,
-			     0 /* version */, &tcx->tc_po_hdl);
 	assert_int_equal(rc, 0);
 
 	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
@@ -148,7 +133,7 @@ iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 }
 
 static void
-run_all_tests(void)
+run_all_tests(daos_handle_t poh)
 {
 	daos_unit_oid_t     oid      = {0};
 	uint64_t            dkey_buf = 1;
@@ -161,6 +146,8 @@ run_all_tests(void)
 	int                 rc;
 
 	struct vos_test_ctx tcx;
+
+	tcx.tc_po_hdl = poh;
 
 	/** prepare a container */
 	test_setup(&tcx);
@@ -201,38 +188,114 @@ run_all_tests(void)
 }
 
 extern struct dss_module dtx_module;
+extern struct argp       argp_engine;
+
+static void
+exec_one(void *arg)
+{
+	struct xstream_arg *xa = arg;
+	daos_handle_t       poh;
+	int rc;
+
+	if (xa->xs->tgt_id != 0) {
+		return;
+	}
+
+	rc = dlck_engine_xstream_init(xa->xs);
+	if (rc != 0) {
+		xa->rc = rc;
+		return;
+	}
+
+	ABT_mutex_lock(xa->engine->open_mtx);
+	rc = dlck_pool_open(xa->args->storage_path, xa->file, xa->xs->tgt_id, &poh);
+	ABT_mutex_unlock(xa->engine->open_mtx);
+	if (rc != 0) {
+		xa->rc = rc;
+		return;
+	}
+
+	run_all_tests(poh);
+
+	ABT_mutex_lock(xa->engine->open_mtx);
+	rc = vos_pool_close(poh);
+	if (rc != 0) {
+		xa->rc = rc;
+		return;
+	}
+	ABT_mutex_unlock(xa->engine->open_mtx);
+
+	rc = dlck_engine_xstream_fini(xa->xs);
+	if (rc != 0) {
+		xa->rc = rc;
+		return;
+	}
+}
+
+static int
+arg_alloc(struct dlck_engine *engine, int idx, void *input_arg, void **output_arg)
+{
+	struct xstream_arg *input_xa = input_arg;
+	struct xstream_arg *xa;
+
+	D_ALLOC_PTR(xa);
+	if (xa == NULL) {
+		return ENOMEM;
+	}
+
+	xa->args   = input_xa->args;
+	xa->engine = engine;
+	xa->xs     = &engine->xss[idx];
+	xa->file   = input_xa->file;
+
+	*output_arg = xa;
+
+	return 0;
+}
+
+static int
+arg_free(void **arg)
+{
+	D_FREE(*arg);
+	*arg = NULL;
+
+	return 0;
+}
 
 int
 main(int argc, char **argv)
 {
-	int rc;
+	struct dlck_args_engine args   = {0};
+	struct dlck_engine     *engine = NULL;
+	struct xstream_arg      xa     = {0};
+	int                     rc;
 
-	d_register_alt_assert(mock_assert);
+	argp_parse(&argp_engine, argc, argv, 0, 0, &args);
 
-	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
-		print_error("Error initializing debug system\n");
+	xa.args = &args;
+
+	rc = parse_file(Po_uuid_str, NULL, &xa.file);
+	assert_int_equal(rc, 0);
+
+	rc = dlck_pool_mkdir(args.storage_path, xa.file->po_uuid);
+	assert_int_equal(rc, 0);
+
+	rc = dlck_engine_start(&args, &engine);
+	if (rc != 0) {
 		return rc;
-	}
-
-	test_cleanup();
-
-	rc = vos_self_init(VOS_PATH, true, BIO_STANDALONE_TGT_ID);
-	if (rc) {
-		print_error("Error initializing VOS instance\n");
-		goto exit_0;
 	}
 
 	daos_register_key(dtx_module.sm_key);
 
-	(void)dss_tls_init(DAOS_TGT_TAG, 0, BIO_STANDALONE_TGT_ID);
+	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, &xa, arg_free);
+	if (rc != 0) {
+		return rc;
+	}
 
-	run_all_tests();
-
-	vos_self_fini();
-
-exit_0:
-	daos_debug_fini();
+	rc = dlck_engine_stop(engine);
+	if (rc != 0) {
+		return rc;
+	}
 
 	return 0;
 }
