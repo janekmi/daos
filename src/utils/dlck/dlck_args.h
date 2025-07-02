@@ -52,6 +52,7 @@ struct dlck_args_engine {
 	char         *storage_path;
 	char         *nvme_conf;
 };
+
 struct dlck_args_common {
 	bool          write_mode; /** false by default (dry run) */
 	d_list_t      files;

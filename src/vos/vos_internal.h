@@ -720,7 +720,7 @@ struct vos_iterator;
  * \retval -DER_*	Error when ilog_fetch fails.
  */
 int
-dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_array *da);
+dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /**
  * Find active ILOG entries of the provided (d/a)key and write them down in \p dda.
@@ -733,7 +733,7 @@ dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_ar
  * \retval -DER_*	Error when ilog_fetch fails.
  */
 int
-dlck_irec_get_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_array *da);
+dlck_irec_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /**
  * DTX table destroy
@@ -1553,7 +1553,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
  * \retval 0		Success (XXX void?)
  */
 int
-dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, struct dlck_array *da);
+dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv);
 
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator

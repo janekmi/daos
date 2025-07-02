@@ -26,6 +26,19 @@ def scons():
     dlck_ut = tenv.d_test_program('dlck_ut', dlck_ut_src + vos_src, LIBS=libraries)
     tenv.Install('$PREFIX/bin/', dlck_ut)
 
+    # build d_vector unit test
+
+    venv = env.Clone()
+
+    venv.Append(OBJPREFIX="dlck_d_vector_ut_")
+    
+    libraries = ['cmocka', 'gurt', 'daos_common_pmem']
+
+    dlck_d_vector_ut_src = ['dlck_d_vector_ut.c']
+
+    dlck_d_vector_ut = venv.d_test_program('dlck_d_vector_ut', dlck_d_vector_ut_src, LIBS=libraries)
+    venv.Install('$PREFIX/bin/', dlck_d_vector_ut)
+
     # build and install the ut helper
     henv = env.Clone()
 

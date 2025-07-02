@@ -382,6 +382,6 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
  * \retval -DER_*	Error when ilog_fetch fails.
  */
 int
-dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, struct dlck_array *da);
+dlck_ilog_get_active(daos_handle_t coh, struct ilog_df *root_df, d_vector_t *dv);
 
 #endif /* __VOS_ILOG_H__ */

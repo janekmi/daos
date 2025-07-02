@@ -35,10 +35,10 @@ process_cont(daos_handle_t poh, uuid_t co_uuid)
 		return rc;
 	}
 
-	struct dlck_array da = {0};
-	dlck_array_init(sizeof(struct dlck_dtx_rec), 10, &da);
+	d_vector_t dv;
+	d_vector_init(sizeof(struct dlck_dtx_rec), &dv);
 
-	rc = dlck_vos_cont_rec_get_active(coh, &da, NULL);
+	rc = dlck_vos_cont_rec_get_active(coh, &dv, NULL);
 	if (rc != 0) {
 		return rc;
 	}
@@ -48,12 +48,12 @@ process_cont(daos_handle_t poh, uuid_t co_uuid)
 		return rc;
 	}
 
-	rc = dlck_dtx_act_recs_set(coh, &da);
+	rc = dlck_dtx_act_recs_set(coh, &dv);
 	if (rc != 0) {
 		return rc;
 	}
 
-	dlck_array_free(&da);
+	d_vector_free(&dv);
 
 	rc = vos_cont_close(coh);
 	if (rc != 0) {
