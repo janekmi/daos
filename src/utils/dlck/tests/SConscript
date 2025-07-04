@@ -55,6 +55,7 @@ def scons():
         '../dlck_abt.c',
         '../dlck_tls.c',
         '../dlck_args_engine.c',
+        '../dlck_args_files.c',
         '../dlck_args_parse.c',
         '../dlck_common.c',
         '../dlck_engine.c',
