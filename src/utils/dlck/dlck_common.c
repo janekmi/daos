@@ -79,9 +79,11 @@ dlck_pool_open(const char *storage_path, struct dlck_file *file, int tgt_id, dao
 		goto fail;
 	}
 
-	rc = dlck_recreate(path, file->po_uuid);
-	if (rc != 0) {
-		goto fail;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = dlck_recreate(path, file->po_uuid);
+		if (rc != 0) {
+			goto fail;
+		}
 	}
 
 	rc = vos_pool_open(path, file->po_uuid, flags, poh);

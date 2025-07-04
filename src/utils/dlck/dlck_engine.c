@@ -208,6 +208,10 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs)
 {
 	int rc;
 
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		return 0;
+	}
+
 	rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
 	if (rc != 0) {
 		return rc;
@@ -374,19 +378,21 @@ dlck_engine_stop(struct dlck_engine *engine)
 	struct dlck_xstream *xs = &engine->xss[engine->targets];
 	int                  rc;
 
-	rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
-	if (rc != 0) {
-		return rc;
-	}
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
+		if (rc != 0) {
+			return rc;
+		}
 
-	rc = ABT_thread_join(xs->nvme_poll.thread);
-	if (rc != 0) {
-		return rc;
-	}
+		rc = ABT_thread_join(xs->nvme_poll.thread);
+		if (rc != 0) {
+			return rc;
+		}
 
-	rc = ABT_thread_free(&xs->nvme_poll.thread);
-	if (rc != 0) {
-		return rc;
+		rc = ABT_thread_free(&xs->nvme_poll.thread);
+		if (rc != 0) {
+			return rc;
+		}
 	}
 
 	rc = ABT_mutex_free(&engine->open_mtx);
