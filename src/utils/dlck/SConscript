@@ -8,7 +8,7 @@ def scons():
     denv = env.Clone()
     denv.Append(OBJPREFIX="dlck_")
 
-    libs = ['vos_srv', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt']
+    libs = ['vos_srv', 'daos_common_pmem', 'bio', 'uuid', 'gurt', 'pmemobj', 'abt', 'pthread']
 
     src = [
         'dlck_abt.c',
