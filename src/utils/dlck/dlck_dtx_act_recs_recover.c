@@ -111,7 +111,7 @@ exec_one(void *arg)
 		return;
 	}
 
-	d_list_for_each_entry(file, &xa->args->common.files, link) {
+	d_list_for_each_entry(file, &xa->args->files.list, link) {
 		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
 			continue;
 		}
@@ -124,10 +124,10 @@ exec_one(void *arg)
 			return;
 		}
 
-		if (uuid_is_null(xa->args->common.co_uuid)) {
+		if (uuid_is_null(xa->args->files.co_uuid)) {
 			rc = process_pool(poh);
 		} else {
-			rc = process_cont(poh, xa->args->common.co_uuid);
+			rc = process_cont(poh, xa->args->files.co_uuid);
 		}
 
 		if (rc != 0) {
@@ -173,10 +173,13 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 static int
 arg_free(void **arg)
 {
+	struct xstream_arg *xa = *arg;
+	int                 rc = xa->rc;
+
 	D_FREE(*arg);
 	*arg = NULL;
 
-	return 0;
+	return rc;
 }
 
 /**
@@ -188,7 +191,7 @@ pool_mkdir_all(struct dlck_args *args, struct dlck_engine *engine)
 	struct dlck_file *file;
 	int               rc;
 
-	d_list_for_each_entry(file, &args->common.files, link) {
+	d_list_for_each_entry(file, &args->files.list, link) {
 		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
 		if (rc != 0) {
 			return rc;

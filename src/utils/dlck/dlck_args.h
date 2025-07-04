@@ -17,6 +17,9 @@
 #define _STRINGIFY(x)                   #x
 #define STRINGIFY(x)                    _STRINGIFY(x)
 
+#define GROUP_OPTIONS                   1
+#define GROUP_AVAILABLE_CMDS            2
+
 /** all short options */
 
 #define KEY_COMMON_WRITE_MODE           'w'
@@ -53,15 +56,19 @@ struct dlck_args_engine {
 	char         *nvme_conf;
 };
 
+struct dlck_args_files {
+	d_list_t list;
+	uuid_t   co_uuid;
+};
+
 struct dlck_args_common {
 	bool          write_mode; /** false by default (dry run) */
-	d_list_t      files;
-	uuid_t        co_uuid;
 	enum dlck_cmd cmd;
 };
 
 struct dlck_args {
 	struct dlck_args_common common;
+	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
 };
 

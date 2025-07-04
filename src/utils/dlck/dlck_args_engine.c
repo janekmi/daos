@@ -15,7 +15,7 @@
 
 static struct argp_option engine_options[] = {
     {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0,
-     "Bind to cores within the specified NUMA node."},
+     "Bind to cores within the specified NUMA node.", GROUP_OPTIONS},
     {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0,
      "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
     {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, "N", 0,

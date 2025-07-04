@@ -39,14 +39,13 @@ static struct argp_option _automagic[] = {OPT_HEADER("Other options:", GROUP_AUT
 /** glue everything together */
 
 extern struct argp        argp_common;
+extern struct argp        argp_file;
 extern struct argp        argp_engine;
 
 static struct argp        automagic = {_automagic, NULL};
 
-static struct argp_child  children[] = {{&argp_common, 0, "Options", 1},
-					{&argp_engine, 0, "Engine options:", 2},
-					{&automagic, 0, 0, 0},
-					{0}};
+static struct argp_child  children[] = {
+    {&argp_common}, {&argp_file}, {&argp_engine}, {&automagic}, {0}};
 
 error_t
 parser(int key, char *arg, struct argp_state *state)
@@ -57,7 +56,8 @@ parser(int key, char *arg, struct argp_state *state)
 	switch (key) {
 	case ARGP_KEY_INIT:
 		state->child_inputs[0] = &args->common;
-		state->child_inputs[1] = &args->engine;
+		state->child_inputs[1] = &args->files;
+		state->child_inputs[2] = &args->engine;
 		break;
 	}
 
