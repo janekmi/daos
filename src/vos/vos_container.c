@@ -1055,7 +1055,7 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 	case VOS_ITER_SINGLE:
 		return dlck_sv_add_if_active(coh, iter, dv);
 	case VOS_ITER_RECX:
-		return -DER_NOTSUPPORTED;
+		return dlck_ev_add_if_active(coh, iter, dv);
 	default:
 		return 0; /** skip */
 	}
