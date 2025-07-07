@@ -6,6 +6,7 @@ on:
     branches:
       - master
       - 'release/*'
+      - janekmi/DAOS-17569-DLCK-DAE-records-recover*
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
