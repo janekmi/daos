@@ -3,10 +3,9 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     # build the unit test
-
     tenv = env.Clone()
 
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
@@ -14,12 +13,12 @@ def scons():
     tenv.Append(OBJPREFIX="dlck_ut_")
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DVOS_STANDALONE', '-DDLCK_ENABLED'])
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=gc_init_cont'])
+    tenv.require('argobots', 'cmocka', 'pmdk')
+
 
     libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'abt', 'vea', 'pthread']
 
-    tenv.require('argobots')
     vos_src = Glob('../../../vos/*.c')
     dlck_ut_src = ['dlck_ut.c', 'vos_gc_mocks.c',
                    '../../../dtx/tests/sched_mock.c',
@@ -29,10 +28,10 @@ def scons():
     tenv.Install('$PREFIX/bin/', dlck_ut)
 
     # build d_vector unit test
-
     venv = env.Clone()
 
     venv.Append(OBJPREFIX="dlck_d_vector_ut_")
+    venv.require('cmocka', 'pmdk')
 
     libraries = ['cmocka', 'gurt', 'daos_common_pmem']
 
@@ -46,14 +45,12 @@ def scons():
 
     henv.Append(OBJPREFIX="dlck_ut_helper_")
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    henv.require('argobots', 'cmocka')
 
     libraries = [
         'vos_srv', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx', 'abt', 'pthread'
     ]
 
-    prereqs.require(henv, 'argobots')
-
-    henv.require('argobots')
     helper_src = [
         'dlck_ut_helper.c',
         '../dlck_abt.c',

@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
     denv.Append(OBJPREFIX="dlck_")
@@ -30,11 +30,10 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
-
-    prereqs.require(denv, 'argobots', 'pmdk')
+    denv.require('argobots', 'pmdk')
 
     dlck = denv.d_program('dlck', src, LIBS=libs)
-    env.Install('$PREFIX/bin', dlck)
+    denv.Install('$PREFIX/bin', dlck)
 
     # build tests
     SConscript('tests/SConscript')
