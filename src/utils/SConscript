@@ -13,6 +13,9 @@ def scons():
         # Build ddb
         SConscript('ddb/SConscript')
 
+        # Build dlck
+        SConscript('dlck/SConscript')
+
     if not prereqs.client_requested():
         return
 
@@ -31,9 +34,6 @@ def scons():
 
     # Build cart_ctl
     SConscript('ctl/SConscript')
-
-    # Build dlck
-    SConscript('dlck/SConscript')
 
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
