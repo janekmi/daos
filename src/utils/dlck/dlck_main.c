@@ -25,6 +25,8 @@ main(int argc, char *argv[])
 	D_ASSERT(args.common.cmd >= 0);
 	D_ASSERT(args.common.cmd < ARRAY_SIZE(dlck_cmds));
 
+	args.out.printf = printf;
+
 	rc = dlck_cmds[args.common.cmd](&args);
 
 	return rc;

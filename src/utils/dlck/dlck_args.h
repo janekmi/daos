@@ -66,10 +66,15 @@ struct dlck_args_common {
 	enum dlck_cmd cmd;
 };
 
+struct dlck_args_out {
+	int (*printf)(const char *fmt, ...);
+};
+
 struct dlck_args {
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
+	struct dlck_args_out    out;
 };
 
 /** helper definitions */
@@ -121,5 +126,12 @@ parse_unsigned(const char *arg, unsigned *value, struct argp_state *state);
 
 int
 parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr);
+
+enum dlck_cmd
+parse_command(const char *arg);
+
+#define DLCK_PRINT(args, fmt)       args->out.printf(fmt)
+
+#define DLCK_PRINTF(args, fmt, ...) args->out.printf(fmt, __VA_ARGS__)
 
 #endif /** __DLCK_ARGS__ */

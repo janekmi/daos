@@ -20,12 +20,8 @@
 #include "dlck_engine.h"
 #include "dlck_common.h"
 
-// const char pool_uuid[] = "3676cebe-bc38-4add-b2a6-bc2025f7e277";
-// const char pool2_uuid[] = "07e9e5fb-4388-4e81-9d07-cdd139899739";
-// const char cont2_uuid[] = "001a010c-4b51-4855-a5cb-fbf582b37000";
-
 static int
-process_cont(daos_handle_t poh, uuid_t co_uuid)
+process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
 {
 	daos_handle_t coh;
 	int           rc;
@@ -43,14 +39,16 @@ process_cont(daos_handle_t poh, uuid_t co_uuid)
 		return rc;
 	}
 
-	rc = dlck_dtx_act_recs_remove(coh);
-	if (rc != 0) {
-		return rc;
-	}
+	if (write_mode) {
+		rc = dlck_dtx_act_recs_remove(coh);
+		if (rc != 0) {
+			return rc;
+		}
 
-	rc = dlck_dtx_act_recs_set(coh, &dv);
-	if (rc != 0) {
-		return rc;
+		rc = dlck_dtx_act_recs_set(coh, &dv);
+		if (rc != 0) {
+			return rc;
+		}
 	}
 
 	d_vector_free(&dv);
@@ -64,7 +62,7 @@ process_cont(daos_handle_t poh, uuid_t co_uuid)
 }
 
 static int
-process_pool(daos_handle_t poh)
+process_pool(daos_handle_t poh, bool write_mode)
 {
 	d_list_t                  co_uuids = D_LIST_HEAD_INIT(co_uuids);
 	struct co_uuid_list_elem *elm, *next;
@@ -76,7 +74,7 @@ process_pool(daos_handle_t poh)
 	}
 
 	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
-		rc = process_cont(poh, elm->uuid);
+		rc = process_cont(poh, elm->uuid, write_mode);
 		if (rc != 0) {
 			return rc;
 		}
@@ -101,6 +99,7 @@ static void
 exec_one(void *arg)
 {
 	struct xstream_arg *xa = arg;
+	const bool          write_mode = xa->args->common.write_mode;
 	struct dlck_file   *file;
 	daos_handle_t       poh;
 	int                 rc;
@@ -125,9 +124,9 @@ exec_one(void *arg)
 		}
 
 		if (uuid_is_null(xa->args->files.co_uuid)) {
-			rc = process_pool(poh);
+			rc = process_pool(poh, write_mode);
 		} else {
-			rc = process_cont(poh, xa->args->files.co_uuid);
+			rc = process_cont(poh, xa->args->files.co_uuid, write_mode);
 		}
 
 		if (rc != 0) {
@@ -209,6 +208,10 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 {
 	struct dlck_engine *engine = NULL;
 	int                 rc;
+
+	if (!args->common.write_mode) {
+		DLCK_PRINT(args, "Write mode is not enabled. Changes won't be applied.");
+	}
 
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != 0) {

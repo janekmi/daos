@@ -13,8 +13,9 @@
 
 #include "dlck_args.h"
 
-static struct argp_option common_options[] = {
+static struct argp_option args_common_options[] = {
     OPT_HEADER("Options:", GROUP_OPTIONS),
+    /** entries below inherits the group number of the header entry */
     {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
     {"cmd", KEY_COMMON_CMD, "CMD", 0, "Command (Required). Please see available commands below."},
     OPT_HEADER("Available commands:", GROUP_AVAILABLE_CMDS),
@@ -23,7 +24,7 @@ static struct argp_option common_options[] = {
     {0}};
 
 static void
-args_init(struct dlck_args_common *args)
+args_common_init(struct dlck_args_common *args)
 {
 	memset(args, 0, sizeof(struct dlck_args));
 	/** set defaults */
@@ -32,7 +33,7 @@ args_init(struct dlck_args_common *args)
 }
 
 static int
-args_check(struct argp_state *state, struct dlck_args_common *args)
+args_common_check(struct argp_state *state, struct dlck_args_common *args)
 {
 	if (args->cmd == DLCK_CMD_NOT_SET) {
 		RETURN_FAIL(state, EINVAL, "Command not set");
@@ -40,18 +41,8 @@ args_check(struct argp_state *state, struct dlck_args_common *args)
 	return 0;
 }
 
-static enum dlck_cmd
-parse_command(const char *arg)
-{
-	if (strcmp(arg, DLCK_CMD_DTX_ACT_RECOVER_STR) == 0) {
-		return DLCK_CMD_DTX_ACT_RECOVER;
-	}
-
-	return DLCK_CMD_UNKNOWN;
-}
-
-error_t
-parser_common(int key, char *arg, struct argp_state *state)
+static error_t
+args_common_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_common *args = state->input;
 	int                      rc   = 0;
@@ -59,10 +50,10 @@ parser_common(int key, char *arg, struct argp_state *state)
 	/** state changes */
 	switch (key) {
 	case ARGP_KEY_INIT:
-		args_init(args);
+		args_common_init(args);
 		return 0;
 	case ARGP_KEY_END:
-		return args_check(state, args);
+		return args_common_check(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;
@@ -86,4 +77,4 @@ parser_common(int key, char *arg, struct argp_state *state)
 	return rc;
 }
 
-struct argp argp_common = {common_options, parser_common, NULL, NULL, NULL};
+struct argp argp_common = {args_common_options, args_common_parser, NULL, NULL, NULL};
