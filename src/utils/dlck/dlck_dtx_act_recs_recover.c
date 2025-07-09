@@ -116,7 +116,8 @@ exec_one(void *arg)
 		}
 
 		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = dlck_pool_open(xa->args->engine.storage_path, file, xa->xs->tgt_id, &poh);
+		rc = dlck_pool_open(xa->args->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
+				    &poh);
 		ABT_mutex_unlock(xa->engine->open_mtx);
 		if (rc != 0) {
 			xa->rc = rc;
