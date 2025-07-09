@@ -43,19 +43,43 @@ dlck_engine_xstream_init(struct dlck_xstream *xs);
 int
 dlck_engine_xstream_fini(struct dlck_xstream *xs);
 
-int
-dlck_abt_attr_default_create(ABT_thread_attr *attr);
+/** dlck_abt.c */
+
+/**
+ * Initialize ABT as it is about to be used by the \p engine.
+ *
+ * \param[out]	engine	Engine for which ABT is initialized for.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 int
 dlck_abt_init(struct dlck_engine *engine);
 
-int
-dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
-int
-dlck_ult_create_on_xstream(struct dlck_xstream *xs, dlck_ult_func func, void *arg,
-			   struct dlck_ult *ult);
-
+/**
+ * Just create an ABT execution stream.
+ *
+ * \param[out]	xs	Where the created execution stream will be stored.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 int
 dlck_xstream_create(struct dlck_xstream *xs);
+
+/**
+ * Create an ABT thread (ULT).
+ *
+ * \param[in]	pool	Pool to put the created ULT in.
+ * \param[in]	func	Function to start on the created ULT.
+ * \param[in]	arg	Argument pointer for the function.
+ * \param[out]	ult	Created ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
 
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *input_arg,
 			      void **output_arg);
