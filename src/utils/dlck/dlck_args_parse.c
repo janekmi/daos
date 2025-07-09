@@ -4,12 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(dlck)
-
-#include <daos_errno.h>
-#include <daos/debug.h>
-#include <daos_version.h>
+#include <string.h>
 #include <argp.h>
+#include <daos/common.h>
 
 #include "dlck_args.h"
 
@@ -26,7 +23,7 @@ parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
 	}
 
 	if (ret == ULONG_MAX || ret > UINT_MAX) {
-		RETURN_FAIL(state, EINVAL, "Unsigned overflow: %s", arg);
+		RETURN_FAIL(state, EOVERFLOW, "Unsigned overflow: %s", arg);
 	}
 
 	*value = ret;
@@ -35,6 +32,7 @@ parse_unsigned(const char *arg, unsigned *value, struct argp_state *state)
 }
 
 #define FILE_SEPARATOR ","
+#define FILE_STR_MAX   (UUID_STR_LEN + 10) /** uuid + separator + generous/reasonable number */
 
 int
 parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr)
@@ -48,12 +46,12 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 
 	D_ALLOC_PTR(file);
 	if (file == NULL) {
-		RETURN_FAIL(state, ENOMEM, "Cannot append more files");
+		RETURN_FAIL(state, ENOMEM, "Out of memory");
 	}
 
 	file->desc = arg;
 
-	D_STRNDUP(arg_copy, arg, 1024);
+	D_STRNDUP(arg_copy, arg, FILE_STR_MAX);
 	if (arg_copy == NULL) {
 		FAIL(state, rc, ENOMEM, "Out of memory");
 		goto free_file;
@@ -67,6 +65,7 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 	rc = uuid_parse(token, file->po_uuid);
 	if (rc != 0) {
 		FAIL(state, rc, EINVAL, "Malformed uuid: %s", arg);
+		goto fail;
 	}
 
 	while ((token = strtok_r(NULL, FILE_SEPARATOR, &saveptr))) {

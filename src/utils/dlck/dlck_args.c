@@ -6,10 +6,11 @@
 
 #define D_LOGFAC DD_FAC(dlck)
 
+#include <stdlib.h>
+#include <argp.h>
 #include <daos_errno.h>
 #include <daos/debug.h>
 #include <daos_version.h>
-#include <argp.h>
 
 #include "dlck_args.h"
 
@@ -20,14 +21,6 @@
 	"." STRINGIFY(DAOS_VERSION_MINOR) "." STRINGIFY(DAOS_VERSION_FIX)
 
 const char *argp_program_version = "dlck " DAOS_VERSION_STR;
-
-/** documentation groups */
-
-#define GROUP_COMMON         1
-#define GROUP_AVAILABLE_CMDS 2
-#define GROUP_AUTOMAGIC      (-1) /** yes, -1 is the last group */
-
-/** complete help list (in order) */
 
 /** XXX provide more details here. */
 static char               doc[] = "\nDAOS Local Consistency Checker (dlck)";
@@ -55,6 +48,7 @@ parser(int key, char *arg, struct argp_state *state)
 	/** state changes */
 	switch (key) {
 	case ARGP_KEY_INIT:
+		/** the following has to match the order of the children parsers */
 		state->child_inputs[0] = &args->common;
 		state->child_inputs[1] = &args->files;
 		state->child_inputs[2] = &args->engine;
@@ -65,8 +59,6 @@ parser(int key, char *arg, struct argp_state *state)
 }
 
 static struct argp argp = {empty_options, parser, NULL /** usage */, doc, children};
-
-/** entry point */
 
 void
 dlck_args_parse(int argc, char *argv[], struct dlck_args *args)

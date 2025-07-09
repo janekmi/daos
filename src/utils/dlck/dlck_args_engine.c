@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(dlck)
-
-#include <daos_errno.h>
-#include <daos/debug.h>
-#include <daos_version.h>
+#include <string.h>
+#include <stdbool.h>
 #include <argp.h>
 
 #include "dlck_args.h"
@@ -52,10 +49,10 @@ args_engine_parser(int key, char *arg, struct argp_state *state)
 	/** state changes */
 	switch (key) {
 	case ARGP_KEY_INIT:
-		args_init(args);
+		args_engine_init(args);
 		return 0;
 	case ARGP_KEY_END:
-		return args_check(state, args);
+		return args_engine_check(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;

@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(dlck)
-
-#include <daos_errno.h>
-#include <daos/debug.h>
-#include <daos_version.h>
+#include <string.h>
+#include <uuid/uuid.h>
 #include <argp.h>
+
+#include <gurt/list.h>
 
 #include "dlck_args.h"
 
