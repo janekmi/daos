@@ -13,10 +13,10 @@
 #include <daos/common.h>
 
 int
-xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
+mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
 int
-xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size)
+mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size)
 {
 	int fd;
 	int rc;

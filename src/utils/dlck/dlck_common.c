@@ -17,7 +17,7 @@
 #include "dlck_common.h"
 
 int
-xxx_vos_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
+mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);
 
 int
 dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
@@ -53,7 +53,7 @@ dlck_recreate(const char *path, uuid_t uuid)
 		return rc;
 	}
 
-	rc = xxx_vos_preallocate(path, uuid, pool_info->spi_scm_sz);
+	rc = mgmt_file_preallocate(path, uuid, pool_info->spi_scm_sz);
 	if (rc != 0) {
 		goto out;
 	}

@@ -23,7 +23,7 @@ def scons():
         'dlck_main.c',
         'dlck_sched.c',
         'dlck_tls.c',
-        '../../mgmt/srv_util_simple.c',
+        '../../mgmt/srv_util_file.c',
     ]
 
     # Add runtime paths for daos libraries

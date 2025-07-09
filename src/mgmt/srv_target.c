@@ -764,7 +764,7 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
 		scm_size);
 
-	rc = xxx_vos_preallocate(path, uuid, scm_size);
+	rc = mgmt_file_preallocate(path, uuid, scm_size);
 
 	D_FREE(path);
 	return rc;
