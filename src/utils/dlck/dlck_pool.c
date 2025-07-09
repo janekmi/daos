@@ -14,7 +14,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_version.h>
 
-#include "dlck_common.h"
+#include "dlck_pool.h"
 
 int
 mgmt_file_preallocate(const char *path, uuid_t uuid, daos_size_t scm_size);

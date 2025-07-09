@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#ifndef __DLCK_COMMON__
-#define __DLCK_COMMON__
+#ifndef __DLCK_POOL__
+#define __DLCK_POOL__
 
 #include <daos_types.h>
 
@@ -66,4 +66,4 @@ struct co_uuid_list_elem {
 int
 dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids);
 
-#endif /** __DLCK_COMMON__ */
+#endif /** __DLCK_POOL__ */

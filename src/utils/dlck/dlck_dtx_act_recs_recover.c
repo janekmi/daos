@@ -18,7 +18,7 @@
 
 #include "dlck_args.h"
 #include "dlck_engine.h"
-#include "dlck_common.h"
+#include "dlck_pool.h"
 
 static int
 process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
