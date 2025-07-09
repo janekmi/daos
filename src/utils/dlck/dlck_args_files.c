@@ -13,7 +13,7 @@
 
 #include "dlck_args.h"
 
-static struct argp_option file_options[] = {
+static struct argp_option args_files_options[] = {
     {"file", KEY_COMMON_FILE, "UUID,TARGET", 0,
      "Pool UUID and set of targets. Can be used more than once.", GROUP_OPTIONS},
     {"co_uuid", KEY_COMMON_CO_UUID, "UUID", 0,
@@ -21,7 +21,7 @@ static struct argp_option file_options[] = {
     {0}};
 
 static void
-args_init(struct dlck_args_files *args)
+args_files_init(struct dlck_args_files *args)
 {
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
@@ -30,7 +30,7 @@ args_init(struct dlck_args_files *args)
 }
 
 static int
-args_check(struct argp_state *state, struct dlck_args_files *args)
+args_files_check(struct argp_state *state, struct dlck_args_files *args)
 {
 	if (d_list_empty(&args->list)) {
 		RETURN_FAIL(state, EINVAL, "No file chosen");
@@ -39,7 +39,7 @@ args_check(struct argp_state *state, struct dlck_args_files *args)
 }
 
 static error_t
-parser_file(int key, char *arg, struct argp_state *state)
+args_files_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_files *args = state->input;
 	struct dlck_file       *file;
@@ -49,10 +49,10 @@ parser_file(int key, char *arg, struct argp_state *state)
 	/** state changes */
 	switch (key) {
 	case ARGP_KEY_INIT:
-		args_init(args);
+		args_files_init(args);
 		return 0;
 	case ARGP_KEY_END:
-		return args_check(state, args);
+		return args_files_check(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;
@@ -80,4 +80,4 @@ parser_file(int key, char *arg, struct argp_state *state)
 	return rc;
 }
 
-struct argp argp_file = {file_options, parser_file, NULL, NULL, NULL};
+struct argp argp_file = {args_files_options, args_files_parser, NULL, NULL, NULL};
