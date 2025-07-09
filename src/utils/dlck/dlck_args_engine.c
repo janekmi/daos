@@ -13,7 +13,7 @@
 
 #include "dlck_args.h"
 
-static struct argp_option engine_options[] = {
+static struct argp_option args_engine_options[] = {
     {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0,
      "Bind to cores within the specified NUMA node.", GROUP_OPTIONS},
     {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0,
@@ -28,7 +28,7 @@ static struct argp_option engine_options[] = {
     {0}};
 
 static void
-args_init(struct dlck_args_engine *args)
+args_engine_init(struct dlck_args_engine *args)
 {
 	memset(args, 0, sizeof(*args));
 	/** set defaults */
@@ -38,14 +38,13 @@ args_init(struct dlck_args_engine *args)
 }
 
 static int
-args_check(struct argp_state *state, struct dlck_args_engine *args)
+args_engine_check(struct argp_state *state, struct dlck_args_engine *args)
 {
-	/* XXX */
 	return 0;
 }
 
 error_t
-parser_engine(int key, char *arg, struct argp_state *state)
+args_engine_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_engine *args = state->input;
 	int                      rc   = 0;
@@ -89,4 +88,4 @@ parser_engine(int key, char *arg, struct argp_state *state)
 	return rc;
 }
 
-struct argp argp_engine = {engine_options, parser_engine, NULL, NULL, NULL};
+struct argp argp_engine = {args_engine_options, args_engine_parser, NULL, NULL, NULL};
