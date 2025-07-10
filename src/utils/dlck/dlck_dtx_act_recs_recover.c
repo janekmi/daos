@@ -4,17 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <daos/mem.h>
-#include <daos/btree_class.h>
-#include <gurt/telemetry_producer.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dlck.h>
-#include <daos_srv/daos_mgmt_srv.h>
-#include <daos_version.h>
-
-#include <libpmemobj.h>
 
 #include "dlck_args.h"
 #include "dlck_engine.h"
