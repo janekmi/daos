@@ -63,6 +63,7 @@ def scons():
         '../../../dtx/tests/ult_mock.c',
         '../../../dtx/tests/pl_map_mock.c',
         '../../../dtx/tests/sched_mock.c',
+        '../../../engine/util.c',
         '../../../mgmt/srv_util_file.c',
     ]
     helper = henv.d_test_program('dlck_ut_helper', helper_src, LIBS=libraries)

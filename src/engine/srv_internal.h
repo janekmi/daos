@@ -374,4 +374,9 @@ int dss_chore_queue_start(struct dss_xstream *dx);
 void dss_chore_queue_stop(struct dss_xstream *dx);
 void dss_chore_queue_fini(struct dss_xstream *dx);
 
+/** util.c */
+
+int
+dss_register_dbtree_classes(void);
+
 #endif /* __DAOS_SRV_INTERNAL__ */

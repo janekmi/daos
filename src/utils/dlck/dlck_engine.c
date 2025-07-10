@@ -17,43 +17,38 @@
 #include "dlck_args.h"
 #include "dlck_engine.h"
 
+int
+dss_register_dbtree_classes(void);
+
+/**
+ * Allocate an engine.
+ *
+ * \param[in]	targets		Number of targets.
+ * \param[out]	engine_ptr	Allocated engine.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ */
 static int
-dlck_engine_alloc(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
+dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
 
 	D_ALLOC_PTR(engine);
 	if (engine == NULL) {
-		return ENOMEM;
+		return -DER_NOMEM;
 	}
 
 	/** each of the targets will get its own xstream + 1 for daos_sys */
-	D_ALLOC_ARRAY(engine->xss, args->targets + 1);
+	D_ALLOC_ARRAY(engine->xss, targets + 1);
 	if (engine->xss == NULL) {
 		D_FREE(engine);
-		return ENOMEM;
+		return -DER_NOMEM;
 	}
 
-	engine->targets = args->targets;
+	engine->targets = targets;
 
 	*engine_ptr = engine;
-
-	return 0;
-}
-
-/**
- * XXX should be shared with the DAOS engine.
- */
-static int
-dlck_register_dbtree_classes(void)
-{
-	int rc;
-
-	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
-				   &dbtree_ifv_ops);
-	if (rc != 0) {
-		return rc;
-	}
 
 	return DER_SUCCESS;
 }
@@ -304,7 +299,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	const unsigned      instance_idx      = 0;
 	int                 rc;
 
-	rc = dlck_engine_alloc(args, &engine);
+	rc = dlck_engine_alloc(args->targets, &engine);
 	if (rc != 0) {
 		return rc;
 	}
@@ -329,7 +324,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		return rc;
 	}
 
-	rc = dlck_register_dbtree_classes();
+	rc = dss_register_dbtree_classes();
 	if (rc != 0) {
 		return rc;
 	}
