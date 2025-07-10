@@ -20,10 +20,21 @@
 #include "dlck_engine.h"
 #include "dlck_pool.h"
 
+/**
+ * Process a single container.
+ *
+ * \param[in]	poh		Pool handle.
+ * \param[in]	co_uuid		Container UUID.
+ * \param[in]	write_mode	Is the write mode enabled?
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 static int
 process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
 {
 	daos_handle_t coh;
+	d_vector_t    dv;
 	int           rc;
 
 	rc = vos_cont_open(poh, co_uuid, &coh);
@@ -31,36 +42,48 @@ process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
 		return rc;
 	}
 
-	d_vector_t dv;
 	d_vector_init(sizeof(struct dlck_dtx_rec), &dv);
 
 	rc = dlck_vos_cont_rec_get_active(coh, &dv, NULL);
 	if (rc != 0) {
-		return rc;
+		goto fail;
 	}
 
 	if (write_mode) {
 		rc = dlck_dtx_act_recs_remove(coh);
 		if (rc != 0) {
-			return rc;
+			goto fail;
 		}
 
 		rc = dlck_dtx_act_recs_set(coh, &dv);
 		if (rc != 0) {
-			return rc;
+			goto fail;
 		}
 	}
 
 	d_vector_free(&dv);
 
 	rc = vos_cont_close(coh);
-	if (rc != 0) {
-		return rc;
-	}
 
-	return 0;
+	return rc;
+
+fail:
+	d_vector_free(&dv);
+
+	(void)vos_cont_close(coh);
+
+	return rc;
 }
 
+/**
+ * Process all containers found in the pool.
+ *
+ * \param[in]	poh		Pool handle.
+ * \param[in]	write_mode	Is the write mode enabled?
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 static int
 process_pool(daos_handle_t poh, bool write_mode)
 {
@@ -69,30 +92,37 @@ process_pool(daos_handle_t poh, bool write_mode)
 	int                       rc;
 
 	rc = dlck_pool_cont_list(poh, &co_uuids);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
-	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
+	d_list_for_each_entry(elm, &co_uuids, link) {
 		rc = process_cont(poh, elm->uuid, write_mode);
-		if (rc != 0) {
-			return rc;
+		if (rc != DER_SUCCESS) {
+			break;
 		}
+	}
 
+	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
 		d_list_del(&elm->link);
 		D_FREE(elm);
 	}
 
 	D_ASSERT(d_list_empty(&co_uuids));
 
-	return 0;
+	return rc;
 }
 
+/**
+ * @struct xstream_arg
+ *
+ * Arguments passed to to the main ULT on each of the execution streams.
+ */
 struct xstream_arg {
-	struct dlck_args    *args;
-	struct dlck_engine  *engine;
-	struct dlck_xstream *xs;
-	int                  rc;
+	struct dlck_args    *args;   /** Complete set of arguments. */
+	struct dlck_engine  *engine; /** Engine itself. */
+	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	int                  rc;     /** [out] return code */
 };
 
 static void
@@ -151,6 +181,17 @@ exec_one(void *arg)
 	}
 }
 
+/**
+ * Allocate arguments for an ULT.
+ *
+ * \param[in]	engine		Engine the ULT is about to be run in.
+ * \param[in]	idx		ULT ID.
+ * \param[in]	args		Set of arguments.
+ * \param[out]	output_arg	Allocated argument for the ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ */
 static int
 arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 {
@@ -158,7 +199,7 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 
 	D_ALLOC_PTR(xa);
 	if (xa == NULL) {
-		return ENOMEM;
+		return -DER_NOMEM;
 	}
 
 	xa->args   = args;
@@ -167,9 +208,16 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 
 	*output_arg = xa;
 
-	return 0;
+	return DER_SUCCESS;
 }
 
+/**
+ * Free arguments of an ULT.
+ *
+ * \param[in,out]	arg	ULT arguments to process and free.
+ *
+ * \return The return code for the ULT.
+ */
 static int
 arg_free(void **arg)
 {
@@ -183,27 +231,33 @@ arg_free(void **arg)
 }
 
 /**
- * XXX teardown
+ * Create pool directories for all files provided.
+ *
+ * \param[in]	storage_path	Engine the ULT is about to be run in.
+ * \param[in]	files		List of files.
+ *
+ * \retval DER_SUCCESS		Success.
+ * \retval -DER_NOMEM		Out of memory.
+ * \retval -DER_NO_PERM		Permission problem. Please see mkdir(2).
+ * \retval -DER_NONEXIST	A component of the \p storage_path does not exist.
+ * \retval -DER_*		Possibly other errors but not -DER_EXIST.
  */
 static int
-pool_mkdir_all(struct dlck_args *args, struct dlck_engine *engine)
+pool_mkdir_all(const char *storage_path, d_list_t files)
 {
 	struct dlck_file *file;
 	int               rc;
 
-	d_list_for_each_entry(file, &args->files.list, link) {
-		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
-		if (rc != 0) {
+	d_list_for_each_entry(file, &files, link) {
+		rc = dlck_pool_mkdir(storage_path, file->po_uuid);
+		if (rc != 0 && rc != -DER_EXIST) {
 			return rc;
 		}
 	}
 
-	return 0;
+	return DER_SUCCESS;
 }
 
-/**
- * XXX teardown
- */
 int
 dlck_dtx_act_recs_recover(struct dlck_args *args)
 {
@@ -219,20 +273,22 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 		return rc;
 	}
 
-	rc = pool_mkdir_all(args, engine);
+	rc = pool_mkdir_all(args->engine.storage_path, args->files.list);
 	if (rc != 0) {
-		return rc;
+		goto fail;
 	}
 
 	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, args, arg_free);
 	if (rc != 0) {
-		return rc;
+		goto fail;
 	}
 
 	rc = dlck_engine_stop(engine);
-	if (rc != 0) {
-		return rc;
-	}
 
-	return 0;
+	return rc;
+
+fail:
+	(void)dlck_engine_stop(engine);
+
+	return rc;
 }
