@@ -57,6 +57,18 @@ dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 }
 
 /**
+ * Free an engine.
+ *
+ * \param[in]	engine	An engine to free.
+ */
+static void
+dlck_engine_free(struct dlck_engine *engine)
+{
+	D_FREE(engine->xss);
+	D_FREE(engine);
+}
+
+/**
  * Poll for NVMe operations.
  *
  * \param[in]	arg	ABT_eventual too wait for.
@@ -272,10 +284,6 @@ fail:
 	return rc;
 }
 
-/**
- * XXX TODO:
- * - clean up on fail before return
- */
 int
 dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 {
@@ -285,65 +293,68 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	int                 rc;
 
 	rc = dlck_engine_alloc(args->targets, &engine);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
-	/**
-	 * List of steps executed by the DAOS engine while starting:
-	 * - d_tm_init
-	 * - register_dbtree_classes
-	 * - ABT_init
-	 * - bio_nvme_init
-	 * - dss_module_init_all -> vos init?
-	 * - vos_standalone_tls_init
-	 * - dss_sys_db_init
-	 * - dss_xstreams_init:
-	 *   - start system service XS
-	 *   - start main IO service XS
-	 */
-
 	rc = dss_register_dbtree_classes();
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_engine_free;
 	}
 
 	rc = dlck_abt_init(engine);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_engine_free;
 	}
 
 	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->nvme_mem_size,
 			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_abt_fini;
 	}
 
 	dss_register_key(&daos_srv_modkey);
 	dss_register_key(&vos_module_key);
 	rc = vos_srv_module.sm_init();
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_unregister_keys;
 	}
 
 	rc = vos_standalone_tls_init(tag);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_vos_sm_fini;
 	}
 
 	rc = vos_init(args->nvme_conf, args->storage_path);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_vos_tls_fini;
 	}
 
 	rc = xstream_start_all(engine);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		goto fail_vos_fini;
 	}
 
 	*engine_ptr = engine;
 
 	return 0;
+
+fail_vos_fini:
+	vos_db_fini();
+fail_vos_tls_fini:
+	vos_standalone_tls_fini();
+fail_vos_sm_fini:
+	(void)vos_srv_module.sm_fini();
+fail_unregister_keys:
+	dss_unregister_key(&vos_module_key);
+	dss_unregister_key(&daos_srv_modkey);
+	bio_nvme_fini();
+fail_abt_fini:
+	(void)dlck_abt_fini(engine);
+fail_engine_free:
+	dlck_engine_free(engine);
+
+	return rc;
 }
 
 int

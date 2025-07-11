@@ -34,10 +34,18 @@ struct dlck_engine {
 typedef void (*dlck_ult_func)(void *arg);
 
 /**
- * XXX doc missing
+ * Start an engine.
+ *
+ * \param[in]	args		Engine's arguments.
+ * \param[out]	engine_ptr	Started engine.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
  */
 int
 dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+
 int
 dlck_engine_stop(struct dlck_engine *engine);
 
@@ -76,6 +84,17 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs);
  */
 int
 dlck_abt_init(struct dlck_engine *engine);
+
+/**
+ * Finalize ABT for the \p engine.
+ *
+ * \param[in,out]	engine	Engine for which ABT is finalized for.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_abt_fini(struct dlck_engine *engine);
 
 /**
  * Just create an ABT execution stream.

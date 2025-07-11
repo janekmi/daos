@@ -69,6 +69,22 @@ dlck_abt_init(struct dlck_engine *engine)
 }
 
 int
+dlck_abt_fini(struct dlck_engine *engine)
+{
+	int rc;
+
+	rc = ABT_mutex_free(&engine->open_mtx);
+	if (rc != ABT_SUCCESS) {
+		(void)ABT_finalize();
+		return dss_abterr2der(rc);
+	}
+
+	rc = ABT_finalize();
+
+	return dss_abterr2der(rc);
+}
+
+int
 dlck_xstream_create(struct dlck_xstream *xs)
 {
 	int rc;
