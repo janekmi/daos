@@ -17,7 +17,6 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
-#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/sys_db.h>
@@ -1354,38 +1353,7 @@ dss_srv_fini(bool force)
 static int
 dss_sys_db_init()
 {
-	int	 rc;
-	char	*sys_db_path = NULL;
-	char	*nvme_conf_path = NULL;
-
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		goto db_init;
-
-	if (dss_nvme_conf == NULL) {
-		D_ERROR("nvme conf path not set\n");
-		return -DER_INVAL;
-	}
-
-	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
-	if (nvme_conf_path == NULL)
-		return -DER_NOMEM;
-	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
-	D_FREE(nvme_conf_path);
-	if (sys_db_path == NULL)
-		return -DER_NOMEM;
-
-db_init:
-	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
-	if (rc)
-		goto out;
-
-	rc = smd_init(vos_db_get());
-	if (rc)
-		vos_db_fini();
-out:
-	D_FREE(sys_db_path);
-
-	return rc;
+	return vos_init(dss_nvme_conf, dss_storage_path);
 }
 
 int

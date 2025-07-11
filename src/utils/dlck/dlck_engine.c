@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <libgen.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <daos/mem.h>
@@ -51,46 +50,6 @@ dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 	*engine_ptr = engine;
 
 	return DER_SUCCESS;
-}
-
-/**
- * XXX should be shared with dss_sys_db_init().
- */
-static int
-dlck_sys_db_init(struct dlck_args_engine *args)
-{
-	int   rc;
-	char *sys_db_path    = NULL;
-	char *nvme_conf_path = NULL;
-
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		goto db_init;
-
-	if (args->nvme_conf == NULL) {
-		D_ERROR("nvme conf path not set\n");
-		return -DER_INVAL;
-	}
-
-	D_STRNDUP(nvme_conf_path, args->nvme_conf, PATH_MAX);
-	if (nvme_conf_path == NULL)
-		return -DER_NOMEM;
-	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
-	D_FREE(nvme_conf_path);
-	if (sys_db_path == NULL)
-		return -DER_NOMEM;
-
-db_init:
-	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : args->storage_path);
-	if (rc)
-		goto out;
-
-	rc = smd_init(vos_db_get());
-	if (rc)
-		vos_db_fini();
-out:
-	D_FREE(sys_db_path);
-
-	return rc;
 }
 
 static void
@@ -352,7 +311,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		return rc;
 	}
 
-	rc = dlck_sys_db_init(args);
+	rc = vos_init(args->nvme_conf, args->storage_path);
 	if (rc != 0) {
 		return rc;
 	}
