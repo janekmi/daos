@@ -284,6 +284,35 @@ fail:
 	return rc;
 }
 
+/** XXX error handling */
+static int
+xstream_stop_all(struct dlck_engine *engine)
+{
+	struct dlck_xstream *xs = &engine->xss[engine->targets];
+	int                  rc;
+
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
+		if (rc != 0) {
+			return rc;
+		}
+
+		rc = ABT_thread_join(xs->nvme_poll.thread);
+		if (rc != 0) {
+			return rc;
+		}
+
+		rc = ABT_thread_free(&xs->nvme_poll.thread);
+		if (rc != 0) {
+			return rc;
+		}
+	}
+
+	/** XXX missing bits? */
+
+	return DER_SUCCESS;
+}
+
 int
 dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 {
@@ -357,27 +386,15 @@ fail_engine_free:
 	return rc;
 }
 
+/** XXX error handling */
 int
 dlck_engine_stop(struct dlck_engine *engine)
 {
-	struct dlck_xstream *xs = &engine->xss[engine->targets];
 	int                  rc;
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
-		if (rc != 0) {
-			return rc;
-		}
-
-		rc = ABT_thread_join(xs->nvme_poll.thread);
-		if (rc != 0) {
-			return rc;
-		}
-
-		rc = ABT_thread_free(&xs->nvme_poll.thread);
-		if (rc != 0) {
-			return rc;
-		}
+	rc = xstream_stop_all(engine);
+	if (rc) {
+		return rc;
 	}
 
 	rc = ABT_mutex_free(&engine->open_mtx);
