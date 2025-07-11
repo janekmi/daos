@@ -110,7 +110,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 	 * >= DSS_XS_NAME_LEN	the output was truncated
 	 * < 0			other error
 	 */
-	if (rc > 0 || rc >= DSS_XS_NAME_LEN) {
+	if (rc < 0 || rc >= DSS_XS_NAME_LEN) {
 		return -DER_INVAL;
 	}
 
@@ -272,15 +272,6 @@ fail:
 	return rc;
 }
 
-static uint64_t
-dlck_metrics_region_size(int num_tgts)
-{
-	const uint64_t est_std_metrics = 1024; /* high estimate to allow for pool links */
-	const uint64_t est_tgt_metrics = 128;  /* high estimate */
-
-	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
-}
-
 /**
  * XXX TODO:
  * - clean up on fail before return
@@ -291,7 +282,6 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	struct dlck_engine *engine;
 	const bool          bypass_health_chk = false;
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
-	const unsigned      instance_idx      = 0;
 	int                 rc;
 
 	rc = dlck_engine_alloc(args->targets, &engine);
@@ -312,12 +302,6 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	 *   - start system service XS
 	 *   - start main IO service XS
 	 */
-
-	/** XXX is it still necessary? */
-	rc = d_tm_init(instance_idx, dlck_metrics_region_size(args->targets), D_TM_SERVER_PROCESS);
-	if (rc != 0) {
-		return rc;
-	}
 
 	rc = dss_register_dbtree_classes();
 	if (rc != 0) {

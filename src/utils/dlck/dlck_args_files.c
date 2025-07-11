@@ -62,7 +62,7 @@ args_files_parser(int key, char *arg, struct argp_state *state)
 	case KEY_COMMON_FILE:
 		rc = parse_file(arg, state, &file);
 		if (rc == 0) {
-			d_list_add_tail(&file->link, &args->list);
+			d_list_add(&file->link, &args->list);
 		}
 		break;
 	case KEY_COMMON_CO_UUID:

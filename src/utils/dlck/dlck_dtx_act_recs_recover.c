@@ -235,12 +235,12 @@ arg_free(void **arg)
  * \retval -DER_*		Possibly other errors but not -DER_EXIST.
  */
 static int
-pool_mkdir_all(const char *storage_path, d_list_t files)
+pool_mkdir_all(const char *storage_path, d_list_t *files)
 {
 	struct dlck_file *file;
 	int               rc;
 
-	d_list_for_each_entry(file, &files, link) {
+	d_list_for_each_entry(file, files, link) {
 		rc = dlck_pool_mkdir(storage_path, file->po_uuid);
 		if (rc != 0 && rc != -DER_EXIST) {
 			return rc;
@@ -265,7 +265,7 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 		return rc;
 	}
 
-	rc = pool_mkdir_all(args->engine.storage_path, args->files.list);
+	rc = pool_mkdir_all(args->engine.storage_path, &args->files.list);
 	if (rc != 0) {
 		goto fail;
 	}
