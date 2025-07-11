@@ -21,6 +21,8 @@ struct dlck_xstream {
 	int             tgt_id;
 	struct dlck_ult nvme_poll;
 	ABT_eventual    nvme_poll_done;
+
+	int             rc_init;
 };
 
 struct dlck_engine {
@@ -52,6 +54,13 @@ dlck_engine_stop(struct dlck_engine *engine);
 int
 dlck_engine_xstream_init(struct dlck_xstream *xs);
 
+/**
+ * Finalize an execution stream.
+ *
+ * \param[in,out]	xs	Execution stream to finalize.
+ *
+ * \retval DER_SUCCESS	Success. Supposedly it can't fail.
+ */
 int
 dlck_engine_xstream_fini(struct dlck_xstream *xs);
 
@@ -78,6 +87,17 @@ dlck_abt_init(struct dlck_engine *engine);
  */
 int
 dlck_xstream_create(struct dlck_xstream *xs);
+
+/**
+ * Free an ABT execution stream.
+ *
+ * \param[out]	xs	Execution stream to free.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_xstream_free(struct dlck_xstream *xs);
 
 /**
  * Create an ABT thread (ULT).

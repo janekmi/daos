@@ -88,6 +88,19 @@ dlck_xstream_create(struct dlck_xstream *xs)
 }
 
 int
+dlck_xstream_free(struct dlck_xstream *xs)
+{
+	int rc;
+
+	rc = ABT_xstream_free(&xs->xstream);
+	if (rc != ABT_SUCCESS) {
+		return dss_abterr2der(rc);
+	}
+
+	return DER_SUCCESS;
+}
+
+int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult)
 {
 	ABT_thread_attr attr;

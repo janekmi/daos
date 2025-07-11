@@ -20,6 +20,9 @@
 int
 dss_register_dbtree_classes(void);
 
+extern struct dss_module     vos_srv_module;
+extern struct dss_module_key vos_module_key;
+
 /**
  * Allocate an engine.
  *
@@ -150,46 +153,60 @@ dlck_engine_xstream_init_ult(void *arg)
 {
 	struct dlck_xstream *xs = arg;
 
-	int                  rc = dlck_engine_xstream_init(xs);
-	D_ASSERT(rc == 0);
+	xs->rc_init = dlck_engine_xstream_init(xs);
 }
 
-/**
- * XXX bits missing
- */
 int
 dlck_engine_xstream_fini(struct dlck_xstream *xs)
 {
-	int rc;
+	void *tls = dss_tls_get();
+	int   rc  = DER_SUCCESS;
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		return 0;
+	D_ASSERT(tls != NULL);
+
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
+		rc = dss_abterr2der(rc);
+		if (rc != DER_SUCCESS) {
+			goto fail;
+		}
+
+		rc = ABT_thread_join(xs->nvme_poll.thread);
+		rc = dss_abterr2der(rc);
+		if (rc != DER_SUCCESS) {
+			goto fail;
+		}
+
+		rc = ABT_thread_free(&xs->nvme_poll.thread);
+		rc = dss_abterr2der(rc);
+		if (rc != DER_SUCCESS) {
+			/**
+			 * After the NVMe polling thread joined we can safely free TLS irrespective
+			 * of the error occurred while freeing the thread.
+			 */
+		}
 	}
 
-	rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
-	if (rc != 0) {
-		return rc;
-	}
+	dss_tls_fini(tls);
 
-	rc = ABT_thread_join(xs->nvme_poll.thread);
-	if (rc != 0) {
-		return rc;
-	}
+fail:
+	/**
+	 * In case of a fail we can't join/free the NVMe polling thread nor free TLS which may
+	 * result in a SIGSEGV. The best we can do is to leave the resources as they are and pass
+	 * error the caller.
+	 */
 
-	rc = ABT_thread_free(&xs->nvme_poll.thread);
-	if (rc != 0) {
-		return rc;
-	}
-
-	return 0;
+	return rc;
 }
 
-extern struct dss_module     vos_srv_module;
-
-extern struct dss_module_key vos_module_key;
-
 /**
- * XXX teardown missing
+ * Create and initialize daos_sys_0 execution stream (XS) and create all daos_io_* XSes.
+ * No daos_io_* initialization here yet. They ought to be initialized by the first ULT run in them.
+ *
+ * \param[in,out]	engine	Engine to start the xstream with.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
  */
 static int
 xstream_start_all(struct dlck_engine *engine)
@@ -198,7 +215,7 @@ xstream_start_all(struct dlck_engine *engine)
 	struct dlck_ult      daos_sys_init;
 	int                  rc;
 
-	/** start daos_sys_0 */
+	/** create and initialize daos_sys_0 execution stream (XS) */
 	xs         = &engine->xss[engine->targets]; /** there is one more XS than targets */
 	xs->tgt_id = -1;
 	rc         = dlck_xstream_create(xs);
@@ -207,33 +224,52 @@ xstream_start_all(struct dlck_engine *engine)
 	}
 
 	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &daos_sys_init);
-	if (rc != 0) {
-		return rc;
+	if (rc != DER_SUCCESS) {
+		/** ULT has not been created - the daos_sys_0 XS can be safely freed */
+		(void)dlck_xstream_free(xs);
+		return dss_abterr2der(rc);
 	}
 
-	/** XXX the user may ask to process a subset of targets */
+	/** wait for the daos_sys_0 initialization to conclude */
+	rc = ABT_thread_join(daos_sys_init.thread);
+	if (rc != ABT_SUCCESS) {
+		/** ULT has not joined - cannot safely free the daos_sys_0 XS */
+		return dss_abterr2der(rc);
+	}
 
-	/** start daos_io_X */
+	rc = ABT_thread_free(&daos_sys_init.thread);
+	if (rc != ABT_SUCCESS) {
+		/** ULT has joined - the daos_sys_0 XS can be safely freed */
+		(void)dlck_xstream_free(xs);
+		return dss_abterr2der(rc);
+	}
+
+	if (xs->rc_init != DER_SUCCESS) {
+		/** ULT has joined - the daos_sys_0 XS can be safely freed */
+		(void)dlck_xstream_free(xs);
+		return xs->rc_init;
+	}
+
+	/** create all daos_io_* execution streams (XS) */
 	for (int i = 0; i < engine->targets; ++i) {
 		xs         = &engine->xss[i];
 		xs->tgt_id = i;
 		rc         = dlck_xstream_create(xs);
 		if (rc != 0) {
-			return rc;
+			goto fail;
 		}
 	}
 
-	rc = ABT_thread_join(daos_sys_init.thread);
-	if (rc != 0) {
-		return rc;
-	}
-
-	rc = ABT_thread_free(&daos_sys_init.thread);
-	if (rc != 0) {
-		return rc;
-	}
-
 	return 0;
+
+fail:
+	/** free all daos_io_* and daos_sys_0 XS */
+	for (int i = 0; i <= engine->targets; ++i) {
+		xs = &engine->xss[i];
+		(void)dlck_xstream_free(xs);
+	}
+
+	return rc;
 }
 
 static uint64_t
