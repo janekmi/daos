@@ -80,17 +80,15 @@ nvme_polling(void *arg)
 	} while (is_ready == ABT_FALSE);
 }
 
-/**
- * XXX teardown
- */
 int
 dlck_engine_xstream_init(struct dlck_xstream *xs)
 {
-	struct dss_module_info *dmi;
 	int                     tag;
-	int                     xs_id;
 	int                     tgt_id = xs->tgt_id;
+	int                     xs_id;
 	char                    name[DSS_XS_NAME_LEN];
+	void                   *tls;
+	struct dss_module_info *dmi;
 	int                     rc;
 
 	if (tgt_id < 0) {
@@ -98,48 +96,53 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 		xs_id = 0;
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT, 0);
-		if (rc < 0) {
-			return ENOMEM;
-		}
 	} else {
 		tag   = DAOS_SERVER_TAG;
 		xs_id = DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, DSS_SYS_XS_NR_DEFAULT);
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
-		if (rc < 0) {
-			return ENOMEM;
-		}
+	}
+
+	/**
+	 * >= DSS_XS_NAME_LEN	the output was truncated
+	 * < 0			other error
+	 */
+	if (rc > 0 || rc >= DSS_XS_NAME_LEN) {
+		return -DER_INVAL;
 	}
 
 	(void)pthread_setname_np(pthread_self(), name);
 
-	/**
-	 * for xstream:
-	 * - dss_tls_init
-	 * - bio_xsctxt_alloc
-	 * - thread_create(dss_nvme_poll_ult)
-	 */
-
-	(void)dss_tls_init(tag, xs_id, tgt_id);
-
-	dmi = dss_get_module_info();
-	D_ASSERT(dmi != NULL);
-
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
-		if (rc != 0) {
-			return rc;
-		}
-
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
-		if (rc != 0) {
-			return rc;
-		}
-
-		dlck_ult_create(xs->pool, nvme_polling, &xs->nvme_poll_done, &xs->nvme_poll);
+	tls = dss_tls_init(tag, xs_id, tgt_id);
+	if (tls == NULL) {
+		/** Note:  dss_tls_init() returns NULL also on other issues */
+		return -DER_NOMEM;
 	}
 
-	return 0;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		dmi = dss_get_module_info();
+		D_ASSERT(dmi != NULL);
+
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
+		if (rc != DER_SUCCESS) {
+			return rc;
+		}
+
+		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
+		if (rc != ABT_SUCCESS) {
+			dss_tls_fini(tls);
+			return dss_abterr2der(rc);
+		}
+
+		rc = dlck_ult_create(xs->pool, nvme_polling, &xs->nvme_poll_done, &xs->nvme_poll);
+		if (rc != DER_SUCCESS) {
+			ABT_eventual_free(&xs->nvme_poll_done);
+			dss_tls_fini(tls);
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
 }
 
 static void
