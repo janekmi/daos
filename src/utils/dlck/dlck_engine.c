@@ -80,10 +80,6 @@ nvme_polling(void *arg)
 	} while (is_ready == ABT_FALSE);
 }
 
-/** XXX should be shared with the DAOS engine */
-#define DSS_SYS_XS_NAME_FMT    "daos_sys_%d"
-#define DSS_IO_XS_NAME_FMT     "daos_io_%d"
-
 /**
  * XXX teardown
  */

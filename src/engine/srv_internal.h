@@ -336,6 +336,10 @@ void ds_iv_fini(void);
 	     ? (DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, dss_sys_xs_nr))                              \
 	     : ((tgt_id) * ((dss_tgt_offload_xs_nr / dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
+#define DSS_SYS_XS_NAME_FMT     "daos_sys_%d"
+#define DSS_IO_XS_NAME_FMT      "daos_io_%d"
+#define DSS_OFFLOAD_XS_NAME_FMT "daos_off_%d"
+
 /**
  * get the VOS target ID of xstream.
  *

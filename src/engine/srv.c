@@ -104,11 +104,6 @@ dss_ctx_nr_get(void)
 {
 	return DSS_CTX_NR_TOTAL;
 }
-
-#define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
-#define DSS_IO_XS_NAME_FMT	"daos_io_%d"
-#define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
-
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
 	int			  xd_init_step;
