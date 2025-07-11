@@ -29,6 +29,7 @@ def scons():
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=[Dir('.')])
+    denv.Append(CPPPATH=[Dir('../../').srcnode()])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     denv.require('argobots', 'pmdk')

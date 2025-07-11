@@ -43,6 +43,7 @@ def scons():
     henv = env.Clone()
 
     henv.Append(OBJPREFIX="dlck_ut_helper_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('argobots', 'cmocka')
 

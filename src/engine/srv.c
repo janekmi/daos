@@ -71,8 +71,6 @@
  * daos_rpc_tag() to query the target tag (context ID) of specific RPC request.
  */
 
-/** Number of dRPC xstreams */
-#define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
 /** Number of offload per socket */
@@ -82,7 +80,7 @@ unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
+unsigned int            dss_sys_xs_nr = DSS_SYS_XS_NR_DEFAULT;
 /**
  * Flag of helper XS as a pool.
  * false - the helper XS is near its main IO service XS. When there is one or

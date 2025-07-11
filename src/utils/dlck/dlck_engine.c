@@ -12,6 +12,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dlck.h>
 #include <daos_version.h>
+#include <engine/srv_internal.h>
 
 #include "dlck_args.h"
 #include "dlck_engine.h"
@@ -52,6 +53,11 @@ dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 	return DER_SUCCESS;
 }
 
+/**
+ * Poll for NVMe operations.
+ *
+ * \param[in]	arg	ABT_eventual too wait for.
+ */
 static void
 nvme_polling(void *arg)
 {
@@ -73,11 +79,6 @@ nvme_polling(void *arg)
 		}
 	} while (is_ready == ABT_FALSE);
 }
-
-unsigned int dss_sys_xs_nr = 3;
-
-/** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id) ((tgt_id) + dss_sys_xs_nr)
 
 /** XXX should be shared with the DAOS engine */
 #define DSS_SYS_XS_NAME_FMT    "daos_sys_%d"
@@ -106,7 +107,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 		}
 	} else {
 		tag   = DAOS_SERVER_TAG;
-		xs_id = DSS_MAIN_XS_ID(tgt_id);
+		xs_id = DSS_MAIN_XS_ID_NO_HELPER_POOL(tgt_id, DSS_SYS_XS_NR_DEFAULT);
 
 		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
 		if (rc < 0) {
