@@ -76,7 +76,7 @@ dlck_engine_free(struct dlck_engine *engine)
 static void
 nvme_polling(void *arg)
 {
-	ABT_eventual           *done = arg;
+	struct dlck_xstream    *xs = arg;
 	ABT_bool                is_ready;
 	struct dss_module_info *dmi;
 	int                     rc;
@@ -88,7 +88,7 @@ nvme_polling(void *arg)
 		(void)bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
 
-		rc = ABT_eventual_test(*done, NULL, &is_ready);
+		rc = ABT_eventual_test(xs->nvme_poll_done, NULL, &is_ready);
 		if (rc != 0) {
 			return;
 		}
@@ -149,7 +149,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 			return dss_abterr2der(rc);
 		}
 
-		rc = dlck_ult_create(xs->pool, nvme_polling, &xs->nvme_poll_done, &xs->nvme_poll);
+		rc = dlck_ult_create(xs->pool, nvme_polling, xs, &xs->nvme_poll);
 		if (rc != DER_SUCCESS) {
 			ABT_eventual_free(&xs->nvme_poll_done);
 			dss_tls_fini(tls);
@@ -171,6 +171,7 @@ dlck_engine_xstream_init_ult(void *arg)
 int
 dlck_engine_xstream_fini(struct dlck_xstream *xs)
 {
+	struct dss_module_info *dmi;
 	void *tls = dss_tls_get();
 	int   rc  = DER_SUCCESS;
 
@@ -197,6 +198,10 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs)
 			 * of the error occurred while freeing the thread.
 			 */
 		}
+
+		dmi = dss_get_module_info();
+		D_ASSERT(dmi != NULL);
+		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 	}
 
 	dss_tls_fini(tls);
@@ -209,6 +214,14 @@ fail:
 	 */
 
 	return rc;
+}
+
+static void
+dlck_engine_xstream_fini_ult(void *arg)
+{
+	struct dlck_xstream *xs = arg;
+
+	xs->rc_init = dlck_engine_xstream_fini(xs);
 }
 
 /**
@@ -304,6 +317,7 @@ static int
 xstream_stop_all(struct dlck_engine *engine)
 {
 	struct dlck_xstream *xs;
+	struct dlck_ult      daos_sys_fini;
 	ABT_bool             is_empty;
 	int                  rc = DER_SUCCESS;
 
@@ -312,22 +326,31 @@ xstream_stop_all(struct dlck_engine *engine)
 
 	/** Stop the NVMe polling ULT if present. */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
-		if (rc != 0) {
-			/** The ULT is there - cannot safely free XSes. */
+		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &daos_sys_fini);
+		if (rc != DER_SUCCESS) {
+			/** ULT has not been created - the daos_sys_0 XS can be safely freed */
 			return dss_abterr2der(rc);
 		}
 
-		rc = ABT_thread_join(xs->nvme_poll.thread);
-		if (rc != 0) {
-			/** The ULT is there - cannot safely free XSes. */
+		/** wait for the daos_sys_0 finalization to conclude */
+		rc = ABT_thread_join(daos_sys_fini.thread);
+		if (rc != ABT_SUCCESS) {
+			/** ULT has not joined - cannot safely free the daos_sys_0 XS */
 			return dss_abterr2der(rc);
 		}
 
-		rc = ABT_thread_free(&xs->nvme_poll.thread);
-		if (rc != 0) {
-			/** The ULT is there - cannot safely free XSes. */
-			return dss_abterr2der(rc);
+		rc = ABT_thread_free(&daos_sys_fini.thread);
+		/**
+		 * This RC is not so important as long as the finalization RC says the finalization
+		 * has succeeded the procedure should continue undisturbed.
+		 */
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		if (xs->rc_init != DER_SUCCESS) {
+			/** the daos_sys_0 finalization failed  - cannot safely free the daos_sys_0
+			 * XS */
+			(void)dlck_xstream_free(xs);
+			return xs->rc_init;
 		}
 	}
 
@@ -345,7 +368,9 @@ xstream_stop_all(struct dlck_engine *engine)
 				return -DER_BUSY;
 			} else {
 				rc = dlck_xstream_free(xs);
-				return rc;
+				if (rc != DER_SUCCESS) {
+					return rc;
+				}
 			}
 		}
 	}
@@ -459,9 +484,6 @@ dlck_engine_stop(struct dlck_engine *engine)
 	return rc;
 }
 
-/**
- * XXX error handling
- */
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn)
@@ -469,50 +491,70 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	struct dlck_ult *ults;
 	void           **ult_args;
 	int              rc;
+	int              rc2;
 
 	D_ALLOC_ARRAY(ults, engine->targets);
 	if (ults == NULL) {
-		return ENOMEM;
+		return -DER_NOMEM;
 	}
 
 	D_ALLOC_ARRAY(ult_args, engine->targets);
 	if (ult_args == NULL) {
-		return ENOMEM;
+		D_FREE(ults);
+		return -DER_NOMEM;
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
 		rc = arg_alloc_fn(engine, i, input_arg, &ult_args[i]);
-		if (rc != 0) {
-			return rc;
+		if (rc != DER_SUCCESS) {
+			goto fail_join_and_free;
 		}
 
 		/** start an ULT */
 		rc = dlck_ult_create(engine->xss[i].pool, exec_one, ult_args[i], &ults[i]);
-		if (rc != 0) {
-			return rc;
+		if (rc != DER_SUCCESS) {
+			goto fail_join_and_free;
 		}
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
 		rc = ABT_thread_join(ults[i].thread);
-		if (rc != 0) {
-			return rc;
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			goto fail_join_and_free;
 		}
 
 		rc = ABT_thread_free(&ults[i].thread);
-		if (rc != 0) {
-			return rc;
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			goto fail_join_and_free;
 		}
 
 		rc = arg_free_fn(&ult_args[i]);
 		if (rc != 0) {
-			return rc;
+			goto fail_join_and_free;
 		}
 	}
 
 	D_FREE(ult_args);
 	D_FREE(ults);
 
-	return 0;
+	return DER_SUCCESS;
+
+fail_join_and_free:
+	for (int i = 0; i < engine->targets; ++i) {
+		rc2 = ABT_thread_join(ults[i].thread);
+		if (rc2 != ABT_SUCCESS) {
+			/** the ULT did not join - can't free the thread nor free the arguments */
+			continue;
+		}
+		(void)ABT_thread_free(&ults[i].thread);
+		(void)arg_free_fn(&ult_args[i]);
+	}
+
+	D_FREE(ult_args);
+	D_FREE(ults);
+
+	return rc;
 }

@@ -10,6 +10,7 @@
 #include <abt.h>
 
 #include "dlck_args.h"
+
 struct dlck_ult {
 	ABT_thread thread;
 };
@@ -144,6 +145,24 @@ typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *input_a
 			      void **output_arg);
 typedef int (*arg_free_fn_t)(void **arg);
 
+/**
+ * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
+ * of the \p engine.
+ *
+ * The function does not return as along as all ULTs conclude.
+ *
+ * The \p arg_alloc_func and \p arg_free_fn are called to allocate and free arguments respectively.
+ * Each of ULTs has a separate arguments allocated for its own use.
+ *
+ * \param[in]	engine		Engine to run the created ULTs.
+ * \param[in]	exec_one	Function to run in the ULTs.
+ * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
+ * \param[in]	input_arg	Custom parameters for the \p arg_alloc_fn function.
+ * \param[in]	arg_free_fn	Function to free arguments.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn);
