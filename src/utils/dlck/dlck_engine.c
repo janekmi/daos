@@ -426,14 +426,14 @@ fail_engine_free:
 	return rc;
 }
 
-/** XXX error handling */
 int
 dlck_engine_stop(struct dlck_engine *engine)
 {
 	int                  rc;
 
 	rc = xstream_stop_all(engine);
-	if (rc) {
+	if (rc != DER_SUCCESS) {
+		/** not all execution streams were stopped - can't pull out other resources */
 		return rc;
 	}
 
@@ -442,16 +442,21 @@ dlck_engine_stop(struct dlck_engine *engine)
 	vos_standalone_tls_fini();
 
 	rc = vos_srv_module.sm_fini();
+	if (rc != DER_SUCCESS) {
+		/** this is odd - do not free other resources just in case */
+		return rc;
+	}
 
 	dss_unregister_key(&vos_module_key);
 	dss_unregister_key(&daos_srv_modkey);
+
 	bio_nvme_fini();
 
 	rc = dlck_abt_fini(engine);
 
 	dlck_engine_free(engine);
 
-	return 0;
+	return rc;
 }
 
 /**
