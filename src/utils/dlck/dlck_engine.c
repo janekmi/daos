@@ -215,7 +215,7 @@ fail:
  * Create and initialize daos_sys_0 execution stream (XS) and create all daos_io_* XSes.
  * No daos_io_* initialization here yet. They ought to be initialized by the first ULT run in them.
  *
- * \param[in,out]	engine	Engine to start the xstream with.
+ * \param[in,out]	engine	Engine to start its XSes.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
@@ -262,6 +262,10 @@ xstream_start_all(struct dlck_engine *engine)
 		return xs->rc_init;
 	}
 
+	/**
+	 * The daos_sys_0 XS initialization succeeded. It may have spawned a NVMe polling ULT.
+	 */
+
 	/** create all daos_io_* execution streams (XS) */
 	for (int i = 0; i < engine->targets; ++i) {
 		xs         = &engine->xss[i];
@@ -275,7 +279,7 @@ xstream_start_all(struct dlck_engine *engine)
 	return 0;
 
 fail:
-	/** free all daos_io_* and daos_sys_0 XS */
+	/** free all daos_io_* and the daos_sys_0 XS */
 	for (int i = 0; i <= engine->targets; ++i) {
 		xs = &engine->xss[i];
 		(void)dlck_xstream_free(xs);
@@ -284,33 +288,69 @@ fail:
 	return rc;
 }
 
-/** XXX error handling */
+/**
+ * Stop and free the daos_sys_0 execution stream (XS) and all the daos_io_* XSes belonging to
+ * the provided engine.
+ *
+ * Note: All the XSes have to be idle before calling this function. Except for daos_sys_0 which
+ * still may have the NMVe polling ULT but no other ULTs present in its pool.
+ *
+ * \param[in,out]	engine	Engine to stop the xstream of.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 static int
 xstream_stop_all(struct dlck_engine *engine)
 {
-	struct dlck_xstream *xs = &engine->xss[engine->targets];
-	int                  rc;
+	struct dlck_xstream *xs;
+	ABT_bool             is_empty;
+	int                  rc = DER_SUCCESS;
 
+	/** check on the daos_sys_0 XS */
+	xs = &engine->xss[engine->targets];
+
+	/** Stop the NVMe polling ULT if present. */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
 		if (rc != 0) {
-			return rc;
+			/** The ULT is there - cannot safely free XSes. */
+			return dss_abterr2der(rc);
 		}
 
 		rc = ABT_thread_join(xs->nvme_poll.thread);
 		if (rc != 0) {
-			return rc;
+			/** The ULT is there - cannot safely free XSes. */
+			return dss_abterr2der(rc);
 		}
 
 		rc = ABT_thread_free(&xs->nvme_poll.thread);
 		if (rc != 0) {
-			return rc;
+			/** The ULT is there - cannot safely free XSes. */
+			return dss_abterr2der(rc);
 		}
 	}
 
-	/** XXX missing bits? */
+	/** free all daos_io_* and the daos_sys_0 XS */
+	for (int i = 0; i <= engine->targets; ++i) {
+		xs = &engine->xss[i];
+		/** make sure the XS is idle */
+		rc = ABT_pool_is_empty(xs->pool, &is_empty);
+		if (rc != ABT_SUCCESS) {
+			/** can't tell whether the XS can be freed or not */
+			return dss_abterr2der(rc);
+		} else {
+			if (is_empty != ABT_TRUE) {
+				/** cannot free the XS - it is busy */
+				return -DER_BUSY;
+			} else {
+				rc = dlck_xstream_free(xs);
+				return rc;
+			}
+		}
+	}
 
-	return DER_SUCCESS;
+	return rc;
 }
 
 int
@@ -397,10 +437,19 @@ dlck_engine_stop(struct dlck_engine *engine)
 		return rc;
 	}
 
-	rc = ABT_mutex_free(&engine->open_mtx);
-	if (rc != 0) {
-		return rc;
-	}
+	vos_db_fini();
+
+	vos_standalone_tls_fini();
+
+	rc = vos_srv_module.sm_fini();
+
+	dss_unregister_key(&vos_module_key);
+	dss_unregister_key(&daos_srv_modkey);
+	bio_nvme_fini();
+
+	rc = dlck_abt_fini(engine);
+
+	dlck_engine_free(engine);
 
 	return 0;
 }
