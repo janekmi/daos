@@ -19,7 +19,6 @@
 #include <daos_srv/dtx_srv.h>
 #include <argp.h>
 
-#include "dlck_ut.h"
 #include "../dlck_args.h"
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"

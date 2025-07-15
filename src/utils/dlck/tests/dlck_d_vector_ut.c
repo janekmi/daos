@@ -23,7 +23,7 @@ struct element {
 	 * - about 3-4 elements per page
 	 * - odd size
 	 */
-	char content[4096 / 4 - 1];
+	char content[D_VECTOR_SEGMENT_SIZE / 4 - 1];
 };
 
 struct state {
