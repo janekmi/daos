@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(telem)
+#define D_LOGFAC DD_FAC(tests)
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -14,18 +14,21 @@
 #include <cmocka.h>
 #include <getopt.h>
 #include <sys/stat.h>
+#include <argp.h>
+
+#include <daos_errno.h>
+#include <daos/debug.h>
 #include <daos/dtx.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
-#include <argp.h>
 
 #include "../dlck_args.h"
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"
 
+#define SRAND_SEED 0x1234
+
 struct vos_test_ctx {
-	uuid_t        tc_po_uuid;
-	uuid_t        tc_co_uuid;
 	daos_handle_t tc_po_hdl;
 	daos_handle_t tc_co_hdl;
 	int           tc_step;
@@ -33,7 +36,6 @@ struct vos_test_ctx {
 
 #define VPOOL_SIZE (1024 * 1024 * 10) /** 10MiB */
 
-static const char Co_uuid_str[]   = "0faccb2b-d498-49d4-aeef-0668e929e919";
 static const char Dti1_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
 static const char Dti2_uuid_str[] = "525c6a15-8bc9-4918-a8fa-98b959ce6575";
 static const char Dti3_uuid_str[] = "25c6a150-8bc9-4918-a8fa-b959ce657503";
@@ -41,23 +43,25 @@ static const char Dti3_uuid_str[] = "25c6a150-8bc9-4918-a8fa-b959ce657503";
 struct xstream_arg {
 	struct dlck_args_engine *args_engine;
 	struct dlck_args_files  *args_files;
+	uuid_t                  *co_uuids;
+
 	struct dlck_engine      *engine;
 	struct dlck_xstream     *xs;
 	struct dlck_file        *file;
+	uuid_t                   co_uuid;
+	unsigned int             seed;
 	int                      rc;
 };
 
 static void
-test_setup(struct vos_test_ctx *tcx)
+test_setup(struct vos_test_ctx *tcx, uuid_t co_uuid)
 {
 	int rc;
-	rc = uuid_parse(Co_uuid_str, tcx->tc_co_uuid);
+
+	rc = vos_cont_create(tcx->tc_po_hdl, co_uuid);
 	assert_int_equal(rc, 0);
 
-	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
-	assert_int_equal(rc, 0);
-
-	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid, &tcx->tc_co_hdl);
+	rc = vos_cont_open(tcx->tc_po_hdl, co_uuid, &tcx->tc_co_hdl);
 	assert_int_equal(rc, 0);
 }
 
@@ -120,20 +124,8 @@ simple_dtx(daos_handle_t coh, const char *dti_uuid_str, daos_unit_oid_t oid, dao
 	}
 }
 
-static int
-iter_cb_printf(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	       vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
-{
-	assert_int_equal(type, VOS_ITER_OBJ);
-
-	printf("- oid=(lo=%" PRIu64 ", hi=%" PRIu64 ")\n", entry->ie_oid.id_pub.lo,
-	       entry->ie_oid.id_pub.hi);
-
-	return 0;
-}
-
 static void
-run_all_tests(daos_handle_t poh)
+run_all_tests(daos_handle_t poh, struct xstream_arg *xa)
 {
 	daos_unit_oid_t     oid      = {0};
 	uint64_t            dkey_buf = 1;
@@ -151,7 +143,7 @@ run_all_tests(daos_handle_t poh)
 	tcx.tc_po_hdl = poh;
 
 	/** prepare a container */
-	test_setup(&tcx);
+	test_setup(&tcx, xa->co_uuid);
 
 	/** prepare DKEY, AKEY, IOD and SGL */
 	d_iov_set(&dkey, (void *)&dkey_buf, sizeof(dkey_buf));
@@ -180,24 +172,10 @@ run_all_tests(daos_handle_t poh)
 	iod.iod_recxs = &rex;
 	simple_dtx(tcx.tc_co_hdl, Dti3_uuid_str, oid, &dkey, &iod, &sgl);
 
-	/** iterate over OBJs */
-	vos_iter_param_t        param   = {0};
-	struct vos_iter_anchors anchors = {0};
-
-	param.ip_hdl        = tcx.tc_co_hdl;
-	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-
-	printf("vos_iterate()...\n");
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, iter_cb_printf, NULL, NULL, NULL);
-	printf("vos_iterate() -> rc = %d\n", rc);
-
 	/** quick teardown */
 	d_sgl_fini(&sgl, false);
 	test_teardown(&tcx);
 }
-
-extern struct dss_module dtx_module;
-extern struct argp       argp_engine;
 
 static void
 exec_one(void *arg)
@@ -208,12 +186,13 @@ exec_one(void *arg)
 	int                 rc;
 
 	rc = dlck_engine_xstream_init(xa->xs);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
 		return;
 	}
 
 	d_list_for_each_entry(file, &xa->args_files->list, link) {
+		/** do not process the given file if the target is excluded */
 		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
 			continue;
 		}
@@ -222,27 +201,35 @@ exec_one(void *arg)
 		rc = dlck_pool_open(xa->args_engine->storage_path, file->po_uuid, xa->xs->tgt_id,
 				    &poh);
 		ABT_mutex_unlock(xa->engine->open_mtx);
-		if (rc != 0) {
+		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
-			return;
+			break;
 		}
 
-		run_all_tests(poh);
+		run_all_tests(poh, xa);
 
 		ABT_mutex_lock(xa->engine->open_mtx);
 		rc = vos_pool_close(poh);
-		if (rc != 0) {
-			xa->rc = rc;
-			return;
-		}
 		ABT_mutex_unlock(xa->engine->open_mtx);
+		if (rc != DER_SUCCESS) {
+			xa->rc = rc;
+			break;
+		}
+	}
+
+	if (xa->rc != DER_SUCCESS) {
+		goto fail_xstream_fini;
 	}
 
 	rc = dlck_engine_xstream_fini(xa->xs);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
-		return;
 	}
+
+	return;
+
+fail_xstream_fini:
+	(void)dlck_engine_xstream_fini(xa->xs);
 }
 
 static int
@@ -261,6 +248,8 @@ arg_alloc(struct dlck_engine *engine, int idx, void *input_arg, void **output_ar
 	xa->engine      = engine;
 	xa->xs          = &engine->xss[idx];
 	xa->file        = input_xa->file;
+	uuid_copy(xa->co_uuid, xa->co_uuids[idx]);
+	xa->seed = rand_r(&input_xa->seed);
 
 	*output_arg = xa;
 
@@ -276,10 +265,14 @@ arg_free(void **arg)
 	return 0;
 }
 
-extern struct argp       argp_file;
-extern struct argp       argp_engine;
+extern struct argp        argp_file;
+extern struct argp        argp_engine;
 
-static struct argp_child children[] = {{&argp_file}, {&argp_engine}, {0}};
+static struct argp_option _automagic[] = {OPT_HEADER("Other options:", GROUP_AUTOMAGIC), {0}};
+
+static struct argp        automagic = {_automagic, NULL};
+
+static struct argp_child  children[] = {{&argp_file}, {&argp_engine}, {&automagic}, {0}};
 
 struct dlck_helper_args {
 	struct dlck_args_files  files;
@@ -304,41 +297,115 @@ parser(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = {NULL, parser, NULL /** usage */, NULL, children};
 
+extern struct dss_module dtx_module;
+
+// static const char Co_uuid_str[]   = "0faccb2b-d498-49d4-aeef-0668e929e919";
+
+static void
+random_uuid(uuid_t uuid, unsigned int *seedp)
+{
+	char uuid_str[UUID_STR_LEN];
+	int  rc;
+
+	for (int i = 0; i < UUID_STR_LEN - 1; ++i) {
+		snprintf(&uuid_str[i], 2, "%x", rand_r(seedp) % 16);
+	}
+
+	uuid_str[8] = uuid_str[13] = uuid_str[18] = uuid_str[23] = '-';
+
+	rc = uuid_parse(uuid_str, uuid);
+	assert_int_equal(rc, 0);
+}
+
+static int
+setup(struct dlck_helper_args *args, struct xstream_arg *xa)
+{
+	struct dlck_file   *file;
+	struct dlck_engine *engine;
+	unsigned int        seed = SRAND_SEED;
+	int                 rc;
+
+	/** prepare pool storage directories */
+	d_list_for_each_entry(file, &args->files.list, link) {
+		rc = dlck_pool_mkdir(args->engine.storage_path, file->po_uuid);
+		assert_int_equal(rc, DER_SUCCESS);
+	}
+
+	/** start an engine */
+	rc = dlck_engine_start(&args->engine, &engine);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	D_ALLOC_ARRAY(xa->co_uuids, args->engine.targets);
+	if (xa->co_uuids == NULL) {
+		rc = -DER_NOMEM;
+		goto fail_engine_stop;
+	}
+
+	for (int i = 0; i < args->engine.targets; ++i) {
+		random_uuid(xa->co_uuids[i], &seed);
+	}
+
+	/** register DTX module key */
+	dss_register_key(dtx_module.sm_key);
+
+	xa->engine      = engine;
+	xa->args_engine = &args->engine;
+	xa->args_files  = &args->files;
+	xa->seed        = seed;
+
+	return DER_SUCCESS;
+
+fail_engine_stop:
+	(void)dlck_engine_stop(engine);
+	return rc;
+}
+
+static int
+teardown(struct dlck_engine *engine)
+{
+	int rc;
+
+	dss_unregister_key(dtx_module.sm_key);
+
+	rc = dlck_engine_stop(engine);
+
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
 	struct dlck_helper_args args   = {0};
-	struct dlck_engine     *engine = NULL;
 	struct xstream_arg      xa     = {0};
-	struct dlck_file       *file;
+
 	int                     rc;
 
 	argp_parse(&argp, argc, argv, 0, 0, &args);
 
-	xa.args_files  = &args.files;
-	xa.args_engine = &args.engine;
-
-	d_list_for_each_entry(file, &args.files.list, link) {
-		rc = dlck_pool_mkdir(args.engine.storage_path, file->po_uuid);
-		assert_int_equal(rc, 0);
+	rc = setup(&args, &xa);
+	if (rc != DER_SUCCESS) {
+		goto fail_args_free;
 	}
 
-	rc = dlck_engine_start(&args.engine, &engine);
-	if (rc != 0) {
-		return rc;
+	rc = dlck_engine_exec_all(xa.engine, exec_one, arg_alloc, &xa, arg_free);
+	if (rc != DER_SUCCESS) {
+		goto fail_teardown;
 	}
 
-	daos_register_key(dtx_module.sm_key);
-
-	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, &xa, arg_free);
-	if (rc != 0) {
-		return rc;
+	rc = teardown(xa.engine);
+	if (rc != DER_SUCCESS) {
+		goto fail_args_free;
 	}
 
-	rc = dlck_engine_stop(engine);
-	if (rc != 0) {
-		return rc;
-	}
+	/** XXX args free */
 
 	return 0;
+
+fail_teardown:
+	(void)teardown(xa.engine);
+fail_args_free:
+	/** XXX args free */
+	return rc;
 }
