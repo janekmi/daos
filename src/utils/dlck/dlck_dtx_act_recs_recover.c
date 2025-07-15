@@ -127,12 +127,13 @@ exec_one(void *arg)
 	int                 rc;
 
 	rc = dlck_engine_xstream_init(xa->xs);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
 		return;
 	}
 
 	d_list_for_each_entry(file, &xa->args->files.list, link) {
+		/** do not process the given file if the target is excluded */
 		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
 			continue;
 		}
@@ -141,36 +142,45 @@ exec_one(void *arg)
 		rc = dlck_pool_open(xa->args->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
 				    &poh);
 		ABT_mutex_unlock(xa->engine->open_mtx);
-		if (rc != 0) {
+		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
-			return;
+			break;
 		}
 
-		if (uuid_is_null(xa->args->files.co_uuid)) {
+		if (uuid_is_null(xa->args->common.co_uuid)) {
 			rc = process_pool(poh, write_mode);
 		} else {
-			rc = process_cont(poh, xa->args->files.co_uuid, write_mode);
+			rc = process_cont(poh, xa->args->common.co_uuid, write_mode);
 		}
 
-		if (rc != 0) {
+		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
-			return;
+			(void)vos_pool_close(poh);
+			break;
 		}
 
 		ABT_mutex_lock(xa->engine->open_mtx);
 		rc = vos_pool_close(poh);
-		if (rc != 0) {
-			xa->rc = rc;
-			return;
-		}
 		ABT_mutex_unlock(xa->engine->open_mtx);
+		if (rc != DER_SUCCESS) {
+			xa->rc = rc;
+			break;
+		}
+	}
+
+	if (xa->rc != DER_SUCCESS) {
+		goto fail_xstream_fini;
 	}
 
 	rc = dlck_engine_xstream_fini(xa->xs);
-	if (rc != 0) {
+	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
-		return;
 	}
+
+	return;
+
+fail_xstream_fini:
+	(void)dlck_engine_xstream_fini(xa->xs);
 }
 
 /**
@@ -197,6 +207,7 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 	xa->args   = args;
 	xa->engine = engine;
 	xa->xs     = &engine->xss[idx];
+	xa->rc     = DER_SUCCESS;
 
 	*output_arg = xa;
 

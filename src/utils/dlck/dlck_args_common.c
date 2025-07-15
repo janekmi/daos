@@ -15,6 +15,8 @@ static struct argp_option args_common_options[] = {
     /** entries below inherits the group number of the header entry */
     {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
     {"cmd", KEY_COMMON_CMD, "CMD", 0, "Command (Required). Please see available commands below."},
+    {"co_uuid", KEY_COMMON_CO_UUID, "UUID", 0,
+     "UUID of a container to process. If not provided all containers are processed."},
     OPT_HEADER("Available commands:", GROUP_AVAILABLE_CMDS),
     /** entries below inherits the group number of the header entry */
     LIST_ENTRY(DLCK_CMD_DTX_ACT_RECOVER_STR, "Active DTX entries' records recovery."),
@@ -27,6 +29,7 @@ args_common_init(struct dlck_args_common *args)
 	/** set defaults */
 	args->write_mode = false; /** dry run */
 	args->cmd        = DLCK_CMD_NOT_SET;
+	uuid_clear(args->co_uuid);
 }
 
 static int
@@ -42,6 +45,7 @@ static error_t
 args_common_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_common *args = state->input;
+	uuid_t                   tmp_uuid;
 	int                      rc   = 0;
 
 	/** state changes */
@@ -66,6 +70,13 @@ args_common_parser(int key, char *arg, struct argp_state *state)
 		if (args->cmd == DLCK_CMD_UNKNOWN) {
 			RETURN_FAIL(state, EINVAL, "Unknown command: %s", arg);
 		}
+		break;
+	case KEY_COMMON_CO_UUID:
+		rc = uuid_parse(arg, tmp_uuid);
+		if (rc != 0) {
+			RETURN_FAIL(state, EINVAL, "Malformed uuid: %s", arg);
+		}
+		uuid_copy(args->co_uuid, tmp_uuid);
 		break;
 	default:
 		return ARGP_ERR_UNKNOWN;

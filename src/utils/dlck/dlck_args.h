@@ -26,17 +26,17 @@
 
 /** all short options */
 
-#define KEY_COMMON_WRITE_MODE           'w'
-#define KEY_COMMON_FILE                 'f'
-#define KEY_COMMON_CO_UUID              'q'
 #define KEY_COMMON_CMD                  'c'
+#define KEY_COMMON_CO_UUID              'q'
+#define KEY_COMMON_WRITE_MODE           'w'
+#define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
-#define KEY_COMMON_NUMA_NODE            'p'
-#define KEY_COMMON_MEM_SIZE             'r'
-#define KEY_COMMON_HUGEPAGE_SIZE        'H'
-#define KEY_COMMON_TARGETS              't'
-#define KEY_COMMON_STORAGE              's'
-#define KEY_COMMON_NVME                 'n'
+#define KEY_ENGINE_NUMA_NODE            'p'
+#define KEY_ENGINE_MEM_SIZE             'r'
+#define KEY_ENGINE_HUGEPAGE_SIZE        'H'
+#define KEY_ENGINE_TARGETS              't'
+#define KEY_ENGINE_STORAGE              's'
+#define KEY_ENGINE_NVME                 'n'
 
 /** defaults */
 
@@ -77,12 +77,12 @@ struct dlck_args_engine {
  */
 struct dlck_args_files {
 	d_list_t list;
-	uuid_t   co_uuid; /** Container UUID. */
 };
 
 struct dlck_args_common {
-	bool          write_mode; /** false by default (dry run) */
 	enum dlck_cmd cmd;
+	uuid_t        co_uuid;    /** Container UUID. */
+	bool          write_mode; /** false by default (dry run) */
 };
 
 struct dlck_args_out {

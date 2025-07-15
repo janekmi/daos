@@ -11,17 +11,17 @@
 #include "dlck_args.h"
 
 static struct argp_option args_engine_options[] = {
-    {"pinned_numa_node", KEY_COMMON_NUMA_NODE, 0, 0,
+    {"pinned_numa_node", KEY_ENGINE_NUMA_NODE, 0, 0,
      "Bind to cores within the specified NUMA node.", GROUP_OPTIONS},
-    {"mem_size", KEY_COMMON_MEM_SIZE, "N", 0,
+    {"mem_size", KEY_ENGINE_MEM_SIZE, "N", 0,
      "Allocates mem_size MB for SPDK. Default: " STRINGIFY(DLCK_DEFAULT_NVME_MEM_SIZE) "."},
-    {"hugepage_size", KEY_COMMON_HUGEPAGE_SIZE, "N", 0,
+    {"hugepage_size", KEY_ENGINE_HUGEPAGE_SIZE, "N", 0,
      "Passes the configured hugepage size(2MB or 1GB). Default: " STRINGIFY(
 	 DLCK_DEFAULT_NVME_HUGEPAGE_SIZE) "."},
-    {"targets", KEY_COMMON_TARGETS, "N", 0,
+    {"targets", KEY_ENGINE_TARGETS, "N", 0,
      "Number of targets to use. Default: " STRINGIFY(DLCK_DEFAULT_TARGETS) "."},
-    {"storage", KEY_COMMON_STORAGE, "PATH", 0, "Storage path."},
-    {"nvme", KEY_COMMON_NVME, "PATH", 0, "NVMe config file."},
+    {"storage", KEY_ENGINE_STORAGE, "PATH", 0, "Storage path."},
+    {"nvme", KEY_ENGINE_NVME, "PATH", 0, "NVMe config file."},
     {0}};
 
 static void
@@ -60,22 +60,22 @@ args_engine_parser(int key, char *arg, struct argp_state *state)
 
 	/** options */
 	switch (key) {
-	case KEY_COMMON_NUMA_NODE:
+	case KEY_ENGINE_NUMA_NODE:
 		rc = parse_unsigned(arg, &args->numa_node, state);
 		break;
-	case KEY_COMMON_MEM_SIZE:
+	case KEY_ENGINE_MEM_SIZE:
 		rc = parse_unsigned(arg, &args->nvme_mem_size, state);
 		break;
-	case KEY_COMMON_HUGEPAGE_SIZE:
+	case KEY_ENGINE_HUGEPAGE_SIZE:
 		rc = parse_unsigned(arg, &args->nvme_hugepage_size, state);
 		break;
-	case KEY_COMMON_TARGETS:
+	case KEY_ENGINE_TARGETS:
 		rc = parse_unsigned(arg, &args->targets, state);
 		break;
-	case KEY_COMMON_STORAGE:
+	case KEY_ENGINE_STORAGE:
 		args->storage_path = arg;
 		break;
-	case KEY_COMMON_NVME:
+	case KEY_ENGINE_NVME:
 		args->nvme_conf = arg;
 		break;
 	default:
