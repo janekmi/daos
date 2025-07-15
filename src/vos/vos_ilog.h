@@ -372,11 +372,11 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
  * \brief Find active ILOG entries.
  *
  * Fetch ILOG entries from the provided ILOG root. Find active ILOG entries and
- * write them down in \p dda.
+ * write them down in \p dv.
  *
  * \param[in]	coh	Parent container.
  * \param[in]	root_df	ILOG root to process.
- * \param[out]	da	Array for storing the found active ILOG entries.
+ * \param[out]	dv	Vector to store the found active ILOG entries.
  *
  * \retval 0		Success.
  * \retval -DER_*	Error when ilog_fetch fails.

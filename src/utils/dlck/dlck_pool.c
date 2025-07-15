@@ -4,15 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <daos/mem.h>
-#include <daos/btree_class.h>
-#include <daos_srv/vos.h>
+#include <gurt/common.h>
+#include <daos/common.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include <daos_version.h>
+#include <daos_srv/smd.h>
+#include <daos_srv/vos.h>
 
 #include "dlck_pool.h"
 

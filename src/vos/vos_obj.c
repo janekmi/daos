@@ -2755,7 +2755,9 @@ dlck_sv_add_if_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *
 	rbund.rb_biov = &biov;
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &val, NULL);
-	D_ASSERT(rc == 0);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
 
 	irec_df = umem_off2ptr(umm, rbund.rb_off);
 	rec.lid = irec_df->ir_dtx;

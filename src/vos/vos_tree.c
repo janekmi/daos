@@ -1378,7 +1378,9 @@ dlck_irec_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *d
 	tree_rec_bundle2iov(&rbund, &iov);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &iov, NULL);
-	D_ASSERT(rc == 0);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
 
 	krec_df = rbund.rb_krec;
 

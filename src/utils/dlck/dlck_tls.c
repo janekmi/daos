@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(dlck)
-
-#include <daos_errno.h>
-#include <daos/debug.h>
-#include <gurt/common.h>
-#include <daos/tls.h>
 #include <daos_srv/daos_engine.h>
 
 static void *
@@ -25,9 +19,7 @@ dlck_srv_tls_init(int tags, int xs_id, int tgt_id)
 static void
 dlck_srv_tls_fini(int tags, void *data)
 {
-	struct dss_module_info *info = (struct dss_module_info *)data;
-
-	D_FREE(info);
+	D_FREE(data);
 }
 
 struct dss_module_key daos_srv_modkey = {

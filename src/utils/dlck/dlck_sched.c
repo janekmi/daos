@@ -9,5 +9,5 @@
 uint64_t
 sched_cur_seq(void)
 {
-	return 0;
+	return 0; /** standalone */
 }

@@ -1058,9 +1058,14 @@ dlck_obj_get_active(daos_handle_t coh, struct vos_iterator *iter, d_vector_t *dv
 	int                 rc;
 
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
-	D_ASSERT(rc == 0);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
 
-	D_ASSERT(iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
+	if (iov.iov_len != vos_obj_df_size(oiter->oit_cont->vc_pool)) {
+		return -DER_INVAL;
+	}
+
 	obj_df = (struct vos_obj_df *)iov.iov_buf;
 
 	return dlck_ilog_get_active(coh, &obj_df->vo_ilog, dv);
