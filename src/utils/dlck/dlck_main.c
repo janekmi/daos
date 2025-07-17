@@ -29,5 +29,7 @@ main(int argc, char *argv[])
 
 	rc = dlck_cmds[args.common.cmd](&args);
 
+	dlck_args_free(&args);
+
 	return rc;
 }

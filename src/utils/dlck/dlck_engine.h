@@ -141,9 +141,8 @@ dlck_xstream_free(struct dlck_xstream *xs);
 int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
 
-typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *input_arg,
-			      void **output_arg);
-typedef int (*arg_free_fn_t)(void **arg);
+typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
+typedef int (*arg_free_fn_t)(void *custom, void **arg);
 
 /**
  * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
@@ -157,7 +156,7 @@ typedef int (*arg_free_fn_t)(void **arg);
  * \param[in]	engine		Engine to run the created ULTs.
  * \param[in]	exec_one	Function to run in the ULTs.
  * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
- * \param[in]	input_arg	Custom parameters for the \p arg_alloc_fn function.
+ * \param[in]	custom		Custom parameters for \p arg_alloc_fn and \p arg_free_fn function.
  * \param[in]	arg_free_fn	Function to free arguments.
  *
  * \retval DER_SUCCESS	Success.

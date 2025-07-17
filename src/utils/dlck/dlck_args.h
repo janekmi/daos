@@ -9,9 +9,9 @@
 
 #include <stdbool.h>
 #include <argp.h>
-#include <gurt/list.h>
-
 #include <uuid/uuid.h>
+#include <gurt/list.h>
+#include <daos_srv/dlck.h>
 
 #include "dlck_cmds.h"
 
@@ -94,6 +94,7 @@ struct dlck_args {
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
 	struct dlck_args_out    out;
+	struct dlck_stats       stats;
 };
 
 /** helper definitions */
@@ -122,7 +123,7 @@ struct dlck_args {
 
 #define DLCK_PRINT(args, fmt)       args->out.dao_printf(fmt)
 
-#define DLCK_PRINTF(args, fmt, ...) args->out.printf(fmt, __VA_ARGS__)
+#define DLCK_PRINTF(args, fmt, ...) args->out.dao_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 
@@ -181,5 +182,21 @@ parse_command(const char *arg);
  */
 void
 dlck_args_parse(int argc, char *argv[], struct dlck_args *args);
+
+/**
+ * Free arguments.
+ *
+ * \param[in]	args	Arguments to free.
+ */
+void
+dlck_args_free(struct dlck_args *args);
+
+/**
+ * Free file arguments.
+ *
+ * \param[in]	args	Arguments to free.
+ */
+void
+dlck_args_files_free(struct dlck_args_files *args);
 
 #endif /** __DLCK_ARGS__ */

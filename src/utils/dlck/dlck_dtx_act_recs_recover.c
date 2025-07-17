@@ -18,12 +18,13 @@
  * \param[in]	poh		Pool handle.
  * \param[in]	co_uuid		Container UUID.
  * \param[in]	write_mode	Is the write mode enabled?
+ * \param[out]	stats		Statistics.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 static int
-process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
+process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode, struct dlck_stats *stats)
 {
 	daos_handle_t coh;
 	d_vector_t    dv;
@@ -36,7 +37,7 @@ process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode)
 
 	d_vector_init(sizeof(struct dlck_dtx_rec), &dv);
 
-	rc = dlck_vos_cont_rec_get_active(coh, &dv, NULL);
+	rc = dlck_vos_cont_rec_get_active(coh, &dv, stats);
 	if (rc != 0) {
 		goto fail;
 	}
@@ -72,12 +73,13 @@ fail:
  *
  * \param[in]	poh		Pool handle.
  * \param[in]	write_mode	Is the write mode enabled?
+ * \param[out]	stats		Statistics.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 static int
-process_pool(daos_handle_t poh, bool write_mode)
+process_pool(daos_handle_t poh, bool write_mode, struct dlck_stats *stats)
 {
 	d_list_t                  co_uuids = D_LIST_HEAD_INIT(co_uuids);
 	struct co_uuid_list_elem *elm, *next;
@@ -89,7 +91,7 @@ process_pool(daos_handle_t poh, bool write_mode)
 	}
 
 	d_list_for_each_entry(elm, &co_uuids, link) {
-		rc = process_cont(poh, elm->uuid, write_mode);
+		rc = process_cont(poh, elm->uuid, write_mode, stats);
 		if (rc != DER_SUCCESS) {
 			break;
 		}
@@ -114,6 +116,7 @@ struct xstream_arg {
 	struct dlck_args    *args;   /** Complete set of arguments. */
 	struct dlck_engine  *engine; /** Engine itself. */
 	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	struct dlck_stats    stats;  /** Cumulative stats for all the DLCK calls. */
 	int                  rc;     /** [out] return code */
 };
 
@@ -148,9 +151,9 @@ exec_one(void *arg)
 		}
 
 		if (uuid_is_null(xa->args->common.co_uuid)) {
-			rc = process_pool(poh, write_mode);
+			rc = process_pool(poh, write_mode, &xa->stats);
 		} else {
-			rc = process_cont(poh, xa->args->common.co_uuid, write_mode);
+			rc = process_cont(poh, xa->args->common.co_uuid, write_mode, &xa->stats);
 		}
 
 		if (rc != DER_SUCCESS) {
@@ -217,15 +220,21 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 /**
  * Free arguments of an ULT.
  *
- * \param[in,out]	arg	ULT arguments to process and free.
+ * \param[out]		input_arg	Set of arguments.
+ * \param[in,out]	arg		ULT arguments to process and free.
  *
  * \return The return code for the ULT.
  */
 static int
-arg_free(void **arg)
+arg_free(void *input_arg, void **arg)
 {
+	struct dlck_args   *args = input_arg;
 	struct xstream_arg *xa = *arg;
 	int                 rc = xa->rc;
+
+	DLCK_PRINTF(args, "Touched[%d]: %u\n", xa->xs->tgt_id, xa->stats.touched);
+
+	args->stats.touched += xa->stats.touched;
 
 	D_FREE(*arg);
 	*arg = NULL;
@@ -268,7 +277,7 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	int                 rc;
 
 	if (!args->common.write_mode) {
-		DLCK_PRINT(args, "Write mode is not enabled. Changes won't be applied.");
+		DLCK_PRINT(args, "Write mode is not enabled. Changes won't be applied.\n");
 	}
 
 	rc = dlck_engine_start(&args->engine, &engine);
@@ -285,6 +294,8 @@ dlck_dtx_act_recs_recover(struct dlck_args *args)
 	if (rc != 0) {
 		goto fail;
 	}
+
+	DLCK_PRINTF(args, "Touched: %u\n", args->stats.touched);
 
 	rc = dlck_engine_stop(engine);
 

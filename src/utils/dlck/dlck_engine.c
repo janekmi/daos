@@ -496,7 +496,7 @@ dlck_engine_stop(struct dlck_engine *engine)
 
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn)
+		     arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
 {
 	struct dlck_ult *ults;
 	void           **ult_args;
@@ -516,7 +516,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
-		rc = arg_alloc_fn(engine, i, input_arg, &ult_args[i]);
+		rc = arg_alloc_fn(engine, i, custom, &ult_args[i]);
 		if (rc != DER_SUCCESS) {
 			goto fail_join_and_free;
 		}
@@ -541,7 +541,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 			goto fail_join_and_free;
 		}
 
-		rc = arg_free_fn(&ult_args[i]);
+		rc = arg_free_fn(custom, &ult_args[i]);
 		if (rc != 0) {
 			goto fail_join_and_free;
 		}
@@ -560,7 +560,7 @@ fail_join_and_free:
 			continue;
 		}
 		(void)ABT_thread_free(&ults[i].thread);
-		(void)arg_free_fn(&ult_args[i]);
+		(void)arg_free_fn(custom, &ult_args[i]);
 	}
 
 	D_FREE(ult_args);

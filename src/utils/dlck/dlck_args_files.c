@@ -69,3 +69,15 @@ args_files_parser(int key, char *arg, struct argp_state *state)
 }
 
 struct argp argp_file = {args_files_options, args_files_parser, NULL, NULL, NULL};
+
+void
+dlck_args_files_free(struct dlck_args_files *args)
+{
+	struct dlck_file *file;
+	struct dlck_file *next;
+
+	d_list_for_each_entry_safe(file, next, &args->list, link) {
+		d_list_del(&file->link);
+		D_FREE(file);
+	}
+}

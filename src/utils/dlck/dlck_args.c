@@ -70,3 +70,9 @@ dlck_args_parse(int argc, char *argv[], struct dlck_args *args)
 		exit(ret);
 	}
 }
+
+void
+dlck_args_free(struct dlck_args *args)
+{
+	dlck_args_files_free(&args->files);
+}
