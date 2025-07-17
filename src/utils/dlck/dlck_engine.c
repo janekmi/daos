@@ -408,14 +408,21 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 
 	dss_register_key(&daos_srv_modkey);
 	dss_register_key(&vos_module_key);
+
 	rc = vos_srv_module.sm_init();
 	if (rc != DER_SUCCESS) {
 		goto fail_unregister_keys;
 	}
 
+	rc = ds_tls_key_create();
+	if (rc != 0) {
+		rc = daos_errno2der(rc);
+		goto fail_vos_sm_fini;
+	}
+
 	rc = vos_standalone_tls_init(tag);
 	if (rc != DER_SUCCESS) {
-		goto fail_vos_sm_fini;
+		goto fail_tls_key_delete;
 	}
 
 	rc = vos_init(args->nvme_conf, args->storage_path);
@@ -436,6 +443,8 @@ fail_vos_fini:
 	vos_db_fini();
 fail_vos_tls_fini:
 	vos_standalone_tls_fini();
+fail_tls_key_delete:
+	ds_tls_key_delete();
 fail_vos_sm_fini:
 	(void)vos_srv_module.sm_fini();
 fail_unregister_keys:
@@ -464,6 +473,8 @@ dlck_engine_stop(struct dlck_engine *engine)
 	vos_db_fini();
 
 	vos_standalone_tls_fini();
+
+	ds_tls_key_delete();
 
 	rc = vos_srv_module.sm_fini();
 	if (rc != DER_SUCCESS) {

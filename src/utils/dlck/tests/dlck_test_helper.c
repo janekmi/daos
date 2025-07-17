@@ -27,6 +27,7 @@
 #include "../dlck_pool.h"
 
 #define SRAND_SEED 0x4321
+#define UPDATES_NUM 125
 
 extern struct dss_module dtx_module;
 
@@ -43,6 +44,18 @@ struct bundle {
 	unsigned int             seed;
 };
 
+struct io {
+	daos_unit_oid_t oid;
+	uint64_t        dkey_buf;
+	daos_key_t      dkey;
+	uint64_t        akey_buf;
+	daos_key_t      akey;
+	daos_iod_t      iod;
+	daos_recx_t     rex;
+	char            value[UUID_STR_LEN];
+	d_sg_list_t     sgl;
+};
+
 struct xstream_state {
 	/** input */
 	struct dlck_args_engine *args_engine;
@@ -54,20 +67,9 @@ struct xstream_state {
 	/** run-time variables */
 	daos_handle_t            poh;
 	daos_handle_t            coh;
+	struct io                io;
 	/** output */
 	int                      rc;
-};
-
-struct io {
-	daos_unit_oid_t oid;
-	uint64_t        dkey_buf;
-	daos_key_t      dkey;
-	uint64_t        akey_buf;
-	daos_key_t      akey;
-	daos_iod_t      iod;
-	daos_recx_t     rex;
-	char            value[UUID_STR_LEN];
-	d_sg_list_t     sgl;
 };
 
 static void
@@ -181,16 +183,17 @@ io_init_random(struct io *io, const char *value, daos_iod_type_t iod_type, unsig
 	d_iov_set(&io->akey, (void *)&io->akey_buf, sizeof(io->akey_buf));
 
 	/** populate the IO descriptor */
+	io->iod.iod_name = io->akey;
+	io->iod.iod_nr   = 1;
+	io->iod.iod_size = strlen(value);
+
 	if (iod_type == DAOS_IOD_SINGLE) {
-		io->iod.iod_name  = io->akey;
 		io->iod.iod_type  = DAOS_IOD_SINGLE;
 		io->iod.iod_recxs = NULL;
-		io->iod.iod_nr    = 1;
-		io->iod.iod_size  = strlen(value);
 	} else if (iod_type == DAOS_IOD_ARRAY) {
+		io->iod.iod_type  = DAOS_IOD_ARRAY;
 		io->rex.rx_idx    = 0;
 		io->rex.rx_nr     = 1;
-		io->iod.iod_type  = DAOS_IOD_ARRAY;
 		io->iod.iod_recxs = &io->rex;
 	} else {
 		assert_true(false);
@@ -209,20 +212,38 @@ io_fini(struct io *io)
 }
 
 static void
-cont_process(struct xstream_state *xst, uuid_t co_uuid)
+update_one(struct xstream_state *xst, daos_iod_type_t iod_type, bool is_leader, bool commit)
 {
 	uuid_t    dti_uuid;
-	struct io io;
+	struct io *io = &xst->io;
 	char      value[UUID_STR_LEN];
+
+	random_uuid(dti_uuid, &xst->seed);
+	random_uuid_str(value, &xst->seed);
+	io_init_random(io, value, iod_type, &xst->seed);
+	dtx_update(xst->coh, dti_uuid, io, is_leader, commit);
+	io_fini(io);
+}
+
+static void
+cont_process(struct xstream_state *xst, uuid_t co_uuid)
+{
+	bool is_leader;
 
 	cont_setup(xst, xst->co_uuid);
 
+	/**
+	 * 2 (IOD types) * 125 * 4 = 1000 total updates
+	 */
 	for (daos_iod_type_t iod_type = DAOS_IOD_SINGLE; iod_type <= DAOS_IOD_ARRAY; ++iod_type) {
-		random_uuid(dti_uuid, &xst->seed);
-		random_uuid_str(value, &xst->seed);
-		io_init_random(&io, value, iod_type, &xst->seed);
-		dtx_update(xst->coh, dti_uuid, &io, false, false);
-		io_fini(&io);
+		for (int i = 0; i < UPDATES_NUM; ++i) {
+			is_leader = true;
+			update_one(xst, iod_type, is_leader, false /** commit */);
+			update_one(xst, iod_type, is_leader, true /** commit */);
+			is_leader = false;
+			update_one(xst, iod_type, is_leader, false /** commit */);
+			update_one(xst, iod_type, is_leader, true /** commit */);
+		}
 	}
 
 	cont_teardown(xst);

@@ -86,7 +86,7 @@ struct dlck_args_common {
 };
 
 struct dlck_args_out {
-	int (*printf)(const char *fmt, ...);
+	int (*dao_printf)(const char *fmt, ...);
 };
 
 struct dlck_args {
@@ -120,7 +120,7 @@ struct dlck_args {
 		return ERRNUM;                                                                     \
 	} while (0)
 
-#define DLCK_PRINT(args, fmt)       args->out.printf(fmt)
+#define DLCK_PRINT(args, fmt)       args->out.dao_printf(fmt)
 
 #define DLCK_PRINTF(args, fmt, ...) args->out.printf(fmt, __VA_ARGS__)
 
