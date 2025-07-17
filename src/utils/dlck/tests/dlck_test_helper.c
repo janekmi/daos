@@ -26,236 +26,291 @@
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"
 
-#define SRAND_SEED 0x1234
+#define SRAND_SEED 0x4321
 
-struct vos_test_ctx {
-	daos_handle_t tc_po_hdl;
-	daos_handle_t tc_co_hdl;
-	int           tc_step;
+extern struct dss_module dtx_module;
+
+struct dlck_helper_args {
+	struct dlck_args_files  files;
+	struct dlck_args_engine engine;
 };
 
-#define VPOOL_SIZE (1024 * 1024 * 10) /** 10MiB */
-
-static const char Dti1_uuid_str[] = "0faccb2b-d498-49d4-aeee-0668e929e000";
-static const char Dti2_uuid_str[] = "525c6a15-8bc9-4918-a8fa-98b959ce6575";
-static const char Dti3_uuid_str[] = "25c6a150-8bc9-4918-a8fa-b959ce657503";
-
-struct xstream_arg {
+struct bundle {
 	struct dlck_args_engine *args_engine;
 	struct dlck_args_files  *args_files;
+	struct dlck_engine      *engine;
 	uuid_t                  *co_uuids;
+	unsigned int             seed;
+};
 
+struct xstream_state {
+	/** input */
+	struct dlck_args_engine *args_engine;
+	struct dlck_args_files  *args_files;
 	struct dlck_engine      *engine;
 	struct dlck_xstream     *xs;
-	struct dlck_file        *file;
 	uuid_t                   co_uuid;
 	unsigned int             seed;
+	/** run-time variables */
+	daos_handle_t            poh;
+	daos_handle_t            coh;
+	/** output */
 	int                      rc;
 };
 
+struct io {
+	daos_unit_oid_t oid;
+	uint64_t        dkey_buf;
+	daos_key_t      dkey;
+	uint64_t        akey_buf;
+	daos_key_t      akey;
+	daos_iod_t      iod;
+	daos_recx_t     rex;
+	char            value[UUID_STR_LEN];
+	d_sg_list_t     sgl;
+};
+
 static void
-test_setup(struct vos_test_ctx *tcx, uuid_t co_uuid)
+random_uuid_str(char *uuid_str, unsigned int *seedp)
 {
-	int rc;
+	for (int i = 0; i < UUID_STR_LEN - 1; ++i) {
+		snprintf(&uuid_str[i], 2, "%x", rand_r(seedp) % 16);
+	}
 
-	rc = vos_cont_create(tcx->tc_po_hdl, co_uuid);
-	assert_int_equal(rc, 0);
+	uuid_str[8] = uuid_str[13] = uuid_str[18] = uuid_str[23] = '-';
+}
 
-	rc = vos_cont_open(tcx->tc_po_hdl, co_uuid, &tcx->tc_co_hdl);
+static void
+random_uuid(uuid_t uuid, unsigned int *seedp)
+{
+	char uuid_str[UUID_STR_LEN];
+	int  rc;
+
+	random_uuid_str(uuid_str, seedp);
+
+	rc = uuid_parse(uuid_str, uuid);
 	assert_int_equal(rc, 0);
 }
 
 static void
-test_teardown(struct vos_test_ctx *tcx)
+cont_setup(struct xstream_state *xst, uuid_t co_uuid)
 {
 	int rc;
 
-	rc = vos_cont_close(tcx->tc_co_hdl);
+	(void)vos_cont_destroy(xst->poh, co_uuid);
+
+	rc = vos_cont_create(xst->poh, co_uuid);
 	assert_int_equal(rc, 0);
 
-	rc = vos_pool_close(tcx->tc_po_hdl);
+	rc = vos_cont_open(xst->poh, co_uuid, &xst->coh);
 	assert_int_equal(rc, 0);
 }
 
 static void
-simple_dtx(daos_handle_t coh, const char *dti_uuid_str, daos_unit_oid_t oid, daos_key_t *dkey,
-	   daos_iod_t *iod, d_sg_list_t *sgl)
+cont_teardown(struct xstream_state *xst)
+{
+	int rc;
+
+	rc = vos_cont_close(xst->coh);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dtx_update(daos_handle_t coh, uuid_t dti_uuid, struct io *io, bool is_leader, bool commit)
 {
 	struct dtx_id             dti        = {0};
 	struct dtx_epoch          epoch      = {0};
 	daos_unit_oid_t           leader_oid = {0};
-	// uint32_t           flags      = 0;
+	uint32_t                  flags      = 0;
 	struct dtx_leader_handle *dlh;
 	struct dtx_handle        *dth;
 	int                       rc;
 
-	rc = uuid_parse(dti_uuid_str, dti.dti_uuid);
-	assert_int_equal(rc, 0);
+	/** create DTI */
+	uuid_copy(dti.dti_uuid, dti_uuid);
 	dti.dti_hlc = d_hlc_get();
 
 	epoch.oe_value = d_hlc_get();
 
-	// rc = dtx_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
-	// assert_int_equal(rc, 0);
+	if (is_leader) {
+		rc = dtx_leader_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, NULL, 0, 0,
+				      NULL, NULL, &dlh);
+		assert_int_equal(rc, 0);
+		dth = &dlh->dlh_handle;
+	} else {
+		rc = dtx_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, flags, NULL, &dth);
+		assert_int_equal(rc, 0);
+	}
 
-	rc = dtx_leader_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, NULL, 0, 0, NULL, NULL,
-			      &dlh);
+	rc = dtx_sub_init(dth, &io->oid, 0);
 	assert_int_equal(rc, 0);
 
-	dth = &dlh->dlh_handle;
-
-	rc = dtx_sub_init(dth, &oid, 0);
+	rc = vos_obj_update_ex(coh, io->oid, 0, 0, 0, &io->dkey, 1, &io->iod, NULL, &io->sgl, dth);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_update_ex(coh, oid, 0, 0, 0, dkey, 1, iod, NULL, sgl, dth);
-	assert_int_equal(rc, 0);
-
+	/**
+	 * XXX Normally, the leader probably won't use this API to end its transaction.
+	 * It also probably messes up a little with the DTX leader handle memory allocation.
+	 */
 	rc = dtx_end(dth, NULL, DER_SUCCESS);
 	assert_int_equal(rc, 0);
 
-	printf("[DTX %s] Commit? (y or [n]): ", dti_uuid_str);
-	char op = getchar();
-	if (op == 'y') {
+	if (commit) {
 		rc = vos_dtx_commit(coh, &dti, 1, true, NULL);
 		assert_int_equal(rc, 1); /** total number of committed */
-	}
-	if (op != '\n') {
-		(void)getchar(); /** consume the leftover \n */
 	}
 }
 
 static void
-run_all_tests(daos_handle_t poh, struct xstream_arg *xa)
+io_init_random(struct io *io, const char *value, daos_iod_type_t iod_type, unsigned int *seedp)
 {
-	daos_unit_oid_t     oid      = {0};
-	uint64_t            dkey_buf = 1;
-	daos_key_t          dkey;
-	uint64_t            akey_buf = 2;
-	daos_key_t          akey;
-	daos_iod_t          iod   = {0};
-	daos_recx_t         rex   = {0};
-	char               *value = "Aloha";
-	d_sg_list_t         sgl;
-	int                 rc;
+	int rc;
 
-	struct vos_test_ctx tcx;
+	memset(io, 0, sizeof(*io));
 
-	tcx.tc_po_hdl = poh;
+	/** random OID */
+	io->oid.id_pub.hi = rand_r(seedp);
+	io->oid.id_pub.lo = rand_r(seedp);
 
-	/** prepare a container */
-	test_setup(&tcx, xa->co_uuid);
+	/** random DKEY */
+	io->dkey_buf = rand_r(seedp);
+	d_iov_set(&io->dkey, (void *)&io->dkey_buf, sizeof(io->dkey_buf));
 
-	/** prepare DKEY, AKEY, IOD and SGL */
-	d_iov_set(&dkey, (void *)&dkey_buf, sizeof(dkey_buf));
-	d_iov_set(&akey, (void *)&akey_buf, sizeof(akey_buf));
-	iod.iod_name  = akey;
-	iod.iod_type  = DAOS_IOD_SINGLE;
-	iod.iod_recxs = NULL;
-	iod.iod_nr    = 1;
-	iod.iod_size  = strlen(value);
-	rc            = d_sgl_init(&sgl, 1);
+	/** random AKEY */
+	io->akey_buf = rand_r(seedp);
+	d_iov_set(&io->akey, (void *)&io->akey_buf, sizeof(io->akey_buf));
+
+	/** populate the IO descriptor */
+	if (iod_type == DAOS_IOD_SINGLE) {
+		io->iod.iod_name  = io->akey;
+		io->iod.iod_type  = DAOS_IOD_SINGLE;
+		io->iod.iod_recxs = NULL;
+		io->iod.iod_nr    = 1;
+		io->iod.iod_size  = strlen(value);
+	} else if (iod_type == DAOS_IOD_ARRAY) {
+		io->rex.rx_idx    = 0;
+		io->rex.rx_nr     = 1;
+		io->iod.iod_type  = DAOS_IOD_ARRAY;
+		io->iod.iod_recxs = &io->rex;
+	} else {
+		assert_true(false);
+	}
+
+	/** populate the SG list */
+	rc = d_sgl_init(&io->sgl, 1);
 	assert_int_equal(rc, 0);
-	d_iov_set(&sgl.sg_iovs[0], (void *)value, iod.iod_size);
+	d_iov_set(&io->sgl.sg_iovs[0], (void *)value, io->iod.iod_size);
+}
 
-	/** 1st DTX */
-	simple_dtx(tcx.tc_co_hdl, Dti1_uuid_str, oid, &dkey, &iod, &sgl);
+static void
+io_fini(struct io *io)
+{
+	d_sgl_fini(&io->sgl, false);
+}
 
-	/** 2nd DTX (just a different OID) */
-	oid.id_pub.lo = 1;
-	simple_dtx(tcx.tc_co_hdl, Dti2_uuid_str, oid, &dkey, &iod, &sgl);
+static void
+cont_process(struct xstream_state *xst, uuid_t co_uuid)
+{
+	uuid_t    dti_uuid;
+	struct io io;
+	char      value[UUID_STR_LEN];
 
-	/** 3rd DTX (EV) */
-	oid.id_pub.lo = 2;
-	rex.rx_idx    = 0;
-	rex.rx_nr     = 1;
-	iod.iod_type  = DAOS_IOD_ARRAY;
-	iod.iod_recxs = &rex;
-	simple_dtx(tcx.tc_co_hdl, Dti3_uuid_str, oid, &dkey, &iod, &sgl);
+	cont_setup(xst, xst->co_uuid);
 
-	/** quick teardown */
-	d_sgl_fini(&sgl, false);
-	test_teardown(&tcx);
+	for (daos_iod_type_t iod_type = DAOS_IOD_SINGLE; iod_type <= DAOS_IOD_ARRAY; ++iod_type) {
+		random_uuid(dti_uuid, &xst->seed);
+		random_uuid_str(value, &xst->seed);
+		io_init_random(&io, value, iod_type, &xst->seed);
+		dtx_update(xst->coh, dti_uuid, &io, false, false);
+		io_fini(&io);
+	}
+
+	cont_teardown(xst);
 }
 
 static void
 exec_one(void *arg)
 {
-	struct xstream_arg *xa = arg;
-	struct dlck_file   *file;
-	daos_handle_t       poh;
+	struct xstream_state *xst = arg;
+	struct dlck_file     *file;
 	int                 rc;
 
-	rc = dlck_engine_xstream_init(xa->xs);
+	rc = dlck_engine_xstream_init(xst->xs);
 	if (rc != DER_SUCCESS) {
-		xa->rc = rc;
+		xst->rc = rc;
 		return;
 	}
 
-	d_list_for_each_entry(file, &xa->args_files->list, link) {
+	d_list_for_each_entry(file, &xst->args_files->list, link) {
 		/** do not process the given file if the target is excluded */
-		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
+		if ((file->targets & (1 << xst->xs->tgt_id)) == 0) {
 			continue;
 		}
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = dlck_pool_open(xa->args_engine->storage_path, file->po_uuid, xa->xs->tgt_id,
-				    &poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		ABT_mutex_lock(xst->engine->open_mtx);
+		rc = dlck_pool_open(xst->args_engine->storage_path, file->po_uuid, xst->xs->tgt_id,
+				    &xst->poh);
+		ABT_mutex_unlock(xst->engine->open_mtx);
 		if (rc != DER_SUCCESS) {
-			xa->rc = rc;
+			xst->rc = rc;
 			break;
 		}
 
-		run_all_tests(poh, xa);
+		cont_process(xst, xst->co_uuid);
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = vos_pool_close(poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		ABT_mutex_lock(xst->engine->open_mtx);
+		rc = vos_pool_close(xst->poh);
+		ABT_mutex_unlock(xst->engine->open_mtx);
 		if (rc != DER_SUCCESS) {
-			xa->rc = rc;
+			xst->rc = rc;
 			break;
 		}
 	}
 
-	if (xa->rc != DER_SUCCESS) {
+	if (xst->rc != DER_SUCCESS) {
 		goto fail_xstream_fini;
 	}
 
-	rc = dlck_engine_xstream_fini(xa->xs);
+	rc = dlck_engine_xstream_fini(xst->xs);
 	if (rc != DER_SUCCESS) {
-		xa->rc = rc;
+		xst->rc = rc;
 	}
 
 	return;
 
 fail_xstream_fini:
-	(void)dlck_engine_xstream_fini(xa->xs);
+	(void)dlck_engine_xstream_fini(xst->xs);
 }
 
+/**
+ * Allocate and populate arguments for an execution stream.
+ */
 static int
 arg_alloc(struct dlck_engine *engine, int idx, void *input_arg, void **output_arg)
 {
-	struct xstream_arg *input_xa = input_arg;
-	struct xstream_arg *xa;
+	struct bundle        *bundle = input_arg;
+	struct xstream_state *xst;
 
-	D_ALLOC_PTR(xa);
-	if (xa == NULL) {
+	D_ALLOC_PTR(xst);
+	if (xst == NULL) {
 		return ENOMEM;
 	}
 
-	xa->args_engine = input_xa->args_engine;
-	xa->args_files  = input_xa->args_files;
-	xa->engine      = engine;
-	xa->xs          = &engine->xss[idx];
-	xa->file        = input_xa->file;
-	uuid_copy(xa->co_uuid, xa->co_uuids[idx]);
-	xa->seed = rand_r(&input_xa->seed);
+	xst->args_engine = bundle->args_engine;
+	xst->args_files  = bundle->args_files;
+	xst->engine      = engine;
+	xst->xs          = &engine->xss[idx];
+	uuid_copy(xst->co_uuid, bundle->co_uuids[idx]);
+	xst->seed = rand_r(&bundle->seed);
 
-	*output_arg = xa;
+	*output_arg = xst;
 
 	return 0;
 }
 
+/**
+ * Free an execution stream's arguments.
+ */
 static int
 arg_free(void **arg)
 {
@@ -264,6 +319,8 @@ arg_free(void **arg)
 
 	return 0;
 }
+
+/** command-line argument parsing */
 
 extern struct argp        argp_file;
 extern struct argp        argp_engine;
@@ -274,11 +331,11 @@ static struct argp        automagic = {_automagic, NULL};
 
 static struct argp_child  children[] = {{&argp_file}, {&argp_engine}, {&automagic}, {0}};
 
-struct dlck_helper_args {
-	struct dlck_args_files  files;
-	struct dlck_args_engine engine;
-};
-
+/**
+ * \brief Main parser.
+ *
+ * Just provides inputs for the child parsers.
+ */
 error_t
 parser(int key, char *arg, struct argp_state *state)
 {
@@ -297,28 +354,8 @@ parser(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = {NULL, parser, NULL /** usage */, NULL, children};
 
-extern struct dss_module dtx_module;
-
-// static const char Co_uuid_str[]   = "0faccb2b-d498-49d4-aeef-0668e929e919";
-
-static void
-random_uuid(uuid_t uuid, unsigned int *seedp)
-{
-	char uuid_str[UUID_STR_LEN];
-	int  rc;
-
-	for (int i = 0; i < UUID_STR_LEN - 1; ++i) {
-		snprintf(&uuid_str[i], 2, "%x", rand_r(seedp) % 16);
-	}
-
-	uuid_str[8] = uuid_str[13] = uuid_str[18] = uuid_str[23] = '-';
-
-	rc = uuid_parse(uuid_str, uuid);
-	assert_int_equal(rc, 0);
-}
-
 static int
-setup(struct dlck_helper_args *args, struct xstream_arg *xa)
+setup(struct dlck_helper_args *args, struct bundle *bundle)
 {
 	struct dlck_file   *file;
 	struct dlck_engine *engine;
@@ -337,23 +374,23 @@ setup(struct dlck_helper_args *args, struct xstream_arg *xa)
 		return rc;
 	}
 
-	D_ALLOC_ARRAY(xa->co_uuids, args->engine.targets);
-	if (xa->co_uuids == NULL) {
+	D_ALLOC_ARRAY(bundle->co_uuids, args->engine.targets);
+	if (bundle->co_uuids == NULL) {
 		rc = -DER_NOMEM;
 		goto fail_engine_stop;
 	}
 
 	for (int i = 0; i < args->engine.targets; ++i) {
-		random_uuid(xa->co_uuids[i], &seed);
+		random_uuid(bundle->co_uuids[i], &seed);
 	}
 
 	/** register DTX module key */
 	dss_register_key(dtx_module.sm_key);
 
-	xa->engine      = engine;
-	xa->args_engine = &args->engine;
-	xa->args_files  = &args->files;
-	xa->seed        = seed;
+	bundle->args_engine = &args->engine;
+	bundle->args_files  = &args->files;
+	bundle->engine      = engine;
+	bundle->seed        = seed;
 
 	return DER_SUCCESS;
 
@@ -363,13 +400,15 @@ fail_engine_stop:
 }
 
 static int
-teardown(struct dlck_engine *engine)
+teardown(struct bundle *bundle)
 {
 	int rc;
 
 	dss_unregister_key(dtx_module.sm_key);
 
-	rc = dlck_engine_stop(engine);
+	D_FREE(bundle->co_uuids);
+
+	rc = dlck_engine_stop(bundle->engine);
 
 	return rc;
 }
@@ -378,23 +417,23 @@ int
 main(int argc, char **argv)
 {
 	struct dlck_helper_args args   = {0};
-	struct xstream_arg      xa     = {0};
+	struct bundle           bundle = {0};
 
 	int                     rc;
 
 	argp_parse(&argp, argc, argv, 0, 0, &args);
 
-	rc = setup(&args, &xa);
+	rc = setup(&args, &bundle);
 	if (rc != DER_SUCCESS) {
 		goto fail_args_free;
 	}
 
-	rc = dlck_engine_exec_all(xa.engine, exec_one, arg_alloc, &xa, arg_free);
+	rc = dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free);
 	if (rc != DER_SUCCESS) {
 		goto fail_teardown;
 	}
 
-	rc = teardown(xa.engine);
+	rc = teardown(&bundle);
 	if (rc != DER_SUCCESS) {
 		goto fail_args_free;
 	}
@@ -404,7 +443,7 @@ main(int argc, char **argv)
 	return 0;
 
 fail_teardown:
-	(void)teardown(xa.engine);
+	(void)teardown(&bundle);
 fail_args_free:
 	/** XXX args free */
 	return rc;
