@@ -85,15 +85,18 @@ struct dlck_args_common {
 	bool          write_mode; /** false by default (dry run) */
 };
 
-struct dlck_args_out {
-	int (*dao_printf)(const char *fmt, ...);
+struct dlck_print {
+	int (*dp_printf)(const char *fmt, ...);
 };
 
-struct dlck_args {
+struct dlck_control {
+	/** in */
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
-	struct dlck_args_out    out;
+	/** print */
+	struct dlck_print       print;
+	/** out */
 	struct dlck_stats       stats;
 };
 
@@ -121,9 +124,9 @@ struct dlck_args {
 		return ERRNUM;                                                                     \
 	} while (0)
 
-#define DLCK_PRINT(args, fmt)       args->out.dao_printf(fmt)
+#define DLCK_PRINT(ctrl, fmt)       ctrl->print.dp_printf(fmt)
 
-#define DLCK_PRINTF(args, fmt, ...) args->out.dao_printf(fmt, __VA_ARGS__)
+#define DLCK_PRINTF(ctrl, fmt, ...) ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 
@@ -176,20 +179,20 @@ parse_command(const char *arg);
  *
  * It may close the calling process if requested for version or help.
  *
- * \param[in]   argc  Length of the \p argv array.
- * \param[in]   argv  Standard list of arguments.
- * \param[out]	args	Parsed arguments.
+ * \param[in]   argc	Length of the \p argv array.
+ * \param[in]   argv  	Standard list of arguments.
+ * \param[out]	control	Control state to store the arguments.
  */
 void
-dlck_args_parse(int argc, char *argv[], struct dlck_args *args);
+dlck_args_parse(int argc, char *argv[], struct dlck_control *control);
 
 /**
  * Free arguments.
  *
- * \param[in]	args	Arguments to free.
+ * \param[in]	ctrl	Control state with arguments to free.
  */
 void
-dlck_args_free(struct dlck_args *args);
+dlck_args_free(struct dlck_control *ctrl);
 
 /**
  * Free file arguments.

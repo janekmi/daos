@@ -43,15 +43,15 @@ static struct argp_child  children[] = {
 error_t
 parser(int key, char *arg, struct argp_state *state)
 {
-	struct dlck_args *args = state->input;
+	struct dlck_control *ctrl = state->input;
 
 	/** state changes */
 	switch (key) {
 	case ARGP_KEY_INIT:
 		/** the following has to match the order of the children parsers */
-		state->child_inputs[0] = &args->common;
-		state->child_inputs[1] = &args->files;
-		state->child_inputs[2] = &args->engine;
+		state->child_inputs[0] = &ctrl->common;
+		state->child_inputs[1] = &ctrl->files;
+		state->child_inputs[2] = &ctrl->engine;
 		break;
 	}
 
@@ -61,9 +61,9 @@ parser(int key, char *arg, struct argp_state *state)
 static struct argp argp = {empty_options, parser, NULL /** usage */, doc, children};
 
 void
-dlck_args_parse(int argc, char *argv[], struct dlck_args *args)
+dlck_args_parse(int argc, char *argv[], struct dlck_control *ctrl)
 {
-	error_t ret = argp_parse(&argp, argc, argv, ARGP_IN_ORDER, 0, args);
+	error_t ret = argp_parse(&argp, argc, argv, ARGP_IN_ORDER, 0, ctrl);
 
 	if (ret != 0) {
 		D_ERROR("Parsing arguments failed: %d", ret);
@@ -72,7 +72,7 @@ dlck_args_parse(int argc, char *argv[], struct dlck_args *args)
 }
 
 void
-dlck_args_free(struct dlck_args *args)
+dlck_args_free(struct dlck_control *ctrl)
 {
-	dlck_args_files_free(&args->files);
+	dlck_args_files_free(&ctrl->files);
 }

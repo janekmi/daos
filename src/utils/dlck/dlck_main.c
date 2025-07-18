@@ -17,19 +17,19 @@ static const dlck_cmd_func dlck_cmds[] = DLCK_CMDS_FUNCS;
 int
 main(int argc, char *argv[])
 {
-	struct dlck_args args = {0};
+	struct dlck_control ctrl = {0};
 	int              rc;
 
-	dlck_args_parse(argc, argv, &args);
+	dlck_args_parse(argc, argv, &ctrl);
 
-	D_ASSERT(args.common.cmd >= 0);
-	D_ASSERT(args.common.cmd < ARRAY_SIZE(dlck_cmds));
+	D_ASSERT(ctrl.common.cmd < ARRAY_SIZE(dlck_cmds));
+	D_ASSERT(ctrl.common.cmd >= 0);
 
-	args.out.dao_printf = printf;
+	ctrl.print.dp_printf = printf;
 
-	rc = dlck_cmds[args.common.cmd](&args);
+	rc = dlck_cmds[ctrl.common.cmd](&ctrl);
 
-	dlck_args_free(&args);
+	dlck_args_free(&ctrl);
 
 	return rc;
 }

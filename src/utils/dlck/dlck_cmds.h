@@ -15,9 +15,9 @@ enum dlck_cmd {
 
 #define DLCK_CMD_DTX_ACT_RECOVER_STR "dtx_act_recs_recover"
 
-struct dlck_args;
+struct dlck_control;
 
-typedef int (*dlck_cmd_func)(struct dlck_args *args);
+typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
 
 /**
  * \brief Recover DTX records by scanning the VOS tree.
@@ -26,13 +26,13 @@ typedef int (*dlck_cmd_func)(struct dlck_args *args);
  * 2. Remove records from all active DTX entries. (write mode only)
  * 3. Populate active DTX entries' records. (write mode only)
  *
- * \param[in]	args	Complete list of arguments.
+ * \param[in]	ctrl	Control state.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 int
-dlck_dtx_act_recs_recover(struct dlck_args *args);
+dlck_dtx_act_recs_recover(struct dlck_control *ctrl);
 
 #define DLCK_CMDS_FUNCS                                                                            \
 	{                                                                                          \

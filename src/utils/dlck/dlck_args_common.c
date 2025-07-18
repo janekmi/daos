@@ -25,7 +25,7 @@ static struct argp_option args_common_options[] = {
 static void
 args_common_init(struct dlck_args_common *args)
 {
-	memset(args, 0, sizeof(struct dlck_args));
+	memset(args, 0, sizeof(*args));
 	/** set defaults */
 	args->write_mode = false; /** dry run */
 	args->cmd        = DLCK_CMD_NOT_SET;

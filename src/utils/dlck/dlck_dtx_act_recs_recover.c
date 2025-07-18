@@ -113,7 +113,7 @@ process_pool(daos_handle_t poh, bool write_mode, struct dlck_stats *stats)
  * Arguments passed to to the main ULT on each of the execution streams.
  */
 struct xstream_arg {
-	struct dlck_args    *args;   /** Complete set of arguments. */
+	struct dlck_control *ctrl;   /** Control state. */
 	struct dlck_engine  *engine; /** Engine itself. */
 	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
 	struct dlck_stats    stats;  /** Cumulative stats for all the DLCK calls. */
@@ -124,7 +124,7 @@ static void
 exec_one(void *arg)
 {
 	struct xstream_arg *xa = arg;
-	const bool          write_mode = xa->args->common.write_mode;
+	const bool          write_mode = xa->ctrl->common.write_mode;
 	struct dlck_file   *file;
 	daos_handle_t       poh;
 	int                 rc;
@@ -135,14 +135,14 @@ exec_one(void *arg)
 		return;
 	}
 
-	d_list_for_each_entry(file, &xa->args->files.list, link) {
+	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is excluded */
 		if ((file->targets & (1 << xa->xs->tgt_id)) == 0) {
 			continue;
 		}
 
 		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = dlck_pool_open(xa->args->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
+		rc = dlck_pool_open(xa->ctrl->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
 				    &poh);
 		ABT_mutex_unlock(xa->engine->open_mtx);
 		if (rc != DER_SUCCESS) {
@@ -150,10 +150,10 @@ exec_one(void *arg)
 			break;
 		}
 
-		if (uuid_is_null(xa->args->common.co_uuid)) {
+		if (uuid_is_null(xa->ctrl->common.co_uuid)) {
 			rc = process_pool(poh, write_mode, &xa->stats);
 		} else {
-			rc = process_cont(poh, xa->args->common.co_uuid, write_mode, &xa->stats);
+			rc = process_cont(poh, xa->ctrl->common.co_uuid, write_mode, &xa->stats);
 		}
 
 		if (rc != DER_SUCCESS) {
@@ -191,14 +191,14 @@ fail_xstream_fini:
  *
  * \param[in]	engine		Engine the ULT is about to be run in.
  * \param[in]	idx		ULT ID.
- * \param[in]	args		Set of arguments.
+ * \param[in]	ctrl_ptr	Control state to be passed to the ULT.
  * \param[out]	output_arg	Allocated argument for the ULT.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_NOMEM	Out of memory.
  */
 static int
-arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
+arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr, void **output_arg)
 {
 	struct xstream_arg *xa;
 
@@ -207,7 +207,7 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 		return -DER_NOMEM;
 	}
 
-	xa->args   = args;
+	xa->ctrl   = ctrl_ptr;
 	xa->engine = engine;
 	xa->xs     = &engine->xss[idx];
 	xa->rc     = DER_SUCCESS;
@@ -220,21 +220,21 @@ arg_alloc(struct dlck_engine *engine, int idx, void *args, void **output_arg)
 /**
  * Free arguments of an ULT.
  *
- * \param[out]		input_arg	Set of arguments.
+ * \param[out]		ctrl_ptr	Control state to collect stats in.
  * \param[in,out]	arg		ULT arguments to process and free.
  *
  * \return The return code for the ULT.
  */
 static int
-arg_free(void *input_arg, void **arg)
+arg_free(void *ctrl_ptr, void **arg)
 {
-	struct dlck_args   *args = input_arg;
+	struct dlck_control *ctrl = ctrl_ptr;
 	struct xstream_arg *xa = *arg;
 	int                 rc = xa->rc;
 
-	DLCK_PRINTF(args, "Touched[%d]: %u\n", xa->xs->tgt_id, xa->stats.touched);
+	DLCK_PRINTF(ctrl, "Touched[%d]: %u\n", xa->xs->tgt_id, xa->stats.touched);
 
-	args->stats.touched += xa->stats.touched;
+	ctrl->stats.touched += xa->stats.touched;
 
 	D_FREE(*arg);
 	*arg = NULL;
@@ -271,31 +271,31 @@ pool_mkdir_all(const char *storage_path, d_list_t *files)
 }
 
 int
-dlck_dtx_act_recs_recover(struct dlck_args *args)
+dlck_dtx_act_recs_recover(struct dlck_control *ctrl)
 {
 	struct dlck_engine *engine = NULL;
 	int                 rc;
 
-	if (!args->common.write_mode) {
-		DLCK_PRINT(args, "Write mode is not enabled. Changes won't be applied.\n");
+	if (!ctrl->common.write_mode) {
+		DLCK_PRINT(ctrl, "Write mode is not enabled. Changes won't be applied.\n");
 	}
 
-	rc = dlck_engine_start(&args->engine, &engine);
+	rc = dlck_engine_start(&ctrl->engine, &engine);
 	if (rc != 0) {
 		return rc;
 	}
 
-	rc = pool_mkdir_all(args->engine.storage_path, &args->files.list);
+	rc = pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list);
 	if (rc != 0) {
 		goto fail;
 	}
 
-	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, args, arg_free);
+	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, ctrl, arg_free);
 	if (rc != 0) {
 		goto fail;
 	}
 
-	DLCK_PRINTF(args, "Touched: %u\n", args->stats.touched);
+	DLCK_PRINTF(ctrl, "Touched: %u\n", ctrl->stats.touched);
 
 	rc = dlck_engine_stop(engine);
 
