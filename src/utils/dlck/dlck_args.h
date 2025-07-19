@@ -124,9 +124,9 @@ struct dlck_control {
 		return ERRNUM;                                                                     \
 	} while (0)
 
-#define DLCK_PRINT(ctrl, fmt)       ctrl->print.dp_printf(fmt)
+#define DLCK_PRINT(ctrl, fmt)       (void)ctrl->print.dp_printf(fmt)
 
-#define DLCK_PRINTF(ctrl, fmt, ...) ctrl->print.dp_printf(fmt, __VA_ARGS__)
+#define DLCK_PRINTF(ctrl, fmt, ...) (void)ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 

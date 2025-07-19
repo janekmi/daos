@@ -1,36 +1,43 @@
 """Build versioned object store tests"""
 
 
-def scons():
-    """Execute build"""
-    Import('env')
-
-    # build d_vector unit test
-    venv = env.Clone()
-
-    venv.Append(OBJPREFIX="dlck_d_vector_ut_")
+def build_dlck_d_vector_ut(venv):
     venv.require('cmocka', 'pmdk')
+    libs = ['cmocka', 'gurt', 'daos_common_pmem']
+    srcs = ['dlck_d_vector_ut.c']
 
-    libraries = ['cmocka', 'gurt', 'daos_common_pmem']
+    bin = venv.d_test_program('dlck_d_vector_ut', srcs, LIBS=libs)
+    venv.Install('$PREFIX/bin/', bin)
 
-    dlck_d_vector_ut_src = ['dlck_d_vector_ut.c']
 
-    dlck_d_vector_ut = venv.d_test_program('dlck_d_vector_ut', dlck_d_vector_ut_src, LIBS=libraries)
-    venv.Install('$PREFIX/bin/', dlck_d_vector_ut)
+def build_dlck_dtx_act_recs_recover_ut(venv):
+    venv.Append(OBJPREFIX="dlck_ut_")
+    venv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
+    venv.require('cmocka', 'argobots')
+    # venv.require('argobots', headers_only=True)
+    libs = ['cmocka', 'gurt', 'uuid', 'daos_common_pmem', 'abt', 'vos', 'bio']
+    srcs = [
+        'dlck_dtx_act_recs_recover_ut.c',
+        'mocks.c',
+        '../dlck_dtx_act_recs_recover.c',
+    ]
 
-    # build and install the test helper
-    henv = env.Clone()
+    bin = venv.d_test_program('dlck_dtx_act_recs_recover_ut', srcs, LIBS=libs)
+    venv.Install('$PREFIX/bin/', bin)
 
+
+def build_dlck_test_helper(henv):
     henv.Append(OBJPREFIX="dlck_ut_helper_")
     henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('argobots', 'cmocka')
 
-    libraries = [
+    libs = [
         'vos_srv', 'gurt', 'daos_common_pmem', 'bio', 'cmocka', 'uuid', 'dtx', 'abt', 'pthread'
     ]
 
-    helper_src = [
+    srcs = [
         'dlck_test_helper.c',
         '../dlck_abt.c',
         '../dlck_tls.c',
@@ -46,8 +53,17 @@ def scons():
         '../../../engine/util.c',
         '../../../mgmt/srv_util_file.c',
     ]
-    helper = henv.d_test_program('dlck_test_helper', helper_src, LIBS=libraries)
-    henv.Install('$PREFIX/bin/', helper)
+    bin = henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
+    henv.Install('$PREFIX/bin/', bin)
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    build_dlck_d_vector_ut(env.Clone())
+    build_dlck_dtx_act_recs_recover_ut(env.Clone())
+    build_dlck_test_helper(env.Clone())
 
 
 if __name__ == "SCons.Script":

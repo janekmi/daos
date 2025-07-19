@@ -260,6 +260,10 @@ pool_mkdir_all(const char *storage_path, d_list_t *files)
 	struct dlck_file *file;
 	int               rc;
 
+	if (d_list_empty(files)) {
+		return -DER_ENOENT;
+	}
+
 	d_list_for_each_entry(file, files, link) {
 		rc = dlck_pool_mkdir(storage_path, file->po_uuid);
 		if (rc != 0 && rc != -DER_EXIST) {
@@ -276,18 +280,22 @@ dlck_dtx_act_recs_recover(struct dlck_control *ctrl)
 	struct dlck_engine *engine = NULL;
 	int                 rc;
 
+	if (ctrl == NULL) {
+		return -DER_INVAL;
+	}
+
 	if (!ctrl->common.write_mode) {
 		DLCK_PRINT(ctrl, "Write mode is not enabled. Changes won't be applied.\n");
+	}
+
+	rc = pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list);
+	if (rc != 0) {
+		return rc;
 	}
 
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	if (rc != 0) {
 		return rc;
-	}
-
-	rc = pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list);
-	if (rc != 0) {
-		goto fail;
 	}
 
 	rc = dlck_engine_exec_all(engine, exec_one, arg_alloc, ctrl, arg_free);
