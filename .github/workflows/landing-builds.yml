@@ -3,9 +3,9 @@ name: Landings
 # Run on landings, or when this action itself is changed.
 on:
   push:
-    branches:
-      - master
-      - 'release/*'
+  # branches:
+  #   - master
+  #   - 'release/*'
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
