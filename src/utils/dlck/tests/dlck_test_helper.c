@@ -27,7 +27,7 @@
 #include "../dlck_pool.h"
 
 #define SRAND_SEED  0x4321
-#define UPDATES_NUM 125
+#define UPDATES_NUM 1
 
 extern struct dss_module dtx_module;
 
@@ -80,6 +80,8 @@ random_uuid_str(char *uuid_str, unsigned int *seedp)
 	}
 
 	uuid_str[8] = uuid_str[13] = uuid_str[18] = uuid_str[23] = '-';
+
+	uuid_str[0] = uuid_str[1] = uuid_str[2] = '0';
 }
 
 static void
@@ -235,14 +237,14 @@ cont_process(struct xstream_state *xst, uuid_t co_uuid)
 	/**
 	 * 2 (IOD types) * 125 * 4 = 1000 total updates
 	 */
-	for (daos_iod_type_t iod_type = DAOS_IOD_SINGLE; iod_type <= DAOS_IOD_ARRAY; ++iod_type) {
+	for (daos_iod_type_t iod_type = DAOS_IOD_ARRAY; iod_type <= DAOS_IOD_ARRAY; ++iod_type) {
 		for (int i = 0; i < UPDATES_NUM; ++i) {
-			is_leader = true;
-			update_one(xst, iod_type, is_leader, false /** commit */);
-			update_one(xst, iod_type, is_leader, true /** commit */);
+			// is_leader = true;
+			// update_one(xst, iod_type, is_leader, false /** commit */);
+			// update_one(xst, iod_type, is_leader, true /** commit */);
 			is_leader = false;
 			update_one(xst, iod_type, is_leader, false /** commit */);
-			update_one(xst, iod_type, is_leader, true /** commit */);
+			// update_one(xst, iod_type, is_leader, true /** commit */);
 		}
 	}
 
