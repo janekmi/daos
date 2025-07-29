@@ -70,7 +70,7 @@ d_vector_segment_entry(d_vector_segment_t *dvs, uint32_t idx)
 }
 
 static inline void
-d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
+d_vector_segment_append(d_vector_segment_t *dvs, const void *entry)
 {
 	D_ASSERT(!d_vector_segment_is_full(dvs));
 	memcpy(d_vector_segment_entry(dvs, dvs->dvs_len), entry, dvs->dvs_entry_size);
@@ -84,7 +84,7 @@ d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
  * \param[in]		src	Address of the element to append.
  */
 static inline int
-d_vector_append(d_vector_t *dst, void *src)
+d_vector_append(d_vector_t *dst, const void *src)
 {
 	d_vector_segment_t *dvs;
 	bool                new_segment = false;

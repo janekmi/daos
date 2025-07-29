@@ -14,8 +14,14 @@ def build_dlck_d_vector_ut(venv):
 def build_dlck_dtx_act_recs_recover_ut(venv):
     """Build dlck_dtx_act_recs_recover.c unit test"""
     venv.Append(OBJPREFIX="dlck_ut_")
+    venv.Append(CPPDEFINES={'DLCK_UT_BUILD': '1'})
     venv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_cont_open'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_cont_close'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dlck_vos_cont_recs_get_active'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dlck_dtx_act_recs_remove'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dlck_dtx_act_recs_set'])
     venv.require('cmocka', 'argobots')
     libs = ['cmocka', 'gurt', 'uuid', 'daos_common_pmem', 'abt', 'vos', 'bio']
     srcs = [

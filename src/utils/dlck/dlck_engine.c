@@ -15,6 +15,7 @@
 
 #include "dlck_args.h"
 #include "dlck_engine.h"
+#include "dlck_pool.h"
 
 int
 			     dss_register_dbtree_classes(void);
@@ -385,7 +386,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	int                 rc;
 
-	rc = dlck_engine_alloc(args->targets, &engine);
+	rc = dlck_engine_alloc(args->nr_targets, &engine);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
@@ -401,7 +402,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	}
 
 	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->nvme_mem_size,
-			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
+			   args->nvme_hugepage_size, args->nr_targets, bypass_health_chk);
 	if (rc != DER_SUCCESS) {
 		goto fail_abt_fini;
 	}
@@ -567,4 +568,63 @@ fail_join_and_free:
 	D_FREE(ults);
 
 	return rc;
+}
+
+int
+dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
+		   daos_handle_t *poh)
+{
+	int rc;
+	int rc_abt;
+
+	rc_abt = ABT_mutex_lock(mtx);
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	rc = dlck_pool_open(storage_path, po_uuid, tgt_id, poh);
+
+	/** unlock ASAP */
+	rc_abt = ABT_mutex_unlock(mtx);
+
+	/** code returned from the open operation takes precedence */
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** unlock error is an error */
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_abt_pool_close(ABT_mutex mtx, daos_handle_t poh)
+{
+	int rc;
+	int rc_abt;
+
+	rc_abt = ABT_mutex_lock(mtx);
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	rc = vos_pool_close(poh);
+
+	/** unlock ASAP */
+	rc_abt = ABT_mutex_unlock(mtx);
+
+	/** code returned from the close operation takes precedence */
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** unlock error is an error */
+	if (rc_abt != ABT_SUCCESS) {
+		return dss_abterr2der(rc_abt);
+	}
+
+	return DER_SUCCESS;
 }

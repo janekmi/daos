@@ -36,7 +36,7 @@ struct dlck_stats {
  * \retval -DER_*	Error.
  */
 int
-dlck_vos_cont_rec_get_active(daos_handle_t coh, d_vector_t *dv, struct dlck_stats *ds);
+dlck_vos_cont_recs_get_active(daos_handle_t coh, d_vector_t *dv, struct dlck_stats *ds);
 
 /**
  * \brief Remove records from all active DTX entries.

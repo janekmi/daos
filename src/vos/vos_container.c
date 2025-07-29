@@ -1066,7 +1066,7 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 }
 
 int
-dlck_vos_cont_rec_get_active(daos_handle_t coh, d_vector_t *dv, struct dlck_stats *ds)
+dlck_vos_cont_recs_get_active(daos_handle_t coh, d_vector_t *dv, struct dlck_stats *ds)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
