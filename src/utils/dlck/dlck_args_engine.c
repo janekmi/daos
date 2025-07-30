@@ -31,7 +31,7 @@ args_engine_init(struct dlck_args_engine *args)
 	/** set defaults */
 	args->nvme_mem_size      = DLCK_DEFAULT_NVME_MEM_SIZE;
 	args->nvme_hugepage_size = DLCK_DEFAULT_NVME_HUGEPAGE_SIZE;
-	args->targets            = DLCK_DEFAULT_TARGETS;
+	args->nr_targets         = DLCK_DEFAULT_TARGETS;
 }
 
 static int
@@ -70,7 +70,7 @@ args_engine_parser(int key, char *arg, struct argp_state *state)
 		rc = parse_unsigned(arg, &args->nvme_hugepage_size, state);
 		break;
 	case KEY_ENGINE_TARGETS:
-		rc = parse_unsigned(arg, &args->targets, state);
+		rc = parse_unsigned(arg, &args->nr_targets, state);
 		break;
 	case KEY_ENGINE_STORAGE:
 		args->storage_path = arg;
