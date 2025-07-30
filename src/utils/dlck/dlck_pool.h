@@ -30,8 +30,6 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid);
 /**
  * Open a pool.
  *
- * It allocates the pool file if necessary (MD-on-SSD).
- *
  * \param[in]	storage_path	Storage path.
  * \param[in]	po_uuid		Pool UUID.
  * \param[in]	tgt_id		Target ID.
@@ -65,5 +63,15 @@ struct co_uuid_list_elem {
  */
 int
 dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids);
+
+/**
+ * Free the list of containers.
+ *
+ * \param[in,out]	co_uuids	List of containers' UUIDs.
+ *
+ * \retval DER_SUCCESS	Success.
+ */
+int
+dlck_pool_cont_list_free(d_list_t *co_uuids);
 
 #endif /** __DLCK_POOL__ */
