@@ -37,7 +37,7 @@ process_cont(daos_handle_t poh, uuid_t co_uuid, bool write_mode, struct dlck_sta
 
 	d_vector_init(sizeof(struct dlck_dtx_rec), &dv);
 
-	rc = dlck_vos_cont_rec_get_active(coh, &dv, stats);
+	rc = dlck_vos_cont_recs_get_active(coh, &dv, stats);
 	if (rc != 0) {
 		goto fail;
 	}
