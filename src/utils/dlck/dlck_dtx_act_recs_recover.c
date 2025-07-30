@@ -11,6 +11,13 @@
 #include "dlck_args.h"
 #include "dlck_engine.h"
 #include "dlck_pool.h"
+#include "dlck_internal.h"
+
+#ifdef DLCK_UT_BUILD
+#define DLCK_STATIC
+#else
+#define DLCK_STATIC static
+#endif
 
 /**
  * Process a single container.
@@ -82,7 +89,7 @@ static int
 process_pool(daos_handle_t poh, bool write_mode, struct dlck_stats *stats)
 {
 	d_list_t                  co_uuids = D_LIST_HEAD_INIT(co_uuids);
-	struct co_uuid_list_elem *elm, *next;
+	struct co_uuid_list_elem *elm;
 	int                       rc;
 
 	rc = dlck_pool_cont_list(poh, &co_uuids);
@@ -97,30 +104,12 @@ process_pool(daos_handle_t poh, bool write_mode, struct dlck_stats *stats)
 		}
 	}
 
-	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
-		d_list_del(&elm->link);
-		D_FREE(elm);
-	}
-
-	D_ASSERT(d_list_empty(&co_uuids));
+	rc = dlck_pool_cont_list_free(&co_uuids);
 
 	return rc;
 }
 
-/**
- * @struct xstream_arg
- *
- * Arguments passed to to the main ULT on each of the execution streams.
- */
-struct xstream_arg {
-	struct dlck_control *ctrl;   /** Control state. */
-	struct dlck_engine  *engine; /** Engine itself. */
-	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
-	struct dlck_stats    stats;  /** Cumulative stats for all the DLCK calls. */
-	int                  rc;     /** [out] return code */
-};
-
-static void
+DLCK_STATIC void
 exec_one(void *arg)
 {
 	struct xstream_arg *xa         = arg;
@@ -141,10 +130,8 @@ exec_one(void *arg)
 			continue;
 		}
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = dlck_pool_open(xa->ctrl->engine.storage_path, file->po_uuid, xa->xs->tgt_id,
-				    &poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		rc = dlck_abt_pool_open(xa->engine->open_mtx, xa->ctrl->engine.storage_path,
+					file->po_uuid, xa->xs->tgt_id, &poh);
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
 			break;
@@ -158,13 +145,11 @@ exec_one(void *arg)
 
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
-			(void)vos_pool_close(poh);
+			(void)dlck_abt_pool_close(xa->engine->open_mtx, poh);
 			break;
 		}
 
-		ABT_mutex_lock(xa->engine->open_mtx);
-		rc = vos_pool_close(poh);
-		ABT_mutex_unlock(xa->engine->open_mtx);
+		rc = dlck_abt_pool_close(xa->engine->open_mtx, poh);
 		if (rc != DER_SUCCESS) {
 			xa->rc = rc;
 			break;
@@ -172,18 +157,14 @@ exec_one(void *arg)
 	}
 
 	if (xa->rc != DER_SUCCESS) {
-		goto fail_xstream_fini;
+		(void)dlck_engine_xstream_fini(xa->xs);
+		return;
 	}
 
 	rc = dlck_engine_xstream_fini(xa->xs);
 	if (rc != DER_SUCCESS) {
 		xa->rc = rc;
 	}
-
-	return;
-
-fail_xstream_fini:
-	(void)dlck_engine_xstream_fini(xa->xs);
 }
 
 /**
@@ -197,7 +178,7 @@ fail_xstream_fini:
  * \retval DER_SUCCESS	Success.
  * \retval -DER_NOMEM	Out of memory.
  */
-static int
+DLCK_STATIC int
 arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr, void **output_arg)
 {
 	struct xstream_arg *xa;
@@ -225,14 +206,12 @@ arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr, void **output_arg
  *
  * \return The return code for the ULT.
  */
-static int
+DLCK_STATIC int
 arg_free(void *ctrl_ptr, void **arg)
 {
 	struct dlck_control *ctrl = ctrl_ptr;
 	struct xstream_arg  *xa   = *arg;
 	int                  rc   = xa->rc;
-
-	DLCK_PRINTF(ctrl, "Touched[%d]: %u\n", xa->xs->tgt_id, xa->stats.touched);
 
 	ctrl->stats.touched += xa->stats.touched;
 

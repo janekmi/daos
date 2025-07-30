@@ -124,3 +124,19 @@ dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids)
 	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list_append, NULL,
 			   co_uuids, NULL);
 }
+
+int
+dlck_pool_cont_list_free(d_list_t *co_uuids)
+{
+	struct co_uuid_list_elem *elm;
+	struct co_uuid_list_elem *next;
+
+	d_list_for_each_entry_safe(elm, next, co_uuids, link) {
+		d_list_del(&elm->link);
+		D_FREE(elm);
+	}
+
+	D_ASSERT(d_list_empty(co_uuids));
+
+	return DER_SUCCESS;
+}
