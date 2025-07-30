@@ -65,7 +65,7 @@ struct dlck_args_engine {
 	unsigned numa_node;
 	unsigned nvme_mem_size;
 	unsigned nvme_hugepage_size;
-	unsigned targets;
+	unsigned nr_targets;
 	char    *storage_path;
 	char    *nvme_conf;
 };

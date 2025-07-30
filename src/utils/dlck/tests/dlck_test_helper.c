@@ -395,13 +395,13 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		return rc;
 	}
 
-	D_ALLOC_ARRAY(bundle->co_uuids, args->engine.targets);
+	D_ALLOC_ARRAY(bundle->co_uuids, args->engine.nr_targets);
 	if (bundle->co_uuids == NULL) {
 		rc = -DER_NOMEM;
 		goto fail_engine_stop;
 	}
 
-	for (int i = 0; i < args->engine.targets; ++i) {
+	for (int i = 0; i < args->engine.nr_targets; ++i) {
 		random_uuid(bundle->co_uuids[i], &seed);
 	}
 

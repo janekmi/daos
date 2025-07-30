@@ -385,7 +385,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	int                 rc;
 
-	rc = dlck_engine_alloc(args->targets, &engine);
+	rc = dlck_engine_alloc(args->nr_targets, &engine);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
@@ -401,7 +401,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 	}
 
 	rc = bio_nvme_init(args->nvme_conf, args->numa_node, args->nvme_mem_size,
-			   args->nvme_hugepage_size, args->targets, bypass_health_chk);
+			   args->nvme_hugepage_size, args->nr_targets, bypass_health_chk);
 	if (rc != DER_SUCCESS) {
 		goto fail_abt_fini;
 	}
