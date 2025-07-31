@@ -70,4 +70,23 @@ dlck_dtx_act_recs_remove(daos_handle_t coh);
 int
 dlck_dtx_act_recs_set(daos_handle_t coh, d_vector_t *dv);
 
+#ifdef DLCK_UT_BUILD
+#define DLCK_STATIC
+#else
+#define DLCK_STATIC static
+#endif
+
+/**
+ * \struct dlck_iter_bundle
+ *
+ * \brief A bundle of arguments passed to vos_iterate() by the DLCK interfaces.
+ *
+ * Exposed for testing purposes.
+ */
+struct dlck_iter_bundle {
+	daos_handle_t      coh;
+	d_vector_t        *dv;
+	struct dlck_stats *ds;
+};
+
 #endif /* __DAOS_DLCK_H__ */

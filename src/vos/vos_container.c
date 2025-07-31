@@ -1030,13 +1030,7 @@ vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch)
 	return 0;
 }
 
-struct dlck_iter_bundle {
-	daos_handle_t      coh;
-	d_vector_t        *dv;
-	struct dlck_stats *ds;
-};
-
-static int
+DLCK_STATIC int
 dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		       vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {

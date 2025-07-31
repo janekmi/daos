@@ -13,6 +13,7 @@
 
 #include <daos_errno.h>
 
+#include "dlck_tests_common.h"
 #include "../dlck_args.h"
 #include "../dlck_cmds.h"
 #include "../dlck_engine.h"
@@ -20,7 +21,6 @@
 #include "../dlck_pool.h"
 
 #define NO_FILES_RC      (-DER_ENOENT)
-#define GENERIC_ERROR_RC (-DER_MISC)
 #define RANDOM_INT_A     17
 #define RANDOM_INT_B     45
 #define OPEN_MTX_PTR     ((void *)0x310)
