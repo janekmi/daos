@@ -86,6 +86,9 @@ d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
 static inline int
 d_vector_append(d_vector_t *dst, void *src)
 {
+	if (dst == NULL || src == NULL)
+		return DER_INVAL;
+
 	d_vector_segment_t *dvs;
 	bool                new_segment = false;
 
@@ -190,8 +193,10 @@ _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx
 		}
 	}
 
-	if (load_entry) {
+	if (load_entry && *idx < (*segment)->dvs_len) {
 		*entry = d_vector_segment_entry(*segment, *idx);
+	} else {
+		*entry = NULL;
 	}
 }
 

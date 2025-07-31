@@ -28,8 +28,10 @@ struct element {
 
 struct state {
 	struct element *array;
-	d_vector_t      vec;
+	d_vector_t	  vec;
 };
+
+#define ENTRY_SIZE sizeof(struct element)
 
 static int
 setup(void **state_ptr)
@@ -76,8 +78,107 @@ empty_vector(void **state_ptr)
 	}
 }
 
+static void
+append_null_vector_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+	int rc = d_vector_append(NULL, &state->array[0]);
+	assert_int_equal(rc, DER_INVAL);
+}
+
+static void
+append_null_entry_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+	int rc = d_vector_append(&state->vec, NULL);
+	assert_int_equal(rc, DER_INVAL);
+}
+
+static void
+move_empty_vector_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+	d_vector_t empty;
+
+	d_vector_init(sizeof(struct element), &empty);
+	d_vector_move(&state->vec, &empty);
+
+	assert_true(d_list_empty(&empty.dv_list));
+	assert_true(d_list_empty(&state->vec.dv_list));
+}
+
+static void
+double_free_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+
+	for (int i = 0; i < ARRAY_MAX; ++i)
+		d_vector_append(&state->vec, &state->array[i]);
+
+	d_vector_free(&state->vec);
+	d_vector_free(&state->vec);
+
+	assert_true(d_list_empty(&state->vec.dv_list));
+}
+
+static void
+append_segment_overflow_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+
+	int capacity = D_VECTOR_SEGMENT_RAW_CAPACITY / ENTRY_SIZE;
+
+	// Fill the segment completely
+	for (int i = 0; i < capacity; i++) {
+		int rc = d_vector_append(&state->vec, &state->array[i]);
+		assert_int_equal(rc, DER_SUCCESS);
+	}
+
+	// Add one more item - exceeding capacity
+	int rc = d_vector_append(&state->vec, &state->array[capacity]);
+	assert_int_equal(rc, DER_SUCCESS);
+
+	// Check that we have 2 segments
+	uint32_t segment_count = 0;
+	d_vector_segment_t *seg;
+	d_list_for_each_entry(seg, &state->vec.dv_list, dvs_link) {
+		segment_count += 1;
+	}
+	assert_int_equal(segment_count, 2);
+
+	d_vector_free(&state->vec);
+}
+
+static void
+append_and_iterate_success(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+	struct element *entry;
+	d_vector_segment_t *segment;
+	uint32_t idx;
+
+	d_vector_init(sizeof(struct element), &state->vec);
+
+	for (int i = 0; i < ARRAY_MAX; ++i) {
+		int rc = d_vector_append(&state->vec, &state->array[i]);
+		assert_int_equal(rc, DER_SUCCESS);
+	}
+
+	d_vector_for_each_entry(entry, segment, idx, &state->vec.dv_list)
+
+	assert_int_equal(d_vector_size(&state->vec), ARRAY_MAX);
+
+	d_vector_free(&state->vec);
+}
+
 static const struct CMUnitTest tests_all[] = {
-    {"DVEC100: empty", empty_vector, setup, teardown},
+	{"DVEC100: empty", empty_vector, setup, teardown},
+	{"DVEC101: null_vector", append_null_vector_test, setup, teardown},
+	{"DVEC102: null_entry", append_null_entry_test, setup, teardown},
+	{"DVEC103: empty_vector", move_empty_vector_test, setup, teardown},
+	{"DVEC104: double_free", double_free_test, setup, teardown},
+	{"DVEC105: segment_overflow", append_segment_overflow_test, setup, teardown},
+	{"DVEC106: happy_day_scenario", append_and_iterate_success, setup, teardown},
 };
 
 int
