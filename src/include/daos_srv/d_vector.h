@@ -23,8 +23,8 @@ struct d_vector {
 
 #define D_VECTOR_SEGMENT_SIZE 4096
 
-#define D_VECTOR_SEGMENT_HEADER                                                                    \
-	struct {                                                                                   \
+#define D_VECTOR_SEGMENT_HEADER                                                            \
+	struct {                                                                               \
 		d_list_t dvs_link;                                                                 \
 		uint32_t dvs_len;                                                                  \
 		uint32_t dvs_capacity;                                                             \
@@ -86,8 +86,9 @@ d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
 static inline int
 d_vector_append(d_vector_t *dst, void *src)
 {
-	if (dst == NULL || src == NULL)
-		return DER_INVAL;
+	if (dst == NULL || src == NULL) {
+		return -DER_INVAL;
+	}
 
 	d_vector_segment_t *dvs;
 	bool                new_segment = false;
@@ -188,7 +189,7 @@ _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx
 			prefetch((*segment)->dvs_link.next);
 			*idx = 0;
 		} else {
-			*idx += 1;
+			*segment = NULL;
 			load_entry = false;
 		}
 	}
@@ -200,10 +201,11 @@ _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx
 	}
 }
 
-#define d_vector_for_each_entry(entry, segment, idx, head)                                         \
-	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head);                        \
-	     segment != NULL && (segment->dvs_link.next != (head) || idx < segment->dvs_len);      \
-	     _d_vector_foreach_next((void **)&entry, &segment, &idx, head))
+#define d_vector_for_each_entry(entry, segment, idx, head)                    \
+    for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head);       \
+         segment != NULL;                                                     \
+         _d_vector_foreach_next((void **)&entry, &segment, &idx, head))       \
+        if (idx < segment->dvs_len)
 
 /**
  * @}

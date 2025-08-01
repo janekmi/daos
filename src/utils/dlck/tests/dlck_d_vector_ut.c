@@ -28,10 +28,8 @@ struct element {
 
 struct state {
 	struct element *array;
-	d_vector_t	  vec;
+	d_vector_t      vec;
 };
-
-#define ENTRY_SIZE sizeof(struct element)
 
 static int
 setup(void **state_ptr)
@@ -83,7 +81,7 @@ append_null_vector_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 	int rc = d_vector_append(NULL, &state->array[0]);
-	assert_int_equal(rc, DER_INVAL);
+	assert_int_equal(rc, -DER_INVAL);
 }
 
 static void
@@ -91,7 +89,7 @@ append_null_entry_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 	int rc = d_vector_append(&state->vec, NULL);
-	assert_int_equal(rc, DER_INVAL);
+	assert_int_equal(rc, -DER_INVAL);
 }
 
 static void
@@ -103,7 +101,7 @@ move_empty_vector_test(void **state_ptr)
 	d_vector_init(sizeof(struct element), &empty);
 	d_vector_move(&state->vec, &empty);
 
-	assert_true(d_list_empty(&empty.dv_list));
+	assert_int_equal(d_vector_size(&empty), 0);
 	assert_true(d_list_empty(&state->vec.dv_list));
 }
 
@@ -112,10 +110,12 @@ double_free_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 
-	for (int i = 0; i < ARRAY_MAX; ++i)
+	for (int i = 0; i < ARRAY_MAX; ++i) {
 		d_vector_append(&state->vec, &state->array[i]);
+	}
 
 	d_vector_free(&state->vec);
+	assert_true(d_list_empty(&state->vec.dv_list));
 	d_vector_free(&state->vec);
 
 	assert_true(d_list_empty(&state->vec.dv_list));
@@ -126,49 +126,69 @@ append_segment_overflow_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 
-	int capacity = D_VECTOR_SEGMENT_RAW_CAPACITY / ENTRY_SIZE;
+	d_vector_t *vec = &state->vec;
+	int capacity = (int)vec->dv_segment_capacity;
 
-	// Fill the segment completely
-	for (int i = 0; i < capacity; i++) {
-		int rc = d_vector_append(&state->vec, &state->array[i]);
+	assert_true(capacity + 1 < ARRAY_MAX);
+
+	int index = 0;
+	int expected_count = capacity + 1;
+	struct element     *entry;
+	d_vector_segment_t *seg;
+	uint32_t            idx;
+
+	/** Fill the segment completely + one more item - exceeding capacity. */
+	for (int i = 0; i <= capacity; i++) {
+		int rc = d_vector_append(vec, &state->array[i]);
 		assert_int_equal(rc, DER_SUCCESS);
 	}
 
-	// Add one more item - exceeding capacity
-	int rc = d_vector_append(&state->vec, &state->array[capacity]);
-	assert_int_equal(rc, DER_SUCCESS);
-
-	// Check that we have 2 segments
-	uint32_t segment_count = 0;
-	d_vector_segment_t *seg;
-	d_list_for_each_entry(seg, &state->vec.dv_list, dvs_link) {
+	/** Check that we have 2 segments */
+	int segment_count = 0;
+	d_list_for_each_entry(seg, &vec->dv_list, dvs_link) {
 		segment_count += 1;
 	}
 	assert_int_equal(segment_count, 2);
 
-	d_vector_free(&state->vec);
+	/** Verify the contents */
+	d_vector_for_each_entry(entry, seg, idx, &vec->dv_list) {
+		assert_memory_equal(entry, &state->array[index], vec->dv_entry_size);
+		index++;
+	}
+	assert_int_equal(index, expected_count);
+
+	d_vector_free(vec);
+
+	/** Check if d_vector_free works properly */
+	assert_ptr_equal(vec->dv_list.next, &vec->dv_list);
+	assert_ptr_equal(vec->dv_list.prev, &vec->dv_list);
 }
 
 static void
 append_and_iterate_success(void **state_ptr)
 {
 	struct state *state = *state_ptr;
+	d_vector_t *vec = &state->vec;
 	struct element *entry;
-	d_vector_segment_t *segment;
+	d_vector_segment_t *seg;
 	uint32_t idx;
+	int index = 0;
 
-	d_vector_init(sizeof(struct element), &state->vec);
+	assert_int_equal(d_vector_size(vec), 0);
 
 	for (int i = 0; i < ARRAY_MAX; ++i) {
-		int rc = d_vector_append(&state->vec, &state->array[i]);
+		int rc = d_vector_append(vec, &state->array[i]);
 		assert_int_equal(rc, DER_SUCCESS);
 	}
 
-	d_vector_for_each_entry(entry, segment, idx, &state->vec.dv_list)
-
-	assert_int_equal(d_vector_size(&state->vec), ARRAY_MAX);
+	d_vector_for_each_entry(entry, seg, idx, &vec->dv_list) {
+		assert_memory_equal(entry, &state->array[index], vec->dv_entry_size);
+		assert_int_equal(d_vector_size(&state->vec), ARRAY_MAX);
+		index++;
+	}
 
 	d_vector_free(&state->vec);
+	assert_int_equal(d_vector_size(&state->vec), 0);
 }
 
 static const struct CMUnitTest tests_all[] = {
