@@ -27,6 +27,7 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 
 /** mocks */
 
+#define COH_MOCK_INIT {.cookie = 0x300413}
 #define ENTRY_MOCK    ((vos_iter_entry_t *)0xE4141)
 #define PARAM_MOCK    ((vos_iter_param_t *)0x5A4A3)
 #define ACTS_MOCK     ((unsigned int *)0xAC15)
@@ -35,15 +36,15 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 
 /** globals */
 
-static const daos_handle_t    Coh = {.cookie = 0x300413};
+static const daos_handle_t    Coh = COH_MOCK_INIT;
 static struct dlck_stats      Stats;
 static const vos_iter_param_t Param = {
-    .ip_hdl   = Coh,
+    .ip_hdl   = COH_MOCK_INIT,
     .ip_epr   = {.epr_hi = DAOS_EPOCH_MAX},
     .ip_flags = VOS_IT_FOR_CHECK,
 };
 static const struct vos_iter_anchors Anchors_zeroed;
-static const struct dlck_iter_bundle Bundle = {.coh = Coh, .ds = &Stats, .dv = DV_MOCK};
+static const struct dlck_iter_bundle Bundle = {.coh = COH_MOCK_INIT, .ds = &Stats, .dv = DV_MOCK};
 static const daos_handle_t           Ih     = {.cookie = (uint64_t)VOS_ITER_MOCK};
 
 /** mocks */
