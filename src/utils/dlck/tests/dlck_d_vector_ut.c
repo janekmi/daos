@@ -32,7 +32,7 @@ struct state {
 };
 
 static int
-setup(void **state_ptr)
+setup( void **state_ptr )
 {
 	static struct state state;
 
