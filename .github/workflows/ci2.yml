@@ -1,7 +1,7 @@
 name: Build
 
 on:
-  pull_request:
+  push:
 
 concurrency:
   group: ci2-${{ github.head_ref }}
