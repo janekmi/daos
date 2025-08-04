@@ -102,7 +102,16 @@ move_empty_vector_test(void **state_ptr)
 	d_vector_move(&state->vec, &empty);
 
 	assert_int_equal(d_vector_size(&empty), 0);
-	assert_true(d_list_empty(&state->vec.dv_list));
+	assert_int_equal(d_vector_size(&state->vec), 0);
+}
+
+static void
+big_entry_size_test(void **state_ptr)
+{
+	d_vector_t vec;
+	size_t     entry_size = D_VECTOR_SEGMENT_RAW_CAPACITY + 8;
+	d_vector_init(entry_size, &vec);
+	assert_true(d_vector_size(&vec) == 0);
 }
 
 static void
@@ -110,32 +119,30 @@ double_free_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 
+	assert_true(ARRAY_MAX > state->vec.dv_segment_capacity);
+
 	for (int i = 0; i < ARRAY_MAX; ++i) {
 		d_vector_append(&state->vec, &state->array[i]);
 	}
 
 	d_vector_free(&state->vec);
-	assert_true(d_list_empty(&state->vec.dv_list));
-	d_vector_free(&state->vec);
+	assert_false(d_vector_size(&state->vec));
 
-	assert_true(d_list_empty(&state->vec.dv_list));
+	d_vector_free(&state->vec);
+	assert_false(d_vector_size(&state->vec));
 }
 
 static void
 append_segment_overflow_test(void **state_ptr)
 {
-	struct state *state = *state_ptr;
-
+	struct state       *state    = *state_ptr;
 	d_vector_t *vec = &state->vec;
-	int capacity = (int)vec->dv_segment_capacity;
-
-	assert_true(capacity + 1 < ARRAY_MAX);
-
-	int index = 0;
-	int expected_count = capacity + 1;
+	int                 capacity = (int)vec->dv_segment_capacity;
 	struct element     *entry;
 	d_vector_segment_t *seg;
 	uint32_t            idx;
+
+	assert_true(capacity + 1 < ARRAY_MAX);
 
 	/** Fill the segment completely + one more item - exceeding capacity. */
 	for (int i = 0; i <= capacity; i++) {
@@ -151,17 +158,17 @@ append_segment_overflow_test(void **state_ptr)
 	assert_int_equal(segment_count, 2);
 
 	/** Verify the contents */
+	int entry_count = 0;
 	d_vector_for_each_entry(entry, seg, idx, &vec->dv_list) {
-		assert_memory_equal(entry, &state->array[index], vec->dv_entry_size);
-		index++;
+		assert_memory_equal(entry, &state->array[entry_count], vec->dv_entry_size);
+		entry_count += 1;
 	}
-	assert_int_equal(index, expected_count);
+	assert_int_equal(entry_count, capacity + 1);
 
 	d_vector_free(vec);
 
 	/** Check if d_vector_free works properly */
-	assert_ptr_equal(vec->dv_list.next, &vec->dv_list);
-	assert_ptr_equal(vec->dv_list.prev, &vec->dv_list);
+	assert_true(d_list_empty(&state->vec.dv_list));
 }
 
 static void
@@ -169,36 +176,40 @@ append_and_iterate_success(void **state_ptr)
 {
 	struct state *state = *state_ptr;
 	d_vector_t *vec = &state->vec;
+	int                 capacity = (int)vec->dv_segment_capacity;
 	struct element *entry;
 	d_vector_segment_t *seg;
-	uint32_t idx;
-	int index = 0;
+	uint32_t            idx;
 
-	assert_int_equal(d_vector_size(vec), 0);
+	assert_true(capacity + 1 < ARRAY_MAX);
 
 	for (int i = 0; i < ARRAY_MAX; ++i) {
 		int rc = d_vector_append(vec, &state->array[i]);
 		assert_int_equal(rc, DER_SUCCESS);
 	}
 
+	int entry_count = 0;
 	d_vector_for_each_entry(entry, seg, idx, &vec->dv_list) {
-		assert_memory_equal(entry, &state->array[index], vec->dv_entry_size);
-		assert_int_equal(d_vector_size(&state->vec), ARRAY_MAX);
-		index++;
+		assert_memory_equal(entry, &state->array[entry_count], vec->dv_entry_size);
+		entry_count += 1;
 	}
+	assert_int_equal(entry_count, ARRAY_MAX);
 
 	d_vector_free(&state->vec);
-	assert_int_equal(d_vector_size(&state->vec), 0);
+
+	/** Check if d_vector_free works properly */
+	assert_true(d_list_empty(&state->vec.dv_list));
 }
 
 static const struct CMUnitTest tests_all[] = {
-	{"DVEC100: empty", empty_vector, setup, teardown},
-	{"DVEC101: null_vector", append_null_vector_test, setup, teardown},
-	{"DVEC102: null_entry", append_null_entry_test, setup, teardown},
-	{"DVEC103: empty_vector", move_empty_vector_test, setup, teardown},
-	{"DVEC104: double_free", double_free_test, setup, teardown},
-	{"DVEC105: segment_overflow", append_segment_overflow_test, setup, teardown},
-	{"DVEC106: happy_day_scenario", append_and_iterate_success, setup, teardown},
+    {"DVEC100: empty", empty_vector, setup, teardown},
+    {"DVEC101: null_vector", append_null_vector_test, setup, teardown},
+    {"DVEC102: null_entry", append_null_entry_test, setup, teardown},
+    {"DVEC103: empty_vector", move_empty_vector_test, setup, teardown},
+    {"DVEC104: big_entry_size", big_entry_size_test, setup, teardown},
+    {"DVEC105: double_free", double_free_test, setup, teardown},
+    {"DVEC106: segment_overflow", append_segment_overflow_test, setup, teardown},
+    {"DVEC107: happy_day_scenario", append_and_iterate_success, setup, teardown},
 };
 
 int

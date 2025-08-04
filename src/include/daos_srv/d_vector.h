@@ -178,34 +178,29 @@ _d_vector_foreach_init(void **entry, d_vector_segment_t **segment, uint32_t *idx
 static inline void
 _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx, d_list_t *head)
 {
-	bool load_entry = true;
-
-	if (*idx < (*segment)->dvs_len) {
+	if (*idx + 1 < (*segment)->dvs_len) { /** there is another entry in the current segment */
 		*idx += 1;
-	} else {
+	} else { /** look for the next segment */
 		d_list_t *next = (*segment)->dvs_link.next;
-		if (next != head) {
+		if (next != head) { /** the next segment exists */
 			(*segment) = d_list_entry(next, __typeof__(**segment), dvs_link);
 			prefetch((*segment)->dvs_link.next);
 			*idx = 0;
-		} else {
+		} else { /** there are no more segments */
 			*segment = NULL;
-			load_entry = false;
+			*idx     = 0;
+			*entry   = NULL;
 		}
 	}
 
-	if (load_entry && *idx < (*segment)->dvs_len) {
+	if (*segment != NULL) {
 		*entry = d_vector_segment_entry(*segment, *idx);
-	} else {
-		*entry = NULL;
 	}
 }
 
-#define d_vector_for_each_entry(entry, segment, idx, head)                    \
-    for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head);       \
-         segment != NULL;                                                     \
-         _d_vector_foreach_next((void **)&entry, &segment, &idx, head))       \
-        if (idx < segment->dvs_len)
+#define d_vector_for_each_entry(entry, segment, idx, head)                                         \
+	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head); segment != NULL;       \
+	     _d_vector_foreach_next((void **)&entry, &segment, &idx, head))
 
 /**
  * @}
