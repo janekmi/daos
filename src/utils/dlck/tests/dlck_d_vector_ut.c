@@ -144,7 +144,7 @@ append_segment_overflow_test(void **state_ptr)
 
 	assert_true(capacity + 1 < ARRAY_MAX);
 
-	/** Fill the segment completely + one more item - exceeding capacity. */
+	/** Fill the segment completely + one more item - exceeding capacity */
 	for (int i = 0; i <= capacity; i++) {
 		int rc = d_vector_append(vec, &state->array[i]);
 		assert_int_equal(rc, DER_SUCCESS);

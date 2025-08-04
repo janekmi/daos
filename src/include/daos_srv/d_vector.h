@@ -23,8 +23,8 @@ struct d_vector {
 
 #define D_VECTOR_SEGMENT_SIZE 4096
 
-#define D_VECTOR_SEGMENT_HEADER                                                            \
-	struct {                                                                               \
+#define D_VECTOR_SEGMENT_HEADER                                                                    \
+	struct {                                                                                   \
 		d_list_t dvs_link;                                                                 \
 		uint32_t dvs_len;                                                                  \
 		uint32_t dvs_capacity;                                                             \
