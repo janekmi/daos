@@ -80,7 +80,7 @@ static void
 append_null_vector_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
-	int rc = d_vector_append(NULL, &state->array[0]);
+	int           rc    = d_vector_append(NULL, &state->array[0]);
 	assert_int_equal(rc, -DER_INVAL);
 }
 
@@ -88,7 +88,7 @@ static void
 append_null_entry_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
-	int rc = d_vector_append(&state->vec, NULL);
+	int           rc    = d_vector_append(&state->vec, NULL);
 	assert_int_equal(rc, -DER_INVAL);
 }
 
@@ -96,7 +96,7 @@ static void
 move_empty_vector_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
-	d_vector_t empty;
+	d_vector_t    empty;
 
 	d_vector_init(sizeof(struct element), &empty);
 	d_vector_move(&state->vec, &empty);
@@ -136,7 +136,7 @@ static void
 append_segment_overflow_test(void **state_ptr)
 {
 	struct state       *state    = *state_ptr;
-	d_vector_t *vec = &state->vec;
+	d_vector_t         *vec      = &state->vec;
 	int                 capacity = (int)vec->dv_segment_capacity;
 	struct element     *entry;
 	d_vector_segment_t *seg;
@@ -174,10 +174,10 @@ append_segment_overflow_test(void **state_ptr)
 static void
 append_and_iterate_success(void **state_ptr)
 {
-	struct state *state = *state_ptr;
-	d_vector_t *vec = &state->vec;
+	struct state       *state    = *state_ptr;
+	d_vector_t         *vec      = &state->vec;
 	int                 capacity = (int)vec->dv_segment_capacity;
-	struct element *entry;
+	struct element     *entry;
 	d_vector_segment_t *seg;
 	uint32_t            idx;
 
