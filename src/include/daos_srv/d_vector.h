@@ -84,7 +84,7 @@ d_vector_segment_append(d_vector_segment_t *dvs, void *entry)
  * \param[in]		src	Address of the element to append.
  */
 static inline int
-d_vector_append( d_vector_t *dst, void *src )
+d_vector_append(d_vector_t *dst, void *src)
 {
 	if (dst == NULL || src == NULL) {
 		return -DER_INVAL;
