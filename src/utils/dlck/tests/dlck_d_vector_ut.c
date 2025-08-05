@@ -93,6 +93,26 @@ append_null_entry_test(void **state_ptr)
 }
 
 static void
+init_large_entry_size_test(void **state_ptr)
+{
+	/** entry_size larger than segment raw capacity */
+	d_vector_t vec_large;
+	size_t     large_size = D_VECTOR_SEGMENT_RAW_CAPACITY + 1;
+	d_vector_init(large_size, &vec_large);
+	assert_true(d_list_empty(&vec_large.dv_list));
+}
+
+static void
+init_misaligned_entry_size_test(void **state_ptr)
+{
+	/** entry_size not perfectly divisible into segment raw capacity */
+	d_vector_t vec_misaligned;
+	size_t     misaligned_size = D_VECTOR_SEGMENT_RAW_CAPACITY / 3;
+	d_vector_init(misaligned_size, &vec_misaligned);
+	assert_true(d_list_empty(&vec_misaligned.dv_list));
+}
+
+static void
 move_empty_vector_test(void **state_ptr)
 {
 	struct state *state = *state_ptr;
@@ -103,6 +123,46 @@ move_empty_vector_test(void **state_ptr)
 
 	assert_int_equal(d_vector_size(&empty), 0);
 	assert_int_equal(d_vector_size(&state->vec), 0);
+}
+
+static void
+move_populated_vector_test(void **state_ptr)
+{
+	struct state *state = *state_ptr;
+	d_vector_t    target;
+
+	d_vector_init(sizeof(struct element), &target);
+
+	/** Plan to overload one segmentation */
+	int total_entries = (int)(state->vec.dv_segment_capacity * 2 + 1);
+	assert_true(total_entries < ARRAY_MAX);
+
+	for (int i = 0; i < total_entries; i++) {
+		int rc = d_vector_append(&state->vec, &state->array[i]);
+		assert_int_equal(rc, DER_SUCCESS);
+	}
+
+	/** Move data to terget */
+	d_vector_move(&target, &state->vec);
+
+	/** The original vector should be empty */
+	assert_int_equal(d_vector_size(&state->vec), 0);
+	assert_true(d_list_empty(&state->vec.dv_list));
+
+	/** Target should include data */
+	struct element     *entry;
+	d_vector_segment_t *seg;
+	uint32_t            idx;
+	int                 count = 0;
+
+	d_vector_for_each_entry(entry, seg, idx, &target.dv_list) {
+		assert_memory_equal(entry, &state->array[count], target.dv_entry_size);
+		count += 1;
+	}
+
+	assert_int_equal(count, total_entries);
+
+	d_vector_free(&target);
 }
 
 static void
@@ -126,10 +186,10 @@ double_free_test(void **state_ptr)
 	}
 
 	d_vector_free(&state->vec);
-	assert_false(d_vector_size(&state->vec));
+	assert_int_equal(d_vector_size(&state->vec), 0);
 
 	d_vector_free(&state->vec);
-	assert_false(d_vector_size(&state->vec));
+	assert_int_equal(d_vector_size(&state->vec), 0);
 }
 
 static void
@@ -205,11 +265,14 @@ static const struct CMUnitTest tests_all[] = {
     {"DVEC100: empty", empty_vector, setup, teardown},
     {"DVEC101: null_vector", append_null_vector_test, setup, teardown},
     {"DVEC102: null_entry", append_null_entry_test, setup, teardown},
-    {"DVEC103: empty_vector", move_empty_vector_test, setup, teardown},
-    {"DVEC104: big_entry_size", big_entry_size_test, setup, teardown},
-    {"DVEC105: double_free", double_free_test, setup, teardown},
-    {"DVEC106: segment_overflow", append_segment_overflow_test, setup, teardown},
-    {"DVEC107: happy_day_scenario", append_and_iterate_success, setup, teardown},
+    {"DVEC103: large_entry_size", init_large_entry_size_test, setup, teardown},
+    {"DVEC104: misaligned_entry_size", init_misaligned_entry_size_test, setup, teardown},
+    {"DVEC105: empty_vector", move_empty_vector_test, setup, teardown},
+    {"DVEC106: move_populated_vector", move_populated_vector_test, setup, teardown},
+    {"DVEC107: big_entry_size", big_entry_size_test, setup, teardown},
+    {"DVEC108: double_free", double_free_test, setup, teardown},
+    {"DVEC109: segment_overflow", append_segment_overflow_test, setup, teardown},
+    {"DVEC110: happy_day_scenario", append_and_iterate_success, setup, teardown},
 };
 
 int
