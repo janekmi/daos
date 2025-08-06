@@ -93,23 +93,12 @@ append_null_entry_test(void **state_ptr)
 }
 
 static void
-init_large_entry_size_test(void **state_ptr)
+init_too_big_entry_size_test(void **state_ptr)
 {
 	/** entry_size larger than segment raw capacity */
 	d_vector_t vec_large;
 	size_t     large_size = D_VECTOR_SEGMENT_RAW_CAPACITY + 1;
-	d_vector_init(large_size, &vec_large);
-	assert_true(d_list_empty(&vec_large.dv_list));
-}
-
-static void
-init_misaligned_entry_size_test(void **state_ptr)
-{
-	/** entry_size not perfectly divisible into segment raw capacity */
-	d_vector_t vec_misaligned;
-	size_t     misaligned_size = D_VECTOR_SEGMENT_RAW_CAPACITY / 3;
-	d_vector_init(misaligned_size, &vec_misaligned);
-	assert_true(d_list_empty(&vec_misaligned.dv_list));
+	expect_assert_failure(d_vector_init(large_size, &vec_large))
 }
 
 static void
@@ -149,7 +138,7 @@ move_populated_vector_test(void **state_ptr)
 	assert_int_equal(d_vector_size(&state->vec), 0);
 	assert_true(d_list_empty(&state->vec.dv_list));
 
-	/** Target should include data */
+	/** Target should contain data */
 	struct element     *entry;
 	d_vector_segment_t *seg;
 	uint32_t            idx;
@@ -163,15 +152,6 @@ move_populated_vector_test(void **state_ptr)
 	assert_int_equal(count, total_entries);
 
 	d_vector_free(&target);
-}
-
-static void
-big_entry_size_test(void **state_ptr)
-{
-	d_vector_t vec;
-	size_t     entry_size = D_VECTOR_SEGMENT_RAW_CAPACITY + 8;
-	d_vector_init(entry_size, &vec);
-	assert_true(d_vector_size(&vec) == 0);
 }
 
 static void
@@ -265,20 +245,20 @@ static const struct CMUnitTest tests_all[] = {
     {"DVEC100: empty", empty_vector, setup, teardown},
     {"DVEC101: null_vector", append_null_vector_test, setup, teardown},
     {"DVEC102: null_entry", append_null_entry_test, setup, teardown},
-    {"DVEC103: large_entry_size", init_large_entry_size_test, setup, teardown},
-    {"DVEC104: misaligned_entry_size", init_misaligned_entry_size_test, setup, teardown},
-    {"DVEC105: empty_vector", move_empty_vector_test, setup, teardown},
-    {"DVEC106: move_populated_vector", move_populated_vector_test, setup, teardown},
-    {"DVEC107: big_entry_size", big_entry_size_test, setup, teardown},
-    {"DVEC108: double_free", double_free_test, setup, teardown},
-    {"DVEC109: segment_overflow", append_segment_overflow_test, setup, teardown},
-    {"DVEC110: happy_day_scenario", append_and_iterate_success, setup, teardown},
+    {"DVEC103: too_big_entry_size", init_too_big_entry_size_test, NULL, NULL},
+    {"DVEC104: empty_vector", move_empty_vector_test, setup, teardown},
+    {"DVEC105: move_populated_vector", move_populated_vector_test, setup, teardown},
+    {"DVEC106: double_free", double_free_test, setup, teardown},
+    {"DVEC107: segment_overflow", append_segment_overflow_test, setup, teardown},
+    {"DVEC108: happy_day_scenario", append_and_iterate_success, setup, teardown},
 };
 
 int
 main(int argc, char **argv)
 {
 	const char *test_name = "d_vector_t tests";
+
+	d_register_alt_assert(mock_assert);
 
 	return cmocka_run_group_tests_name(test_name, tests_all, NULL, NULL);
 }

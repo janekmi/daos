@@ -122,6 +122,7 @@ d_vector_init(size_t entry_size, d_vector_t *dv)
 {
 	memset(dv, 0, sizeof(d_vector_t));
 	dv->dv_entry_size       = entry_size;
+	D_ASSERT(entry_size <= D_VECTOR_SEGMENT_RAW_CAPACITY);
 	dv->dv_segment_capacity = D_VECTOR_SEGMENT_RAW_CAPACITY / entry_size;
 	D_INIT_LIST_HEAD(&dv->dv_list);
 }
