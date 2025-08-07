@@ -27,7 +27,10 @@ dlck_rec_get_active_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_
 
 /** mocks */
 
-#define COH_MOCK_INIT {.cookie = 0x300413}
+#define COH_MOCK_INIT                                                                              \
+	{                                                                                          \
+		.cookie = 0x300413                                                                 \
+	}
 #define ENTRY_MOCK    ((vos_iter_entry_t *)0xE4141)
 #define PARAM_MOCK    ((vos_iter_param_t *)0x5A4A3)
 #define ACTS_MOCK     ((unsigned int *)0xAC15)
