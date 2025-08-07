@@ -13,12 +13,6 @@
 #include "dlck_pool.h"
 #include "dlck_internal.h"
 
-#ifdef DLCK_UT_BUILD
-#define DLCK_STATIC
-#else
-#define DLCK_STATIC static
-#endif
-
 /**
  * Process a single container.
  *

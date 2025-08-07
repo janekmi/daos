@@ -14,7 +14,7 @@ def build_dlck_d_vector_ut(venv):
 def build_dlck_dtx_act_recs_recover_ut(venv):
     """Build dlck_dtx_act_recs_recover.c unit test"""
     venv.Append(OBJPREFIX="dlck_ut_")
-    venv.Append(CPPDEFINES={'DLCK_UT_BUILD': '1'})
+    venv.Append(CPPDEFINES=['-DDLCK_UT_BUILD'])
     venv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
     venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_cont_open'])
@@ -31,6 +31,27 @@ def build_dlck_dtx_act_recs_recover_ut(venv):
     ]
 
     program = venv.d_test_program('dlck_dtx_act_recs_recover_ut', srcs, LIBS=libs)
+    venv.Install('$PREFIX/bin/', program)
+
+
+def build_dlck_vos_cont_recs_get_active(venv):
+    """Build dlck_vos_cont_recs_get_active() unit test"""
+    venv.Append(OBJPREFIX="dlck_ut_")
+    venv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD', '-DDLCK_UT_BUILD'])
+    venv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    venv.require('cmocka', 'argobots')
+    libs = ['cmocka', 'gurt', 'uuid', 'daos_common_pmem', 'abt', 'vea', 'bio']
+    srcs = [
+        'dlck_vos_cont_recs_get_active_ut.c',
+        'vos_mocks.c',
+        '../../../vos/vos_container.c',
+        '../../../vos/vos_gc.c',
+        '../../../vos/vos_space.c',
+        '../../../vos/lru_array.c',
+        '../../../vos/evtree.c',
+    ]
+
+    program = venv.d_test_program('dlck_vos_cont_recs_get_active_ut', srcs, LIBS=libs)
     venv.Install('$PREFIX/bin/', program)
 
 
@@ -71,6 +92,7 @@ def scons():
 
     build_dlck_d_vector_ut(env.Clone())
     build_dlck_dtx_act_recs_recover_ut(env.Clone())
+    build_dlck_vos_cont_recs_get_active(env.Clone())
     build_dlck_test_helper(env.Clone())
 
 
