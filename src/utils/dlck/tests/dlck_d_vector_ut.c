@@ -122,7 +122,7 @@ move_populated_vector_test(void **state_ptr)
 
 	d_vector_init(sizeof(struct element), &target);
 
-	/** Plan to overload one segmentation */
+	/** Overload two segment. Three segments in total. */
 	int total_entries = (int)(state->vec.dv_segment_capacity * 2 + 1);
 	assert_true(total_entries < ARRAY_MAX);
 
