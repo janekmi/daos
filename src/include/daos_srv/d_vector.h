@@ -86,6 +86,10 @@ d_vector_segment_append(d_vector_segment_t *dvs, const void *entry)
 static inline int
 d_vector_append(d_vector_t *dst, const void *src)
 {
+	if (dst == NULL || src == NULL) {
+		return -DER_INVAL;
+	}
+
 	d_vector_segment_t *dvs;
 	bool                new_segment = false;
 
@@ -118,6 +122,7 @@ d_vector_init(size_t entry_size, d_vector_t *dv)
 {
 	memset(dv, 0, sizeof(d_vector_t));
 	dv->dv_entry_size       = entry_size;
+	D_ASSERT(entry_size <= D_VECTOR_SEGMENT_RAW_CAPACITY);
 	dv->dv_segment_capacity = D_VECTOR_SEGMENT_RAW_CAPACITY / entry_size;
 	D_INIT_LIST_HEAD(&dv->dv_list);
 }
@@ -174,30 +179,28 @@ _d_vector_foreach_init(void **entry, d_vector_segment_t **segment, uint32_t *idx
 static inline void
 _d_vector_foreach_next(void **entry, d_vector_segment_t **segment, uint32_t *idx, d_list_t *head)
 {
-	bool load_entry = true;
-
-	if (*idx < (*segment)->dvs_len) {
+	if (*idx + 1 < (*segment)->dvs_len) { /** there is another entry in the current segment */
 		*idx += 1;
-	} else {
+	} else { /** look for the next segment */
 		d_list_t *next = (*segment)->dvs_link.next;
-		if (next != head) {
+		if (next != head) { /** the next segment exists */
 			(*segment) = d_list_entry(next, __typeof__(**segment), dvs_link);
 			prefetch((*segment)->dvs_link.next);
 			*idx = 0;
-		} else {
-			*idx += 1;
-			load_entry = false;
+		} else { /** there are no more segments */
+			*segment = NULL;
+			*idx     = 0;
+			*entry   = NULL;
 		}
 	}
 
-	if (load_entry) {
+	if (*segment != NULL) {
 		*entry = d_vector_segment_entry(*segment, *idx);
 	}
 }
 
 #define d_vector_for_each_entry(entry, segment, idx, head)                                         \
-	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head);                        \
-	     segment != NULL && (segment->dvs_link.next != (head) || idx < segment->dvs_len);      \
+	for (_d_vector_foreach_init((void **)&entry, &segment, &idx, head); segment != NULL;       \
 	     _d_vector_foreach_next((void **)&entry, &segment, &idx, head))
 
 /**
