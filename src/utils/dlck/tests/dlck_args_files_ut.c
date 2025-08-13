@@ -66,20 +66,21 @@ test_args_files_check_should_fail_if_no_files(void **state)
 static void
 test_args_files_parser_should_add_file_to_list(void **state)
 {
-    struct dlck_args_files *args = *state;
-    struct argp_state argp_state = {.input = args};
+	struct dlck_args_files *args       = *state;
+	struct argp_state       argp_state = {.input = args};
 
-    uuid_t expected;
-    uuid_parse("12345678-1234-1234-1234-123456789abc", expected);
+	uuid_t                  expected;
+	uuid_parse("12345678-1234-1234-1234-123456789abc", expected);
 
-    const char *arg = "12345678-1234-1234-1234-123456789abc,1,2,3";
-    int rc = args_files_parser(KEY_FILES, (char *)arg, &argp_state);
-    assert_int_equal(rc, 0);
-    assert_false(d_list_empty(&args->list));
+	const char *arg = "12345678-1234-1234-1234-123456789abc,1,2,3";
+	int         rc  = args_files_parser(KEY_FILES, (char *)arg, &argp_state);
+	assert_int_equal(rc, 0);
+	assert_false(d_list_empty(&args->list));
+	;
 
-    struct dlck_file *file = d_list_entry(args->list.next, struct dlck_file, link);
-    assert_non_null(file);
-    assert_memory_equal(file->po_uuid, expected, 16);
+	struct dlck_file *file = d_list_entry(args->list.next, struct dlck_file, link);
+	assert_non_null(file);
+	assert_memory_equal(file->po_uuid, expected, 16);
 }
 
 static void
@@ -87,7 +88,7 @@ test_dlck_args_files_free_should_cleanup_list(void **state)
 {
     struct dlck_args_files *args = *state;
 
-    struct dlck_file *file = create_dummy_file("12345678-1234-1234-1234-123456789abc");
+    struct dlck_file       *file = create_dummy_file("12345678-1234-1234-1234-123456789abc");
     d_list_add_tail(&file->link, &args->list);
 
     dlck_args_files_free(args);
