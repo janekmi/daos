@@ -60,8 +60,9 @@ def build_dlck_args_files_ut(venv):
     venv.require('cmocka')
     libs = ['cmocka', 'gurt', 'daos_common_pmem', 'uuid']
     srcs = ['dlck_args_files_ut.c', '../dlck_args_files.c', '../dlck_args_parse.c']
+    cppdefines=['DLCK_UT_BUILD']
 
-    program = venv.d_test_program('dlck_args_files_ut', srcs, LIBS=libs, CPPDEFINES=['DLCK_UT_BUILD'])
+    program = venv.d_test_program('dlck_args_files_ut', srcs, LIBS=libs, CPPDEFINES=cppdefines)
     venv.Install('$PREFIX/bin/', program)
 
 

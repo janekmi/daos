@@ -203,9 +203,12 @@ void
 dlck_args_files_free(struct dlck_args_files *args);
 
 #ifdef DLCK_UT_BUILD
-int args_files_parser(int key, char *arg, struct argp_state *state);
-void args_files_init(struct dlck_args_files *args);
-int args_files_check(struct argp_state *state, struct dlck_args_files *args);
+int
+args_files_parser(int key, char *arg, struct argp_state *state);
+void
+args_files_init(struct dlck_args_files *args);
+int
+args_files_check(struct argp_state *state, struct dlck_args_files *args);
 #endif
 
 #endif /** __DLCK_ARGS__ */
