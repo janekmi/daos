@@ -86,13 +86,13 @@ test_args_files_parser_should_add_file_to_list(void **state)
 static void
 test_dlck_args_files_free_should_cleanup_list(void **state)
 {
-    struct dlck_args_files *args = *state;
+	struct dlck_args_files *args = *state;
 
-    struct dlck_file       *file = create_dummy_file("12345678-1234-1234-1234-123456789abc");
-    d_list_add_tail(&file->link, &args->list);
+	struct dlck_file       *file = create_dummy_file("12345678-1234-1234-1234-123456789abc");
+	d_list_add_tail(&file->link, &args->list);
 
-    dlck_args_files_free(args);
-    assert_true(d_list_empty(&args->list));
+	dlck_args_files_free(args);
+	assert_true(d_list_empty(&args->list));
 }
 
 int
