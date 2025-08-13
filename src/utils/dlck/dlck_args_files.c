@@ -12,12 +12,18 @@
 
 #include "dlck_args.h"
 
-static struct argp_option args_files_options[] = {
+#ifdef DLCK_UT_BUILD
+#define DLCK_STATIC
+#else
+#define DLCK_STATIC static
+#endif
+
+DLCK_STATIC struct argp_option args_files_options[] = {
     {"file", KEY_FILES, "UUID,TARGET", 0,
      "Pool UUID and set of targets. Can be used more than once.", GROUP_OPTIONS},
     {0}};
 
-static void
+DLCK_STATIC void
 args_files_init(struct dlck_args_files *args)
 {
 	memset(args, 0, sizeof(*args));
@@ -25,7 +31,7 @@ args_files_init(struct dlck_args_files *args)
 	D_INIT_LIST_HEAD(&args->list);
 }
 
-static int
+DLCK_STATIC int
 args_files_check(struct argp_state *state, struct dlck_args_files *args)
 {
 	if (d_list_empty(&args->list)) {
@@ -34,7 +40,7 @@ args_files_check(struct argp_state *state, struct dlck_args_files *args)
 	return 0;
 }
 
-static error_t
+DLCK_STATIC error_t
 args_files_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_files *args = state->input;
