@@ -11,6 +11,7 @@
 #include <argp.h>
 #include <uuid/uuid.h>
 #include <gurt/list.h>
+#include <daos_srv/dlck.h>
 
 #include "dlck_cmds.h"
 
@@ -94,6 +95,8 @@ struct dlck_control {
 	struct dlck_args_engine engine;
 	/** print */
 	struct dlck_print       print;
+	/** out */
+	struct dlck_stats       stats;
 };
 
 /** helper definitions */

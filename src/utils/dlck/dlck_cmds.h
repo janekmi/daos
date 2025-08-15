@@ -36,6 +36,7 @@ dlck_dtx_act_recs_recover(struct dlck_control *ctrl);
 
 #define DLCK_CMDS_FUNCS                                                                            \
 	{                                                                                          \
+                dlck_dtx_act_recs_recover\
 	}
 
 #endif /** __DLCK_CMDS__ */
