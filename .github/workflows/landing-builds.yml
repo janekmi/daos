@@ -3,9 +3,9 @@ name: Landings
 # Run on landings, or when this action itself is changed.
 on:
   push:
-    branches:
-      - master
-      - 'release/*'
+  # branches:
+  #   - master
+  #   - 'release/*'
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
@@ -44,20 +44,21 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        # distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [rocky]
         include:
-          - distro: ubuntu
-            base: ubuntu
-            with: ubuntu:oracular
+          # - distro: ubuntu
+          #   base: ubuntu
+          #   with: ubuntu:oracular
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-          - distro: fedora
-            base: el.8
-            with: fedora:38
-          - distro: leap.15
-            base: leap.15
-            with: opensuse/leap:15.5
+          # - distro: fedora
+          #   base: el.8
+          #   with: fedora:38
+          # - distro: leap.15
+          #   base: leap.15
+          #   with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
