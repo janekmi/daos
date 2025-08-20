@@ -110,10 +110,10 @@ test_free_should_cleanup_list(void **state)
 }
 
 static const struct CMUnitTest tests_all[] = {
-	{"DARG100: init", test_init_should_initialize_list, setup, teardown},
-	{"DARG101: check", test_check_should_fail_if_no_files, setup, teardown},
-	{"DARG102: parser", test_parser_should_add_file_to_list, setup, teardown},
-	{"DARG103: free", test_free_should_cleanup_list, setup, teardown},
+    {"DARG100: init", test_init_should_initialize_list, setup, teardown},
+    {"DARG101: check", test_check_should_fail_if_no_files, setup, teardown},
+    {"DARG102: parser", test_parser_should_add_file_to_list, setup, teardown},
+    {"DARG103: free", test_free_should_cleanup_list, setup, teardown},
 };
 
 int
