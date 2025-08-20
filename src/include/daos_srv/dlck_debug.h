@@ -7,7 +7,6 @@
 #ifndef __DAOS_DLCK_DEBUG_H__
 #define __DAOS_DLCK_DEBUG_H__
 
-
 #ifdef DLCK_UT_BUILD
 #define DLCK_STATIC
 #else

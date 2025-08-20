@@ -43,11 +43,13 @@ teardown(void **state)
 
 /** mocks */
 
-void __wrap_argp_failure(struct argp_state *state, int status, int errnum, const char *fmt, ...) {
-    check_expected_ptr(state);
-    check_expected(status);
-    check_expected(errnum);
-    check_expected(fmt);
+void
+__wrap_argp_failure(struct argp_state *state, int status, int errnum, const char *fmt, ...)
+{
+	check_expected_ptr(state);
+	check_expected(status);
+	check_expected(errnum);
+	check_expected(fmt);
 }
 
 /** tests */
@@ -70,7 +72,7 @@ test_check_should_fail_if_no_files(void **state)
 	expect_value(__wrap_argp_failure, errnum, EINVAL);
 	expect_string(__wrap_argp_failure, fmt, "No file chosen");
 
-	int                     rc = args_files_check(&argp_state, args);
+	int rc = args_files_check(&argp_state, args);
 	assert_int_equal(rc, EINVAL);
 }
 
@@ -79,22 +81,18 @@ test_parser_should_add_file_to_list(void **state)
 {
 	struct dlck_args_files *args = *state;
 
-    uuid_t expected;
-    uuid_parse("12345678-1234-1234-1234-123456789abc", expected);
+	uuid_t                  expected;
+	uuid_parse("12345678-1234-1234-1234-123456789abc", expected);
 
-    char *argv[] = {
-        "program_name",
-        "--file=12345678-1234-1234-1234-123456789abc,1,2,3",
-        NULL
-    };
+	char *argv[] = {"program_name", "--file=12345678-1234-1234-1234-123456789abc,1,2,3", NULL};
 
-    int rc = argp_parse(&argp_file, 2, argv, 0, NULL, args);
-    assert_int_equal(rc, 0);
-    assert_false(d_list_empty(&args->list));
+	int   rc = argp_parse(&argp_file, 2, argv, 0, NULL, args);
+	assert_int_equal(rc, 0);
+	assert_false(d_list_empty(&args->list));
 
-    struct dlck_file *file = d_list_entry(args->list.next, struct dlck_file, link);
-    assert_non_null(file);
-    assert_memory_equal(file->po_uuid, expected, 16);
+	struct dlck_file *file = d_list_entry(args->list.next, struct dlck_file, link);
+	assert_non_null(file);
+	assert_memory_equal(file->po_uuid, expected, 16);
 }
 
 static void
