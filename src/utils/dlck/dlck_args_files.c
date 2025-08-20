@@ -11,14 +11,9 @@
 #include <gurt/list.h>
 
 #include "dlck_args.h"
+#include "daos_srv/dlck_debug.h"
 
-#ifdef DLCK_UT_BUILD
-#define DLCK_STATIC
-#else
-#define DLCK_STATIC static
-#endif
-
-DLCK_STATIC struct argp_option args_files_options[] = {
+static struct argp_option args_files_options[] = {
     {"file", KEY_FILES, "UUID,TARGET", 0,
      "Pool UUID and set of targets. Can be used more than once.", GROUP_OPTIONS},
     {0}};
@@ -40,7 +35,7 @@ args_files_check(struct argp_state *state, struct dlck_args_files *args)
 	return 0;
 }
 
-DLCK_STATIC error_t
+static error_t
 args_files_parser(int key, char *arg, struct argp_state *state)
 {
 	struct dlck_args_files *args = state->input;

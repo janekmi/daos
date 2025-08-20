@@ -30,7 +30,6 @@ static struct argp_option empty_options[] = {{0}};
 static struct argp_option _automagic[] = {OPT_HEADER("Other options:", GROUP_AUTOMAGIC), {0}};
 
 /** glue everything together */
-
 extern struct argp        argp_common;
 extern struct argp        argp_file;
 extern struct argp        argp_engine;
