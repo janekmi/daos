@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#ifndef __DAOS_DLCK_DEBUG_H__
-#define __DAOS_DLCK_DEBUG_H__
+#ifndef __DLCK_DEBUG_H__
+#define __DLCK_DEBUG_H__
 
 #ifdef DLCK_UT_BUILD
 #define DLCK_STATIC
@@ -13,4 +13,4 @@
 #define DLCK_STATIC static
 #endif
 
-#endif /** __DLCK_DEBUG__ */
+#endif /** __DLCK_DEBUG_H__ */

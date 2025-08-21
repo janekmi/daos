@@ -128,8 +128,6 @@ struct dlck_control {
 
 #define DLCK_PRINTF(ctrl, fmt, ...) (void)ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
-extern struct argp argp_file;
-
 /** dlck_args_parse.c */
 
 /**
