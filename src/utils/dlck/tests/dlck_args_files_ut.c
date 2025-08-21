@@ -225,7 +225,7 @@ static const struct CMUnitTest tests_all[] = {
     {"DARG105: key init", test_init_sets_up_list, setup, teardown},
     {"DARG106: key end fail", test_parser_end_fails_without_file, setup, teardown},
     {"DARG107: key end ok", test_end_succeeds_with_file, setup, teardown},
-    {"DARG108: paser fail", test_key_files_parse_file_fails, setup, teardown},
+    {"DARG108: parser fail", test_key_files_parse_file_fails, setup, teardown},
     {"DARG109: success noop", test_success_and_fini_are_noops, setup, teardown},
 };
 
