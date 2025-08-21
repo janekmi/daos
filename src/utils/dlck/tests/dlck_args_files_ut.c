@@ -23,7 +23,7 @@ args_files_check(struct argp_state *state, struct dlck_args_files *args);
 /** mocks */
 
 #define MOCK_ARGP_STATE ((void *)0xDEADBEEF)
-struct dlck_file File;
+struct dlck_file   File;
 extern struct argp argp_file;
 
 void
@@ -114,7 +114,7 @@ test_parser_should_add_file_to_list(void **state)
 
 	will_return(__wrap_parse_file, DER_SUCCESS);
 
-	int   rc = argp_parse(&argp_file, 2, argv, 0, NULL, args);
+	int rc = argp_parse(&argp_file, 2, argv, 0, NULL, args);
 	assert_int_equal(rc, 0);
 	assert_false(d_list_empty(&args->list));
 
