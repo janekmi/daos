@@ -16,6 +16,7 @@
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
+#include <daos_srv/dlck.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -2117,4 +2118,161 @@ vos_pool_feature_skip_dtx_resync(daos_handle_t poh)
 	D_ASSERT(vos_pool != NULL);
 
 	return vos_pool->vp_pool_df->pd_compat_flags & VOS_POOL_COMPAT_FLAG_SKIP_DTX_RESYNC;
+}
+
+static int
+dlck_umem_check(const char *path, uuid_t po_uuid, unsigned int flags, struct umem_pool **ph,
+		struct dlck_print *dp)
+{
+	struct bio_xs_context   *xs_ctxt = vos_xsctxt_get();
+	struct umem_store        store   = {0};
+	/* No NVMe is configured or current xstream doesn't have NVMe context */
+	bool                     pmem = (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL);
+	enum bio_mc_flags        mc_flags = vos2mc_flags(flags);
+	struct bio_meta_context *mc;
+	struct umem_pool        *pop;
+	int                      rc, rc2;
+
+	DLCK_PRINT(dp, "PMEM pool... ");
+	DLCK_PRINT_YES_NO(dp, pmem);
+
+	if (pmem) {
+		store.store_type = DAOS_MD_PMEM;
+	} else {
+		DLCK_PRINT(dp, "Open BIO meta context... ");
+		rc = bio_mc_open(xs_ctxt, po_uuid, mc_flags, &mc);
+		if (rc) {
+			DLCK_PRINT_RC(dp, rc);
+			return rc;
+		}
+		DLCK_PRINT_OK(dp);
+
+		init_umem_store(&store, mc);
+	}
+
+	DLCK_PRINT(dp, "Open the pool... ");
+	pop = umempobj_open(path, VOS_POOL_LAYOUT, UMEMPOBJ_ENABLE_STATS, &store);
+	if (pop != NULL) {
+		DLCK_PRINT_OK(dp);
+		*ph = pop;
+		return DER_SUCCESS;
+	}
+	rc = daos_errno2der(errno);
+	DLCK_PRINT_RC(dp, rc);
+
+	if (!pmem) {
+		DLCK_PRINT(dp, "Close BIO meta context... ");
+		rc2 = bio_mc_close(store.stor_priv);
+		if (rc2) {
+			DLCK_PRINT_RC(dp, rc);
+		} else {
+			DLCK_PRINT_OK(dp);
+		}
+	}
+
+	return rc;
+}
+
+static int
+dlck_pool_post_check(struct umem_pool *pop, struct vos_pool_df *pool_df, unsigned int flags,
+		     struct dlck_print *dp)
+{
+	struct umem_attr     uma = {0};
+	struct umem_instance umm = {0};
+	int                  rc;
+
+	uma.uma_pool = pop;
+	uma.uma_id   = umempobj_backend_type2class_id(pop->up_store.store_type);
+
+	rc = umem_class_init(&uma, &umm);
+	if (rc != 0) {
+		return rc;
+	}
+
+	DLCK_PRINT(dp, "Containers tree...\n");
+	dlck_print_indent_inc(dp);
+	rc = dlck_dbtree_check_inplace(&pool_df->pd_cont_root, dp);
+	dlck_print_indent_dec(dp);
+	DLCK_PRINT(dp, "Containers tree... ");
+	if (rc != 0) {
+		DLCK_PRINT_RC(dp, rc);
+		return rc;
+	}
+	DLCK_PRINT_OK(dp);
+
+	if (!(flags & VOS_POF_FOR_FEATURE_FLAG) && bio_nvme_configured(SMD_DEV_TYPE_DATA) &&
+	    pool_df->pd_nvme_sz != 0) {
+		/** dlck_vea_check */
+	}
+
+	/** dlck_gc_check() */
+
+	return DER_SUCCESS;
+}
+
+int
+dlck_pool_check(const char *path, uuid_t po_uuid, unsigned int flags, struct dlck_print *dp)
+{
+	struct umem_pool   *pop     = NULL;
+	struct vos_pool_df *pool_df = NULL;
+	int                 rc;
+
+	if (path == NULL) {
+		return -DER_INVAL;
+	}
+
+	/** header with parameters */
+	DLCK_PRINT(dp, "Check pool:\n");
+	DLCK_PRINTF(dp, "\tpath: %s\n", path);
+	DLCK_PRINTF(dp, "\tuuid: " DF_UUIDF "\n", DP_UUID(po_uuid));
+	dlck_print_indent_inc(dp);
+
+	DLCK_PRINT(dp, "NVMe devices (if applicable)... ");
+	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
+	if (rc) {
+		DLCK_PRINT_RC(dp, rc);
+		return rc;
+	}
+	DLCK_PRINT_OK(dp);
+
+	rc = dlck_umem_check(path, po_uuid, flags, &pop, dp);
+	if (rc) {
+		return rc;
+	}
+
+	pool_df = vos_pool_pop2df(pop);
+	DLCK_PRINT(dp, "Magic... ");
+	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+		DLCK_PRINTF(dp, "invalid (%#x)\n", pool_df->pd_magic);
+		return -DER_DF_INVAL;
+	}
+	DLCK_PRINT_OK(dp);
+
+	DLCK_PRINT(dp, "Version... ");
+	if (pool_df->pd_version > POOL_DF_VERSION || pool_df->pd_version < POOL_DF_VER_1) {
+		DLCK_PRINTF(dp, "unsupported (%#x)\n", pool_df->pd_version);
+		return -DER_DF_INCOMPT;
+	}
+	DLCK_PRINT_OK(dp);
+
+	DLCK_PRINT(dp, "UUID... ");
+	if (uuid_compare(po_uuid, pool_df->pd_id)) {
+		DLCK_PRINTF(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
+			    DP_UUID(po_uuid), DP_UUID(pool_df->pd_id));
+		return -DER_ID_MISMATCH;
+	}
+	DLCK_PRINT_OK(dp);
+
+	rc = dlck_pool_post_check(pop, pool_df, flags, dp);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** close & clean up */
+
+	dlck_print_indent_dec(dp);
+	DLCK_PRINT(dp, "Check pool... ");
+	DLCK_PRINT_OK(dp);
+
+	return rc;
 }

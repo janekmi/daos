@@ -22,6 +22,7 @@ def scons():
         'dlck_pool.c',
         'dlck_sched.c',
         'dlck_tls.c',
+        'dlck_wip.c',
         '../../engine/util.c',
         '../../mgmt/srv_util_file.c',
     ]

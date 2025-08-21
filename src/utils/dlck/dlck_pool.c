@@ -40,6 +40,38 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid)
 	}
 }
 
+/**
+ * Create pool directories for all files provided.
+ *
+ * \param[in]	storage_path	Engine the ULT is about to be run in.
+ * \param[in]	files		List of files.
+ *
+ * \retval DER_SUCCESS		Success.
+ * \retval -DER_NOMEM		Out of memory.
+ * \retval -DER_NO_PERM		Permission problem. Please see mkdir(2).
+ * \retval -DER_NONEXIST	A component of the \p storage_path does not exist.
+ * \retval -DER_*		Possibly other errors but not -DER_EXIST.
+ */
+int
+dlck_pool_mkdir_all(const char *storage_path, d_list_t *files)
+{
+	struct dlck_file *file;
+	int               rc;
+
+	if (d_list_empty(files)) {
+		return -DER_ENOENT;
+	}
+
+	d_list_for_each_entry(file, files, link) {
+		rc = dlck_pool_mkdir(storage_path, file->po_uuid);
+		if (rc != 0 && rc != -DER_EXIST) {
+			return rc;
+		}
+	}
+
+	return DER_SUCCESS;
+}
+
 static int
 dlck_file_preallocate(const char *path, uuid_t uuid)
 {
@@ -58,17 +90,26 @@ dlck_file_preallocate(const char *path, uuid_t uuid)
 	return rc;
 }
 
-int
-dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle_t *poh)
+char *
+dlck_pool_path(const char *storage_path, uuid_t po_uuid, int tgt_id)
 {
-	char              *path;
-	char               po_uuid_str[UUID_STR_LEN];
-	const unsigned int flags = VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG;
-	int                rc;
+	char  po_uuid_str[UUID_STR_LEN];
+	char *path;
 
 	uuid_unparse(po_uuid, po_uuid_str);
 
 	D_ASPRINTF(path, "%s/%s/" VOS_FILE "%d", storage_path, po_uuid_str, tgt_id);
+
+	return path;
+}
+
+int
+dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle_t *poh)
+{
+	char              *path;
+	int                rc;
+
+	path = dlck_pool_path(storage_path, po_uuid, tgt_id);
 	if (path == NULL) {
 		return -DER_NOMEM;
 	}
@@ -81,7 +122,7 @@ dlck_pool_open(const char *storage_path, uuid_t po_uuid, int tgt_id, daos_handle
 		}
 	}
 
-	rc = vos_pool_open(path, po_uuid, flags, poh);
+	rc = vos_pool_open(path, po_uuid, DLCK_POOL_OPEN_FLAGS, poh);
 
 fail:
 	D_FREE(path);

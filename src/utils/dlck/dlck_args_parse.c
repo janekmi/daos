@@ -93,7 +93,9 @@ free_file:
 enum dlck_cmd
 parse_command(const char *arg)
 {
-	/** placeholder for future commands */
+	if (strcmp(arg, DLCK_CMD_WIP_STR) == 0) {
+		return DLCK_CMD_WIP;
+	}
 
 	return DLCK_CMD_UNKNOWN;
 }

@@ -582,6 +582,55 @@ fail_join_and_free:
 }
 
 int
+dlck_engine_exec(struct dlck_engine *engine, int idx, dlck_ult_func exec,
+		 arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn)
+{
+	struct dlck_ult ult;
+	void           *ult_args;
+	int             rc;
+	int             rc2;
+
+	/** prepare arguments */
+	rc = arg_alloc_fn(engine, idx, custom, &ult_args);
+	if (rc != DER_SUCCESS) {
+		goto fail_join_and_free;
+	}
+
+	/** start an ULT */
+	rc = dlck_ult_create(engine->xss[idx].pool, exec, ult_args, &ult);
+	if (rc != DER_SUCCESS) {
+		goto fail_join_and_free;
+	}
+
+	rc = ABT_thread_join(ult.thread);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto fail_join_and_free;
+	}
+
+	rc = ABT_thread_free(&ult.thread);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto fail_join_and_free;
+	}
+
+	return arg_free_fn(custom, &ult_args);
+
+fail_join_and_free:
+	if (ult.thread != ABT_THREAD_NULL) {
+		rc2 = ABT_thread_join(ult.thread);
+		if (rc2 != ABT_SUCCESS) {
+			/** the ULT did not join - can't free the thread nor free the arguments */
+			return rc;
+		}
+	}
+	(void)ABT_thread_free(&ult.thread);
+	(void)arg_free_fn(custom, &ult_args);
+
+	return rc;
+}
+
+int
 dlck_abt_pool_open(ABT_mutex mtx, const char *storage_path, uuid_t po_uuid, int tgt_id,
 		   daos_handle_t *poh)
 {
@@ -638,4 +687,65 @@ dlck_abt_pool_close(ABT_mutex mtx, daos_handle_t poh)
 	}
 
 	return DER_SUCCESS;
+}
+
+/**
+ * Allocate arguments for an ULT.
+ *
+ * \param[in]	engine		Engine the ULT is about to be run in.
+ * \param[in]	idx		ULT ID.
+ * \param[in]	ctrl_ptr	Control state to be passed to the ULT.
+ * \param[out]	output_arg	Allocated argument for the ULT.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ */
+int
+dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
+			      void **output_arg)
+{
+	struct xstream_arg *xa;
+
+	D_ALLOC_PTR(xa);
+	if (xa == NULL) {
+		return -DER_NOMEM;
+	}
+
+	xa->ctrl   = ctrl_ptr;
+	xa->engine = engine;
+	xa->xs     = &engine->xss[idx];
+	xa->rc     = DER_SUCCESS;
+
+	*output_arg = xa;
+
+	return DER_SUCCESS;
+}
+
+/**
+ * Free arguments of an ULT.
+ *
+ * \param[out]		ctrl_ptr	Control state to collect stats in.
+ * \param[in,out]	arg		ULT arguments to process and free.
+ *
+ * \return The return code for the ULT.
+ */
+int
+dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
+{
+	struct dlck_control *ctrl = ctrl_ptr;
+	struct xstream_arg  *xa   = *arg;
+	int                  rc;
+
+	if (xa == NULL) {
+		return DER_SUCCESS;
+	}
+
+	rc = xa->rc;
+
+	ctrl->stats.touched += xa->stats.touched;
+
+	D_FREE(*arg);
+	*arg = NULL;
+
+	return rc;
 }

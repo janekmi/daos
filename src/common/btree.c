@@ -16,6 +16,7 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
+#include <daos_srv/dlck.h>
 
 #define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
 
@@ -4446,6 +4447,59 @@ out:
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 
 /**
+ * Calculate tree features.
+ *
+ * \param[in]		tree_class
+ * \param[in,out]	tree_feats
+ * \param[in]		tc
+ *
+ * \retval -DER_PROTO	Unsupported features
+ * \retval DER_SUCCESS	Success
+ */
+static int
+btr_class_init_feats(unsigned int tree_class, uint64_t *tree_feats, struct btr_class *tc)
+{
+	uint64_t special_feat;
+
+	/* If no hkey callbacks are supplied, only special key types are
+	 * supported.  Rather than flagging an error just set the
+	 * appropriate flag.
+	 */
+	special_feat = tc->tc_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY);
+	if (!(special_feat & *tree_feats) &&
+	    (tc->tc_ops->to_hkey_gen == NULL || tc->tc_ops->to_hkey_size == NULL)) {
+		D_DEBUG(DB_TRACE,
+			"Setting feature " DF_X64 " required"
+			" by tree class %d",
+			special_feat, tree_class);
+		*tree_feats |= special_feat;
+	}
+
+	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
+		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
+
+	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
+	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {
+		/** The key is normally stored in value but with integer
+		 * keys, it's stored in the btr_record. While we would
+		 * save an indirection if we added 8 bytes to the value
+		 * allocation, we would have 8 unrecoverable bytes stored
+		 * with that value.  It would also add some complication
+		 * to the key retrieval logic.  For now, integer keys are
+		 * not supported for this optimization.
+		 */
+		*tree_feats ^= BTR_FEAT_EMBED_FIRST;
+	}
+
+	/** Only check btree managed bits that can be set in tr_class */
+	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_EXT_FEAT_MASK)) {
+		return -DER_PROTO;
+	}
+
+	return DER_SUCCESS;
+}
+
+/**
  * Initialize a tree instance from a registered tree class.
  */
 static int
@@ -4454,9 +4508,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	       struct umem_attr *uma, daos_handle_t coh, void *priv,
 	       struct btr_instance *tins)
 {
-	struct btr_class	*tc;
-	uint64_t		 special_feat;
-	int			 rc;
+	struct btr_class *tc;
+	int               rc;
 
 	memset(tins, 0, sizeof(*tins));
 	rc = umem_class_init(uma, &tins->ti_umm);
@@ -4491,40 +4544,10 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 		return -DER_NONEXIST;
 	}
 
-	/* If no hkey callbacks are supplied, only special key types are
-	 * supported.  Rather than flagging an error just set the
-	 * appropriate flag.
-	 */
-	special_feat = tc->tc_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY);
-	if (!(special_feat & *tree_feats) &&
-	    (tc->tc_ops->to_hkey_gen == NULL ||
-	     tc->tc_ops->to_hkey_size == NULL)) {
-		D_DEBUG(DB_TRACE, "Setting feature "DF_X64" required"
-			" by tree class %d", special_feat, tree_class);
-		*tree_feats |= special_feat;
-	}
-
-	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
-		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
-
-	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
-	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {
-		/** The key is normally stored in value but with integer
-		 * keys, it's stored in the btr_record. While we would
-		 * save an indirection if we added 8 bytes to the value
-		 * allocation, we would have 8 unrecoverable bytes stored
-		 * with that value.  It would also add some complication
-		 * to the key retrieval logic.  For now, integer keys are
-		 * not supported for this optimization.
-		 */
-		*tree_feats ^= BTR_FEAT_EMBED_FIRST;
-	}
-
-	/** Only check btree managed bits that can be set in tr_class */
-	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_EXT_FEAT_MASK)) {
-		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
-			*tree_feats, tc->tc_feats);
-		return -DER_PROTO;
+	rc = btr_class_init_feats(tree_class, tree_feats, tc);
+	if (rc != DER_SUCCESS) {
+		D_ERROR("Unsupported features " DF_X64 "/" DF_X64 "\n", *tree_feats, tc->tc_feats);
+		return rc;
 	}
 
 	tins->ti_ops = tc->tc_ops;
@@ -4640,3 +4663,32 @@ done:
 	return 0;
 }
 
+int
+dlck_dbtree_check_inplace(struct btr_root *root, struct dlck_print *dp)
+{
+	unsigned int      tree_class = root->tr_class;
+	uint64_t          tree_feats = root->tr_feats;
+	struct btr_class *tc;
+	int               rc;
+
+	DLCK_PRINT(dp, "Tree class... ");
+	if (tree_class >= BTR_TYPE_MAX) {
+		DLCK_PRINTF(dp, "invalid (%u)\n", tree_class);
+		return -DER_INVAL;
+	}
+	tc = &btr_class_registered[tree_class];
+	if (tc->tc_ops == NULL) {
+		DLCK_PRINTF(dp, "unregistered (%u)\n", tree_class);
+		return -DER_NONEXIST;
+	}
+	DLCK_PRINT_OK(dp);
+	DLCK_PRINT(dp, "Tree features... ");
+	rc = btr_class_init_feats(tree_class, &tree_feats, tc);
+	if (rc != DER_SUCCESS) {
+		DLCK_PRINTF(dp, "unsupported (" DF_X64 "/" DF_X64 ")\n", tree_feats, tc->tc_feats);
+		return rc;
+	}
+	DLCK_PRINT_OK(dp);
+
+	return DER_SUCCESS;
+}

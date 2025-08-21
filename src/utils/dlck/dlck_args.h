@@ -12,6 +12,8 @@
 #include <uuid/uuid.h>
 #include <gurt/list.h>
 
+#include <daos_srv/dlck.h>
+
 #include "dlck_cmds.h"
 
 #define _STRINGIFY(x)                   #x
@@ -83,15 +85,13 @@ struct dlck_args_files {
 	d_list_t list;
 };
 
-struct dlck_print {
-	int (*dp_printf)(const char *fmt, ...);
-};
-
 struct dlck_control {
 	/** in */
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
 	struct dlck_args_engine engine;
+	/** out */
+	struct dlck_stats       stats;
 	/** print */
 	struct dlck_print       print;
 };
@@ -119,10 +119,6 @@ struct dlck_control {
 		argp_failure(STATE, ERRNUM, ERRNUM, __VA_ARGS__);                                  \
 		return ERRNUM;                                                                     \
 	} while (0)
-
-#define DLCK_PRINT(ctrl, fmt)       (void)ctrl->print.dp_printf(fmt)
-
-#define DLCK_PRINTF(ctrl, fmt, ...) (void)ctrl->print.dp_printf(fmt, __VA_ARGS__)
 
 /** dlck_args_parse.c */
 
