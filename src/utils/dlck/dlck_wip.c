@@ -17,7 +17,7 @@ exec_one(struct xstream_arg *xa, int idx)
 {
 	struct dlck_file *file;
 	char             *path;
-	// daos_handle_t     poh;
+	daos_handle_t     poh;
 	int               rc;
 
 	xa->xs->tgt_id = idx; /** pretend to be a target of the requested ID */
@@ -39,12 +39,18 @@ exec_one(struct xstream_arg *xa, int idx)
 			break;
 		}
 
-		// rc = vos_pool_open(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, &poh);
-
-		rc = dlck_pool_check(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, &xa->ctrl->print);
-		if (rc != DER_SUCCESS) {
-			break;
+		DLCK_PRINT(&xa->ctrl->print, "\n");
+		rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL,
+					   &xa->ctrl->print, &poh);
+		if (rc == DER_SUCCESS) {
+			(void)vos_pool_close(poh);
 		}
+		// rc = vos_pool_open(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, &xa->ctrl->print,
+		// &poh);
+
+		// rc = dlck_pool_check(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS,
+		// &xa->ctrl->print); if (rc != DER_SUCCESS) { 	break;
+		// }
 	}
 
 	if (rc != DER_SUCCESS) {
