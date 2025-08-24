@@ -990,16 +990,18 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	}
 	DLCK_PRINT_YES_NO(dp, false);
 
-	DLCK_DEBUG(dp, DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID "\n", xs_ctxt,
-		   DP_UUID(pool_id));
+	DLCK_PRINT(dp, "Open BIO meta context... ");
+	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID "\n", xs_ctxt,
+		DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	if (rc) {
-		DLCK_LOG(dp, ERROR,
-			 "Failed to open BIO meta context for xs:%p pool:" DF_UUID ", " DF_RC "\n",
-			 xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		DLCK_PRINT_RC(dp, rc);
+		D_ERROR("Failed to open BIO meta context for xs:%p pool:" DF_UUID ", " DF_RC "\n",
+			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
 		return rc;
 	}
+	DLCK_PRINT_OK(dp);
 
 	init_umem_store(&store, mc);
 	store.stor_stats = metrics;
@@ -1781,8 +1783,13 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		return -DER_NOTSUPPORTED;
 	}
 
-	DLCK_DEBUG(dp, DB_MGMT, "Pool Path: %s, UUID: " DF_UUID "\n", path, DP_UUID(uuid));
+	/** header with parameters */
+	DLCK_PRINT(dp, "Check pool:\n");
+	DLCK_PRINTF(dp, "\tpath: %s\n", path);
+	DLCK_PRINTF(dp, "\tuuid: " DF_UUIDF "\n", DP_UUID(uuid));
 	dlck_print_indent_inc(dp);
+
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: " DF_UUID "\n", path, DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1832,7 +1839,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	pool_df = vos_pool_pop2df(ph);
 	DLCK_PRINT(dp, "Magic... ");
 	if (pool_df->pd_magic != POOL_DF_MAGIC) {
-		DLCK_LOG(dp, CRIT, "Unknown DF magic %x\n", pool_df->pd_magic);
+		DLCK_PRINTF(dp, "invalid (%#x)\n", pool_df->pd_magic);
+		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
 		goto out;
 	}
@@ -1841,7 +1849,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	DLCK_PRINT(dp, "Version... ");
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
-		DLCK_LOG(dp, ERROR, "Unsupported DF version %x\n", pool_df->pd_version);
+		DLCK_PRINTF(dp, "unsupported (%#x)\n", pool_df->pd_version);
+		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
 		/** Send a RAS notification */
 		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
 					   POOL_DF_VER_1, POOL_DF_VERSION,
@@ -1853,8 +1862,10 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	DLCK_PRINT(dp, "UUID... ");
 	if (uuid_compare(uuid, pool_df->pd_id)) {
-		DLCK_LOG(dp, ERROR, "Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF "\n",
-			 DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		DLCK_PRINTF(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
+			    DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		D_ERROR("Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF "\n", DP_UUID(uuid),
+			DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
