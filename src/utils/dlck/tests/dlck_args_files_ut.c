@@ -18,15 +18,15 @@
 void
 args_files_init(struct dlck_args_files *args);
 int
-args_files_check(struct argp_state *state, struct dlck_args_files *args);
+		   args_files_check(struct argp_state *state, struct dlck_args_files *args);
 extern struct argp argp_file;
 
 /** mocks */
 
 struct argp_state  Argp_state;
 #define MOCK_ARGP_STATE (&Argp_state)
-struct dlck_file   File;
-static char        mock_arg_str[] = "mock_arg_value";
+struct dlck_file File;
+static char      mock_arg_str[] = "mock_arg_value";
 #define MOCK_ARG mock_arg_str
 
 void
