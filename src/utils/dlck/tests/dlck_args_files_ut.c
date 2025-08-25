@@ -19,28 +19,49 @@ void
 args_files_init(struct dlck_args_files *args);
 int
 args_files_check(struct argp_state *state, struct dlck_args_files *args);
+extern struct argp argp_file;
 
 /** mocks */
 
-#define MOCK_ARGP_STATE ((void *)0xDEADBEEF)
+struct argp_state  Argp_state;
+#define MOCK_ARGP_STATE (&Argp_state)
 struct dlck_file   File;
-extern struct argp argp_file;
+static char        mock_arg_str[] = "mock_arg_value";
+#define MOCK_ARG mock_arg_str
 
 void
 __wrap_argp_failure(struct argp_state *state, int status, int errnum, const char *fmt, ...)
 {
+	assert_ptr_equal(state, MOCK_ARGP_STATE);
 	check_expected(status);
 	check_expected(errnum);
 	assert_non_null(fmt);
 }
 
 int
-__wrap_parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr)
+parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_ptr)
 {
-	memset(&File, 0, sizeof(File));
-	uuid_parse("12345678-1234-1234-1234-123456789abc", File.po_uuid);
-	*file_ptr = &File;
-	return (int)mock();
+	assert_ptr_equal(arg, MOCK_ARG);
+	assert_ptr_equal(state, MOCK_ARGP_STATE);
+	assert_non_null(file_ptr);
+	int rc = mock_type(int);
+	if (rc == DER_SUCCESS) {
+		memset(&File, 0, sizeof(File));
+		*file_ptr = &File;
+	}
+	return rc;
+}
+
+void *
+__wrap_d_calloc(size_t count, size_t eltsize)
+{
+	return test_calloc(count, eltsize);
+}
+
+void
+__wrap_d_free(void *ptr)
+{
+	test_free(ptr);
 }
 
 /* Setup and teardown for dlck_args_files */
@@ -63,12 +84,19 @@ teardown(void **state)
 	struct dlck_args_files *args = *state;
 
 	dlck_args_files_free(args);
-	D_FREE(args);
-
+	if (args) {
+		D_FREE(args);
+	}
 	return 0;
 }
 
 /** tests */
+
+static void
+test_files_free_empty_list(void **unused)
+{
+	/** the work is done by setup and teardown functions */;
+}
 
 static void
 test_init_should_initialize_list(void **state)
@@ -79,30 +107,26 @@ test_init_should_initialize_list(void **state)
 }
 
 static void
-test_files_free_empty_list()
-{
-	struct dlck_args_files *args;
-	D_ALLOC_PTR(args);
-	assert_non_null(args);
-
-	args_files_init(args);
-
-	dlck_args_files_free(args);
-	D_FREE(args);
-}
-
-static void
 test_check_should_fail_if_no_files(void **state)
 {
-	struct dlck_args_files *args       = *state;
-	struct argp_state      *argp_state = MOCK_ARGP_STATE;
-	assert_ptr_equal(argp_state, MOCK_ARGP_STATE);
+	struct dlck_args_files *args = *state;
 
 	expect_value(__wrap_argp_failure, status, EINVAL);
 	expect_value(__wrap_argp_failure, errnum, EINVAL);
 
-	int rc = args_files_check(argp_state, args);
+	int rc = args_files_check(MOCK_ARGP_STATE, args);
 	assert_int_equal(rc, EINVAL);
+}
+
+static void
+test_check_should_succeed_with_file(void **state)
+{
+	struct dlck_args_files *args = *state;
+
+	d_list_add_tail(&File.link, &args->list);
+
+	int rc = args_files_check(MOCK_ARGP_STATE, args);
+	assert_int_equal(rc, 0);
 }
 
 static void
@@ -110,19 +134,18 @@ test_parser_should_add_file_to_list(void **state)
 {
 	struct dlck_args_files *args = *state;
 
-	char *argv[] = {"program_name", "--file=12345678-1234-1234-1234-123456789abc,1,2,3", NULL};
+	memset(&Argp_state, 0, sizeof(Argp_state));
+	Argp_state.input = args;
 
-	will_return(__wrap_parse_file, DER_SUCCESS);
+	will_return(parse_file, 0);
 
-	int rc = argp_parse(&argp_file, 2, argv, 0, NULL, args);
+	int rc = argp_file.parser(KEY_FILES, MOCK_ARG, &Argp_state);
 	assert_int_equal(rc, 0);
+
 	assert_false(d_list_empty(&args->list));
 
 	struct dlck_file *file = d_list_entry(args->list.next, struct dlck_file, link);
 	assert_ptr_equal(file, &File);
-
-	/** cleanup */
-	D_FREE(args);
 }
 
 static void
@@ -136,24 +159,21 @@ test_free_should_cleanup_list(void **state)
 	d_list_add_tail(&file->link, &args->list);
 
 	dlck_args_files_free(args);
-	assert_true(d_list_empty(&args->list));
 }
 
 static void
-test_init_sets_up_list(void **state)
+test_free_should_cleanup_multiple_files(void **state)
 {
-	struct dlck_args_files args;
-	memset(&args, 0, sizeof(args));
+	struct dlck_args_files *args = *state;
 
-	char *argv[] = {"program_name", NULL};
-	int   argc   = 1;
+	for (int i = 0; i < 3; i++) {
+		struct dlck_file *file;
+		D_ALLOC_PTR(file);
+		d_list_add_tail(&file->link, &args->list);
+	}
 
-	expect_value(__wrap_argp_failure, status, EINVAL);
-	expect_value(__wrap_argp_failure, errnum, EINVAL);
-
-	int rc = argp_parse(&argp_file, argc, argv, 0, NULL, &args);
-	assert_int_equal(rc, EINVAL);
-	assert_true(d_list_empty(&args.list));
+	dlck_args_files_free(args);
+	assert_true(d_list_empty(&args->list));
 }
 
 static void
@@ -162,14 +182,11 @@ test_parser_end_fails_without_file(void **state)
 	struct dlck_args_files args;
 	args_files_init(&args);
 
-	char *argv[] = {"program_name", NULL};
-	int   argc   = 1;
+	will_return(parse_file, EINVAL);
 
-	expect_value(__wrap_argp_failure, status, EINVAL);
-	expect_value(__wrap_argp_failure, errnum, EINVAL);
-
-	int rc = argp_parse(&argp_file, argc, argv, 0, NULL, &args);
+	int rc = argp_file.parser(KEY_FILES, MOCK_ARG, &Argp_state);
 	assert_int_equal(rc, EINVAL);
+	assert_true(d_list_empty(&args.list));
 }
 
 static void
@@ -177,12 +194,11 @@ test_end_succeeds_with_file(void **state)
 {
 	struct dlck_args_files args;
 	args_files_init(&args);
+	Argp_state.input = &args;
 
-	char *argv[] = {"program_name", "--file=12345678-1234-1234-1234-123456789abc,1", NULL};
-	int   argc   = 2;
+	will_return(parse_file, DER_SUCCESS);
 
-	will_return(__wrap_parse_file, DER_SUCCESS);
-	int rc = argp_parse(&argp_file, argc, argv, 0, NULL, &args);
+	int rc = argp_file.parser(KEY_FILES, MOCK_ARG, &Argp_state);
 	assert_int_equal(rc, 0);
 	assert_false(d_list_empty(&args.list));
 }
@@ -193,40 +209,35 @@ test_key_files_parse_file_fails(void **state)
 	struct dlck_args_files args;
 	args_files_init(&args);
 
-	char *argv[] = {"program_name", "--file=invalid", NULL};
-	int   argc   = 2;
+	will_return(parse_file, EINVAL);
 
-	will_return(__wrap_parse_file, EINVAL);
-	int rc = argp_parse(&argp_file, argc, argv, 0, NULL, &args);
+	int rc = argp_file.parser(KEY_FILES, MOCK_ARG, &Argp_state);
 	assert_int_equal(rc, EINVAL);
 	assert_true(d_list_empty(&args.list));
 }
 
 static void
-test_success_and_fini_are_noops(void **state)
+test_parser_unknown_key_should_return_zero(void **state)
 {
-	struct dlck_args_files args;
-	args_files_init(&args);
+	struct dlck_args_files *args = *state;
+	Argp_state.input             = args;
 
-	char *argv[] = {"program_name", "--file=12345678-1234-1234-1234-123456789abc,1", NULL};
-	int   argc   = 2;
-
-	will_return(__wrap_parse_file, DER_SUCCESS);
-	int rc = argp_parse(&argp_file, argc, argv, 0, NULL, &args);
-	assert_int_equal(rc, 0);
+	int rc = argp_file.parser(9999, NULL, &Argp_state);
+	assert_int_equal(rc, ARGP_ERR_UNKNOWN);
 }
 
 static const struct CMUnitTest tests_all[] = {
-    {"DARG100: init", test_init_should_initialize_list, setup, teardown},
-    {"DARG101: free empty", test_files_free_empty_list, NULL, NULL},
+    {"DARG100: free empty", test_files_free_empty_list, setup, teardown},
+    {"DARG101: init", test_init_should_initialize_list, setup, teardown},
     {"DARG102: check fail", test_check_should_fail_if_no_files, setup, teardown},
-    {"DARG103: parser add", test_parser_should_add_file_to_list, setup, NULL},
-    {"DARG104: free list", test_free_should_cleanup_list, setup, teardown},
-    {"DARG105: key init", test_init_sets_up_list, setup, teardown},
-    {"DARG106: key end fail", test_parser_end_fails_without_file, setup, teardown},
-    {"DARG107: key end ok", test_end_succeeds_with_file, setup, teardown},
-    {"DARG108: parser fail", test_key_files_parse_file_fails, setup, teardown},
-    {"DARG109: success noop", test_success_and_fini_are_noops, setup, teardown},
+    {"DARG103: check success", test_check_should_succeed_with_file, setup, NULL},
+    {"DARG104: parser add", test_parser_should_add_file_to_list, setup, NULL},
+    {"DARG105: free list", test_free_should_cleanup_list, setup, teardown},
+    {"DARG106: free list multiple", test_free_should_cleanup_multiple_files, setup, teardown},
+    {"DARG107: key end fail", test_parser_end_fails_without_file, setup, teardown},
+    {"DARG108: key end ok", test_end_succeeds_with_file, setup, teardown},
+    {"DARG109: parser fail", test_key_files_parse_file_fails, setup, teardown},
+    {"DARG110: unknown key", test_parser_unknown_key_should_return_zero, setup, teardown},
 };
 
 int

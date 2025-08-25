@@ -58,7 +58,9 @@ def build_dlck_vos_cont_recs_get_active(venv):
 def build_dlck_args_files_ut(venv):
     """Build dlck_args_files.c test"""
     venv.require('cmocka')
-    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=argp_failure', '-Wl,--wrap=parse_file'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=argp_failure'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_free'])
     libs = ['cmocka', 'gurt', 'daos_common_pmem', 'uuid']
     srcs = ['dlck_args_files_ut.c', '../dlck_args_files.c']
     cppdefines = ['DLCK_UT_BUILD']
