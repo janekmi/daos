@@ -91,27 +91,24 @@ class LogLine():
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
+        # The format of log lines depends on the flags (DLOG_FLV_*) passed during initialization.
+        # All assumed flag settings are noted alongside the relevant logic that relies on those
+        # assumptions.
         fields = line.split()
         # Work out the end of the fixed-width portion, and the beginning of the
         # message. The hostname, pid, fac and level fields are all variable width.
         idx = 0
         for i in range(4):
             idx += len(fields[i]) + 1
-        # pylint: disable=wrong-spelling-in-comment
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c - d_vlog()
-        # snprintf(..., "%-4s ", facstr)
+        # Assuming DLOG_FLV_FAC is set.
         idx += max(len(fields[4]), 4) + 1
         idx += max(len(fields[5]), 4)
-        # assuming (mst.oflags & DLOG_FLV_TAG) always true in src/gurt/dlog.c - d_vlog()
-        # assuming (mst.oflags & DLOG_FLV_LOGPID) always true in src/gurt/dlog.c - d_vlog()
+        # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set.
         pidtid = fields[3][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
         self._preamble = line[:idx]
         self.fac = fields[4]
-        # assuming (mst.oflags & DLOG_FLV_FAC) always true in src/gurt/dlog.c
-        # snprintf(..., "%-4s ", facstr)
-        # pylint: enable=wrong-spelling-in-comment
         try:
             self.level = LOG_LEVELS[fields[5]]
         except KeyError as error:
