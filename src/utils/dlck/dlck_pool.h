@@ -83,4 +83,16 @@ struct co_uuid_list_elem {
 int
 dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids);
 
+typedef int (*dlck_pool_foreach_cont_func)(daos_handle_t poh, uuid_t co_uuid, void *arg);
+
+/**
+ * Execute \p cb for each of the containers found in \p poh.
+ *
+ * \param[in] poh	Pool handle.
+ * \param[in] cb	Callback function.
+ * \param[in] arg	Custom argument passed to \p cb.
+ */
+int
+dlck_pool_foreach_cont(daos_handle_t poh, dlck_pool_foreach_cont_func cb, void *arg);
+
 #endif /** __DLCK_POOL__ */

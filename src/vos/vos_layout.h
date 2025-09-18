@@ -272,6 +272,8 @@ enum vos_io_stream {
 	VOS_IOS_CNT
 };
 
+#define VOS_CONT_EXT_PADDING_SIZE 37
+
 /* VOS container durable format extension */
 struct vos_cont_ext_df {
 	/* GC bucket extension */
@@ -282,7 +284,7 @@ struct vos_cont_ext_df {
 	 */
 	uint64_t			ced_global_stable_epoch;
 	/* Reserved for potential new features */
-	uint64_t			ced_paddings[37];
+	uint64_t                        ced_paddings[VOS_CONT_EXT_PADDING_SIZE];
 	/* Reserved for future extension */
 	uint64_t			ced_reserve;
 };

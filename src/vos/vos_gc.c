@@ -1587,14 +1587,47 @@ gc_close_cont(struct vos_container *cont)
 	return gc_close_bkt(&cont->vc_gc_info);
 }
 
+static int
+dlck_cd_ext_df_check(struct vos_cont_ext_df *cd_ext, umem_off_t off, struct dlck_print *dp)
+{
+	DLCK_PRINTF(dp, "Container extension (off=%#x)... ", off);
+
+	for (int i = 0; i < VOS_CONT_EXT_PADDING_SIZE; ++i) {
+		if (cd_ext->ced_paddings[i] != 0) {
+			DLCK_PRINTF_ERR(dp, "non-zero padding[%d] (%#" PRIx64 ")\n", i,
+					cd_ext->ced_paddings[i]);
+			return -DER_NOTYPE;
+		}
+	}
+
+	if (cd_ext->ced_reserve != 0) {
+		DLCK_PRINTF_ERR(dp, "non-zero reserved space (%#" PRIx64 ")\n",
+				cd_ext->ced_reserve);
+		return -DER_NOTYPE;
+	}
+
+	DLCK_PRINT_OK(dp);
+
+	return DER_SUCCESS;
+}
+
 int
-gc_open_cont(struct vos_container *cont)
+gc_open_cont(struct vos_container *cont, struct dlck_print *dp)
 {
 	struct vos_pool		*pool = vos_cont2pool(cont);
 	struct vos_cont_ext_df	*cd_ext = umem_off2ptr(&pool->vp_umm, cont->vc_cont_df->cd_ext);
+	int                      rc;
 
-	if (cd_ext != NULL)
-		return gc_open_bkt(&pool->vp_uma, &cd_ext->ced_gc_bkt, NULL, &cont->vc_gc_info);
+	if (cd_ext != NULL) {
+		if (unlikely(dp != NULL)) {
+			rc = dlck_cd_ext_df_check(cd_ext, cont->vc_cont_df->cd_ext, dp);
+			if (rc != 0) {
+				return rc;
+			}
+		}
+
+		return gc_open_bkt(&pool->vp_uma, &cd_ext->ced_gc_bkt, dp, &cont->vc_gc_info);
+	}
 	return 0;
 }
 

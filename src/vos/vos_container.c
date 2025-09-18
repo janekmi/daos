@@ -338,11 +338,45 @@ static const struct lru_callbacks lru_cont_cbs = {
 	.lru_on_free = vos_lru_free_track,
 };
 
+static int
+dlck_cont_df_check(uuid_t co_uuid, struct umem_instance *umm, struct vos_cont_df *cont_df,
+		   struct dlck_print *dp)
+{
+	D_ASSERT(dp != NULL);
+
+	umem_off_t off = umem_ptr2off(umm, cont_df);
+
+	DLCK_PRINT(dp, "UUID... ");
+	if (uuid_compare(cont_df->cd_id, co_uuid) != 0) {
+		DLCK_PRINTF_ERR(dp, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")\n",
+				DP_UUID(co_uuid), DP_UUID(cont_df->cd_id));
+		return -DER_ID_MISMATCH;
+	}
+	DLCK_PRINT_OK(dp);
+
+	DLCK_PRINTF(dp, "Container (off=%#x)... ", off);
+
+	if (cont_df->cd_pad != 0) {
+		DLCK_PRINTF_ERR(dp, "non-zero padding (%#" PRIx32 ")\n", cont_df->cd_pad);
+		return -DER_NOTYPE;
+	}
+
+	if (cont_df->cd_reserv_upgrade != 0) {
+		DLCK_PRINTF_ERR(dp, "non-zero reserved space (%#" PRIx64 ")\n",
+				cont_df->cd_reserv_upgrade);
+		return -DER_NOTYPE;
+	}
+
+	DLCK_PRINT_OK(dp);
+
+	return DER_SUCCESS;
+}
+
 /**
  * Open a container within a VOSP
  */
 int
-vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
+vos_cont_open(daos_handle_t poh, uuid_t co_uuid, struct dlck_print *dp, daos_handle_t *coh)
 {
 
 	int				rc = 0;
@@ -353,10 +387,16 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct vos_container		*cont = NULL;
 	struct umem_attr		uma;
 
+	/** header with parameters */
+	DLCK_PRINT(dp, "Check container:\n");
+	DLCK_PRINTF(dp, "\tuuid: " DF_UUIDF "\n", DP_UUID(co_uuid));
+	dlck_print_indent_inc(dp);
+
 	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL) {
+		dlck_print_indent_dec(dp);
 		D_ERROR("Empty pool handle?\n");
 		return -DER_INVAL;
 	}
@@ -370,6 +410,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	rc = cont_lookup(&ukey, &pkey, &cont, pool->vp_sysdb);
 	if (rc == 0) {
 		cont->vc_open_count++;
+		DLCK_PRINTF(dp, "Found already opened(%d) container\n", cont->vc_open_count);
 		D_DEBUG(DB_TRACE, "Found handle for cont "DF_UUID
 			" in DRAM hash table, open count: %d\n",
 			DP_UUID(co_uuid), cont->vc_open_count);
@@ -377,16 +418,26 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
+	DLCK_PRINT(dp, "Lookup... ");
 	rc = cont_df_lookup(pool, &ukey, &args);
 	if (rc) {
+		DLCK_PRINT_RC(dp, rc);
 		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
+	DLCK_PRINT_OK(dp);
 
 	D_ALLOC_PTR(cont);
 	if (!cont) {
 		D_GOTO(exit, rc = -DER_NOMEM);
+	}
+
+	if (unlikely(dp != NULL)) {
+		rc = dlck_cont_df_check(co_uuid, &pool->vp_umm, args.ca_cont_df, dp);
+		if (rc != DER_SUCCESS) {
+			goto exit;
+		}
 	}
 
 	uuid_copy(cont->vc_id, co_uuid);
@@ -406,7 +457,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	D_INIT_LIST_HEAD(&cont->vc_dtx_reindex_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_solo_dtx_epoch = d_hlc_get();
-	rc = gc_open_cont(cont);
+	rc                           = gc_open_cont(cont, dp);
 	if (rc)
 		D_GOTO(exit, rc);
 	gc_check_cont(cont);
@@ -501,6 +552,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		DP_UUID(cont->vc_id));
 
 exit:
+	dlck_print_indent_dec(dp);
+
 	if (rc != 0 && cont)
 		cont_free_internal(cont);
 

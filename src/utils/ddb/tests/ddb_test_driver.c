@@ -396,7 +396,7 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 	/* Setup by creating containers */
 	for (c = 0; c < cont_to_create; c++) {
 		assert_success(vos_cont_create(poh, g_uuids[c]));
-		assert_success(vos_cont_open(poh, g_uuids[c], &coh));
+		assert_success(vos_cont_open(poh, g_uuids[c], NULL, &coh));
 
 		create_object_data(&coh, obj_to_create, dkeys_to_create, akeys_to_create,
 				   recx_to_create);
@@ -584,7 +584,7 @@ create_test_vos_file()
 	assert_success(vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, 0, &poh));
 	dvt_insert_data(poh, conts, objs, dkeys, akeys, &tctx);
 
-	assert_success(vos_cont_open(poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(poh, g_uuids[0], NULL, &coh));
 	dvt_vos_insert_2_records_with_dtx(coh);
 	vos_cont_close(coh);
 

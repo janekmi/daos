@@ -568,16 +568,15 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid);
 /**
  * Open a container within a VOSP
  *
- * \param poh	[IN]	Pool open handle
- * \param co_uuid
- *		[IN]	Container uuid
- * \param mode	[IN]	open mode: rd-only, rdwr...
- * \param coh	[OUT]	Returned container handle
+ * \param[in] poh	Pool open handle
+ * \param[in] co_uuid	Container uuid
+ * \param[in] dp	DLCK print utility
+ * \param[out] coh	Returned container handle
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
+vos_cont_open(daos_handle_t poh, uuid_t co_uuid, struct dlck_print *dp, daos_handle_t *coh);
 
 /**
  * Release container open handle

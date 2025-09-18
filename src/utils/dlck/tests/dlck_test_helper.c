@@ -105,7 +105,7 @@ cont_setup(struct xstream_state *xst, uuid_t co_uuid)
 	rc = vos_cont_create(xst->poh, co_uuid);
 	assert_int_equal(rc, 0);
 
-	rc = vos_cont_open(xst->poh, co_uuid, &xst->coh);
+	rc = vos_cont_open(xst->poh, co_uuid, NULL, &xst->coh);
 	assert_int_equal(rc, 0);
 }
 

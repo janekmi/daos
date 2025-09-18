@@ -126,8 +126,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, uint64_t scm_sz, uint64_t meta_sz, uint64
 	}
 	tcx->tc_step = TCX_CO_CREATE;
 
-	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
-			   &tcx->tc_co_hdl);
+	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid, NULL, &tcx->tc_co_hdl);
 	if (rc) {
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
@@ -310,7 +309,7 @@ cont_init(struct credit_context *tsc)
 			goto out;
 	}
 
-	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
+	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL, &coh);
 	if (rc)
 		goto out;
 

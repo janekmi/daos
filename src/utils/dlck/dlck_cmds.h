@@ -11,9 +11,12 @@ enum dlck_cmd {
 	DLCK_CMD_NOT_SET = -2,
 	DLCK_CMD_UNKNOWN = -1,
 	DLCK_CMD_POOL_CHECK,
+	DLCK_CMD_CONT_CHECK,
 };
 
 #define DLCK_CMD_POOL_CHECK_STR "pool_check"
+#define DLCK_CMD_CONT_CHECK_STR_LONG  "container_check"
+#define DLCK_CMD_CONT_CHECK_STR_SHORT "cont_check"
 
 struct dlck_control;
 
@@ -38,9 +41,22 @@ typedef int (*dlck_cmd_func)(struct dlck_control *ctrl);
 int
 dlck_cmd_pool_check(struct dlck_control *ctrl);
 
-#define DLCK_CMDS_FUNCS                                                                            \
-	{                                                                                          \
-		dlck_cmd_pool_check                                                                \
-	}
+/**
+ * \brief Validate the integrity of the container(s) metadata.
+ *
+ * The \p ctrl argument specifies which container(s) to check and how the output will be printed.
+ *
+ * \note Validation terminates at the first detected error.
+ *
+ * \param[in] ctrl	Control bundle.
+ *
+ * \retval DER_SUCCESS		All checked pools are ok.
+ *
+ * XXX
+ */
+int
+dlck_cmd_cont_check(struct dlck_control *ctrl);
+
+#define DLCK_CMDS_FUNCS {dlck_cmd_pool_check, dlck_cmd_cont_check}
 
 #endif /** __DLCK_CMDS__ */

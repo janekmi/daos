@@ -214,7 +214,7 @@ dump_dtx_cmd_tests(void **state)
 
 	assert_invalid(ddb_run_dtx_dump(&ctx, &opt));
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 
 	dvt_vos_insert_2_records_with_dtx(coh);
 	vos_cont_close(coh);

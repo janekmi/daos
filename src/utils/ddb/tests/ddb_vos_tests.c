@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -288,7 +289,7 @@ get_dkey_from_idx_tests(void **state)
 	daos_key_t dkey2;
 
 	assert_rc_equal(-DER_INVAL, dv_get_dkey(coh, uoid, 0, &dkey));
-	vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh);
+	vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh);
 	assert_rc_equal(-DER_INVAL, dv_get_dkey(coh, uoid, 0, &dkey));
 	uoid = g_oids[0];
 
@@ -322,7 +323,7 @@ get_akey_from_idx_tests(void **state)
 	int			 i;
 
 	assert_rc_equal(-DER_INVAL, dv_get_akey(coh, uoid, &dkey, 0, &akey));
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 	assert_rc_equal(-DER_INVAL, dv_get_akey(coh, uoid, &dkey, 0, &akey));
 	uoid = g_oids[0];
 	assert_rc_equal(-DER_NONEXIST, dv_get_akey(coh, uoid, &dkey, 0, &akey));
@@ -359,7 +360,7 @@ get_recx_from_idx_tests(void **state)
 
 	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 	dv_get_object_oid(coh, 0, &uoid);
 	assert_rc_equal(-DER_NONEXIST, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
@@ -486,7 +487,7 @@ get_obj_ilog_tests(void **state)
 	daos_unit_oid_t null_oid = {0};
 	daos_unit_oid_t bad_oid = {.id_pub.lo = 1};
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 
 	assert_rc_equal(-DER_INVAL, dv_get_obj_ilog_entries(DAOS_HDL_INVAL, null_oid,
 							    fake_dump_ilog_entry, NULL));
@@ -516,7 +517,7 @@ abort_obj_ilog_tests(void **state)
 	/* error handling */
 	assert_rc_equal(-DER_INVAL, dv_process_obj_ilog_entries(coh, null_oid, DDB_ILOG_OP_ABORT));
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 
 	/* First make sure there is an ilog to rm */
 	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
@@ -540,7 +541,7 @@ get_dkey_ilog_tests(void **state)
 	daos_handle_t		 coh;
 	daos_unit_oid_t		 null_oid = {0};
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 
 	assert_rc_equal(-DER_INVAL, dv_get_key_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL, NULL,
 							    fake_dump_ilog_entry, NULL));
@@ -568,7 +569,7 @@ abort_dkey_ilog_tests(void **state)
 	daos_handle_t		 coh;
 	daos_unit_oid_t		 null_oid = {0};
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[1], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[1], NULL, &coh));
 
 	assert_invalid(dv_process_key_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL, NULL,
 						   DDB_ILOG_OP_UNKNOWN));
@@ -637,7 +638,7 @@ get_dtx_tables_tests(void **state)
 	assert_rc_equal(-DER_INVAL, dv_dtx_get_act_table(coh, active_entry_handler, NULL));
 	assert_int_equal(0, active_entry_handler_called);
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], NULL, &coh));
 
 	dvt_vos_insert_2_records_with_dtx(coh);
 

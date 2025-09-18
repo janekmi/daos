@@ -830,7 +830,7 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 					msg->term, slc_record);
 		if (rc != 0)
 			return rc;
-		rc = vos_cont_open(db->d_pool, slc_record->dlr_uuid, slc);
+		rc = vos_cont_open(db->d_pool, slc_record->dlr_uuid, NULL, slc);
 		/* Not good, but we've just created it ourself... */
 		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	}
@@ -2344,7 +2344,7 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replica
 		return rc;
 
 	/* Record the configuration in the LC at index 1. */
-	rc = vos_cont_open(pool, record.dlr_uuid, &lc);
+	rc = vos_cont_open(pool, record.dlr_uuid, NULL, &lc);
 	/* This really should not be happening.. */
 	D_ASSERTF(rc == 0, "Open VOS container: "DF_RC"\n", DP_RC(rc));
 
@@ -2370,7 +2370,7 @@ rdb_raft_open_lc(struct rdb *db)
 		return rc;
 	}
 
-	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, &db->d_lc);
+	rc = vos_cont_open(db->d_pool, db->d_lc_record.dlr_uuid, NULL, &db->d_lc);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to open LC "DF_UUID": "DF_RC"\n", DP_DB(db),
 			DP_UUID(db->d_lc_record.dlr_uuid), DP_RC(rc));
@@ -2480,7 +2480,7 @@ rdb_raft_load_lc(struct rdb *db)
 		db->d_slc = DAOS_HDL_INVAL;
 		goto load_snapshot;
 	}
-	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
+	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, NULL, &db->d_slc);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_MD, DF_DB": dangling SLC record: "DF_UUID"\n",
 			DP_DB(db), DP_UUID(db->d_slc_record.dlr_uuid));

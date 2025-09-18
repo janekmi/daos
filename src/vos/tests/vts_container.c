@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,9 +53,8 @@ co_ops_run(void **state)
 						    arg->uuid[i].uuid);
 				break;
 			case OPEN:
-				ret = vos_cont_open(arg->poh,
-						    arg->uuid[i].uuid,
-						    &arg->coh[i]);
+				ret =
+				    vos_cont_open(arg->poh, arg->uuid[i].uuid, NULL, &arg->coh[i]);
 				break;
 			case CLOSE:
 				ret = vos_cont_close(arg->coh[i]);
@@ -123,8 +123,7 @@ co_ref_count_setup(void **state)
 	assert_rc_equal(ret, 0);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_cont_open(arg->poh, arg->uuid[0].uuid,
-				    &arg->coh[i]);
+		ret = vos_cont_open(arg->poh, arg->uuid[0].uuid, NULL, &arg->coh[i]);
 		assert_rc_equal(ret, 0);
 	}
 

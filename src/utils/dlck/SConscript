@@ -12,6 +12,7 @@ def scons():
 
     src = [
         'cmds/dlck_cmd_pool_check.c',
+        'cmds/dlck_cmd_cont_check.c',
         'dlck_abt.c',
         'dlck_args_common.c',
         'dlck_args_engine.c',

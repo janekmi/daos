@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,7 +155,7 @@ db_open_create(struct sys_db *db, bool try_create)
 			goto failed;
 		}
 	}
-	rc = vos_cont_open(vdb->db_poh, vdb->db_cont, &vdb->db_coh);
+	rc = vos_cont_open(vdb->db_poh, vdb->db_cont, NULL, &vdb->db_coh);
 	if (rc) {
 		D_CRIT("sys cont open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;

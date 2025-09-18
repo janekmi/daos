@@ -137,3 +137,32 @@ dlck_pool_cont_list(daos_handle_t poh, d_list_t *co_uuids)
 	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_list_append, NULL,
 			   co_uuids, NULL);
 }
+
+typedef int (*dlck_pool_foreach_cont_func)(daos_handle_t poh, uuid_t co_uuid, void *arg);
+
+int
+dlck_pool_foreach_cont(daos_handle_t poh, dlck_pool_foreach_cont_func cb, void *arg)
+{
+	d_list_t                  co_uuids = D_LIST_HEAD_INIT(co_uuids);
+	struct co_uuid_list_elem *elm, *next;
+	int                       rc;
+
+	rc = dlck_pool_cont_list(poh, &co_uuids);
+	if (rc != 0) {
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(elm, next, &co_uuids, link) {
+		rc = cb(poh, elm->uuid, arg);
+		if (rc != 0) {
+			return rc;
+		}
+
+		d_list_del(&elm->link);
+		D_FREE(elm);
+	}
+
+	D_ASSERT(d_list_empty(&co_uuids));
+
+	return DER_SUCCESS;
+}

@@ -94,7 +94,7 @@ dv_pool_close(daos_handle_t poh)
 int
 dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh)
 {
-	return vos_cont_open(poh, uuid, coh);
+	return vos_cont_open(poh, uuid, NULL, coh);
 }
 
 int
@@ -833,7 +833,7 @@ iter_cont_recurse_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t 
 		return rc;
 
 	/* recursively iterate the objects in the container */
-	rc = vos_cont_open(param->ip_hdl, entry->ie_couuid, &coh);
+	rc = vos_cont_open(param->ip_hdl, entry->ie_couuid, NULL, &coh);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -894,7 +894,7 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 		return rc;
 	}
 
-	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	rc = vos_cont_open(poh, path->vtp_cont, NULL, &coh);
 	if (!SUCCESS(rc)) {
 		itp_free(&ctx.itp);
 		return rc;
@@ -971,7 +971,7 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 
 	d_sgl_init(&sgl, 1);
 
-	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	rc = vos_cont_open(poh, path->vtp_cont, NULL, &coh);
 	if (!SUCCESS(rc))
 		return rc;
 

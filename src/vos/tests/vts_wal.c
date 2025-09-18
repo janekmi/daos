@@ -338,7 +338,7 @@ wal_tst_pool_cont(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Open cont */
-	rc = vos_cont_open(poh, cont_id, &coh);
+	rc = vos_cont_open(poh, cont_id, NULL, &coh);
 	assert_int_equal(rc, 0);
 
 	/* Close cont */
@@ -438,7 +438,7 @@ wal_pool_refill(struct io_test_args *arg)
 	rc = compare_pool_info(&pool_info1, &pool_info2);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_cont_open(poh, tcx->tc_co_uuid, &coh);
+	rc = vos_cont_open(poh, tcx->tc_co_uuid, NULL, &coh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_co_hdl = coh;
 	tcx->tc_step = TCX_READY;

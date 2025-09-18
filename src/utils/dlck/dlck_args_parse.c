@@ -105,6 +105,10 @@ parse_command(const char *arg)
 {
 	if (strcmp(arg, DLCK_CMD_POOL_CHECK_STR) == 0) {
 		return DLCK_CMD_POOL_CHECK;
+	} else if (strcmp(arg, DLCK_CMD_CONT_CHECK_STR_LONG) == 0) {
+		return DLCK_CMD_CONT_CHECK;
+	} else if (strcmp(arg, DLCK_CMD_CONT_CHECK_STR_SHORT) == 0) {
+		return DLCK_CMD_CONT_CHECK;
 	}
 
 	return DLCK_CMD_UNKNOWN;

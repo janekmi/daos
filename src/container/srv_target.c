@@ -681,7 +681,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_finish_cond;
 	}
 
-	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
+	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, NULL, &cont->sc_hdl);
 	if (rc != 0)
 		goto out_pool;
 
@@ -1910,7 +1910,7 @@ cont_query_one(void *vin)
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
-	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, NULL, &vos_chdl);
 	if (rc != 0) {
 		D_ERROR(DF_CONT ": Opening VOS container open handle failed: " DF_RC "\n",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
@@ -2274,7 +2274,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 	daos_handle_t	 coh;
 	int		 rc;
 
-	rc = vos_cont_open(ph, co_uuid, &coh);
+	rc = vos_cont_open(ph, co_uuid, NULL, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: rc = "DF_RC"\n",
 			DP_UUID(co_uuid), DP_RC(rc));

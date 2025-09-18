@@ -295,7 +295,7 @@ create_pool(struct cmd_info *cinfo)
 		goto close_pool;
 	}
 
-	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, &known_pool->kp_coh);
+	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, NULL, &known_pool->kp_coh);
 	if (rc != 0) {
 		goto close_pool;
 		D_ERROR("Could not open vos container, rc=" DF_RC "\n", DP_RC(rc));
@@ -341,7 +341,7 @@ open_pool(struct cmd_info *cinfo)
 		goto out;
 	}
 
-	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, &known_pool->kp_coh);
+	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, NULL, &known_pool->kp_coh);
 	if (rc != 0) {
 		D_ERROR("Could not open vos container, rc=" DF_RC "\n", DP_RC(rc));
 		goto close_pool;

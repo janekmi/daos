@@ -70,7 +70,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	rc = vos_cont_create(pool, (unsigned char *)uuid);
 	if (rc != 0)
 		goto out_pool_hdl;
-	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
+	rc = vos_cont_open(pool, (unsigned char *)uuid, NULL, &mc);
 	if (rc != 0)
 		goto out_pool_hdl;
 
@@ -404,7 +404,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	}
 	ABT_thread_yield();
 
-	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
+	rc = vos_cont_open(pool, (unsigned char *)uuid, NULL, &mc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to open metadata container: "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));

@@ -2499,7 +2499,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, NULL, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));

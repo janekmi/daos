@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,7 +74,7 @@ engine_cont_init(struct credit_context *tsc)
 			return rc;
 	}
 
-	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, &coh);
+	rc = vos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL, &coh);
 	if (rc)
 		return rc;
 

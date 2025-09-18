@@ -1010,7 +1010,7 @@ io_obj_cache_test(void **state)
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_cont_open(l_poh, ctx->tc_co_uuid, &l_coh);
+	rc = vos_cont_open(l_poh, ctx->tc_co_uuid, NULL, &l_coh);
 	assert_rc_equal(rc, 0);
 
 	oids[0] = gen_oid(arg->otype);
@@ -1921,7 +1921,7 @@ pool_cont_same_uuid(void **state)
 	ret = vos_pool_open(arg->fname, pool_uuid, 0, &poh);
 	assert_rc_equal(ret, 0);
 
-	ret = vos_cont_open(poh, co_uuid, &coh);
+	ret = vos_cont_open(poh, co_uuid, NULL, &coh);
 	assert_rc_equal(ret, 0);
 
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
@@ -2052,8 +2052,7 @@ io_simple_one_key_cross_container(void **state)
 		return;
 	}
 
-	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid,
-			   &arg->addn_co);
+	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL, &arg->addn_co);
 	if (rc) {
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -262,7 +263,7 @@ sts_ctx_cont_init(struct sts_context *ctx)
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 
 	assert_success(vos_cont_create(ctx->tsc_poh, ctx->tsc_cont_uuid));
-	assert_success(vos_cont_open(ctx->tsc_poh, ctx->tsc_cont_uuid, &coh));
+	assert_success(vos_cont_open(ctx->tsc_poh, ctx->tsc_cont_uuid, NULL, &coh));
 
 	ctx->tsc_coh = coh;
 	ctx->tsc_get_cont_fn = get_cont_fn;

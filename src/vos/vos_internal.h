@@ -1458,7 +1458,7 @@ gc_open_pool(struct vos_pool *pool, struct dlck_print *dp);
 void
 gc_close_pool(struct vos_pool *pool);
 int
-gc_open_cont(struct vos_container *cont);
+gc_open_cont(struct vos_container *cont, struct dlck_print *dp);
 void
 gc_close_cont(struct vos_container *cont);
 

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -338,8 +339,7 @@ gc_obj_run(struct gc_test_args *args, bool reopen)
 		}
 
 		/* close and reopen the container */
-		rc = vos_cont_open(args->gc_ctx.tsc_poh,
-				   args->gc_ctx.tsc_cont_uuid,
+		rc = vos_cont_open(args->gc_ctx.tsc_poh, args->gc_ctx.tsc_cont_uuid, NULL,
 				   &args->gc_ctx.tsc_coh);
 		if (rc) {
 			print_error("failed to open container: %s\n",
@@ -397,7 +397,7 @@ gc_obj_run_destroy(struct gc_test_args *args)
 	}
 
 	gc_add_stat(STAT_CONT);
-	rc = vos_cont_open(poh, cont_id, &coh);
+	rc = vos_cont_open(poh, cont_id, NULL, &coh);
 	if (rc) {
 		print_error("failed to open container: %s\n",
 			    d_errstr(rc));
@@ -508,7 +508,7 @@ gc_cont_run(struct gc_test_args *args)
 		}
 
 		gc_add_stat(STAT_CONT);
-		rc = vos_cont_open(poh, cont_ids[i], &coh);
+		rc = vos_cont_open(poh, cont_ids[i], NULL, &coh);
 		if (rc) {
 			print_error("failed to open container: %s\n",
 				    d_errstr(rc));
