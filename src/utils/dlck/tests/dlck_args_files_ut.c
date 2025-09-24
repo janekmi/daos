@@ -21,13 +21,15 @@ int
 		   args_files_check(struct argp_state *state, struct dlck_args_files *args);
 extern struct argp argp_file;
 
-/** mocks */
+/** mocks & globals */
 
 struct argp_state  Argp_state;
 #define MOCK_ARGP_STATE (&Argp_state)
 struct dlck_file File;
 #define MOCK_ARG ((void *)0xDEADBEEF)
 struct dlck_args_files Args;
+
+#define MOCK_KEY_UKNOWN 9999
 
 void
 __wrap_argp_failure(struct argp_state *state, int status, int errnum, const char *fmt, ...)
@@ -45,7 +47,7 @@ parse_file(const char *arg, struct argp_state *state, struct dlck_file **file_pt
 	assert_ptr_equal(state, MOCK_ARGP_STATE);
 	assert_non_null(file_ptr);
 	int rc = mock_type(int);
-	if (rc == DER_SUCCESS) {
+	if (rc == 0) {
 		memset(&File, 0, sizeof(File));
 		*file_ptr = &File;
 	}
@@ -64,20 +66,19 @@ __wrap_d_free(void *ptr)
 	test_free(ptr);
 }
 
-/* Setup for dlck_args_files */
+/** setup (no teardown necessary) */
 static int
-setup(void **state)
+setup(void **unused)
 {
 	args_files_init(&Args);
 	Argp_state.input = &Args;
-	*state           = &Args;
 	return 0;
 }
 
 /** tests */
 
 static void
-test_check_should_fail_if_no_files(void **unused)
+test_check_no_files_fail(void **unused)
 {
 	expect_value(__wrap_argp_failure, status, EINVAL);
 	expect_value(__wrap_argp_failure, errnum, EINVAL);
@@ -87,38 +88,27 @@ test_check_should_fail_if_no_files(void **unused)
 }
 
 static void
-test_check_should_succeed_with_file(void **state)
+test_check_success(void **unused)
 {
-	struct dlck_args_files *args = *state;
+	d_list_add_tail(&File.link, &Args.list);
 
-	d_list_add_tail(&File.link, &args->list);
-
-	int rc = args_files_check(MOCK_ARGP_STATE, args);
+	int rc = args_files_check(MOCK_ARGP_STATE, &Args);
 	assert_int_equal(rc, 0);
 }
 
 static void
-test_parser_key_init(void **state)
+test_parser_KEY_INIT(void **unused)
 {
-	struct dlck_args_files args;
-	args_files_init(&args);
-	struct dlck_file *dummy;
-	D_ALLOC_PTR(dummy);
-	d_list_add_tail(&dummy->link, &args.list);
-	assert_false(d_list_empty(&args.list));
-
-	Argp_state.input = &args;
+	memset(&Args, 0xf, sizeof(Args));
 
 	int rc = argp_file.parser(ARGP_KEY_INIT, NULL, &Argp_state);
 	assert_int_equal(rc, 0);
 
-	assert_true(d_list_empty(&args.list));
-
-	D_FREE(dummy);
+	assert_true(d_list_empty(&Args.list));
 }
 
 static void
-test_parser_end_without_files_triggers_failure(void **unused)
+test_parser_KEY_END_without_files_fails(void **unused)
 {
 	expect_value(__wrap_argp_failure, status, EINVAL);
 	expect_value(__wrap_argp_failure, errnum, EINVAL);
@@ -129,53 +119,38 @@ test_parser_end_without_files_triggers_failure(void **unused)
 }
 
 static void
-test_parser_end_with_files_returns_zero(void **state)
+test_parser_KEY_END_with_files_success(void **unused)
 {
-	struct dlck_args_files *args = *state;
+	d_list_add_tail(&File.link, &Args.list);
 
-	struct dlck_file       *f;
-	D_ALLOC_PTR(f);
-	d_list_add_tail(&f->link, &args->list);
-
-	Argp_state.input = args;
-	int rc           = argp_file.parser(ARGP_KEY_END, NULL, &Argp_state);
+	int rc = argp_file.parser(ARGP_KEY_END, NULL, &Argp_state);
 
 	assert_int_equal(rc, 0);
-
-	D_FREE(f);
 }
 
 static void
-test_parser_success_and_fini_are_noop(void **state)
+helper_KEY_is_noop(int key)
 {
-	struct dlck_args_files *args = *state;
-
-	struct dlck_file       *d1, *d2;
-	D_ALLOC_PTR(d1);
-	D_ALLOC_PTR(d2);
-	d_list_add_tail(&d1->link, &args->list);
-	d_list_add_tail(&d2->link, &args->list);
-
-	assert_false(d_list_empty(&args->list));
-
-	Argp_state.input = args;
-
-	/* SUCCESS */
-	int rc1 = argp_file.parser(ARGP_KEY_SUCCESS, NULL, &Argp_state);
-	assert_int_equal(rc1, 0);
-	assert_false(d_list_empty(&args->list));
-
-	/* FINI */
-	int rc2 = argp_file.parser(ARGP_KEY_FINI, NULL, &Argp_state);
-	assert_int_equal(rc2, 0);
-	assert_false(d_list_empty(&args->list));
-
-	D_FREE(d1);
-	D_FREE(d2);
+	d_list_add_tail(&File.link, &Args.list);
+	int rc = argp_file.parser(key, NULL, &Argp_state);
+	assert_int_equal(rc, 0);
+	assert_false(d_list_empty(&Args.list));
 }
 
 static void
-test_parser_should_add_file_to_list(void **state)
+test_parser_KEY_SUCCESS_is_noop(void **unused)
+{
+	helper_KEY_is_noop(ARGP_KEY_SUCCESS);
+}
+
+static void
+test_parser_KEY_FINI_is_noop(void **unused)
+{
+	helper_KEY_is_noop(ARGP_KEY_FINI);
+}
+
+static void
+test_KEY_FILE_success(void **unused)
 {
 	will_return(parse_file, 0);
 
@@ -189,25 +164,19 @@ test_parser_should_add_file_to_list(void **state)
 }
 
 static void
-test_key_files_parse_file_fails(void **state)
+test_KEY_FILE_fail(void **unused)
 {
-	struct dlck_args_files args;
-	args_files_init(&args);
-
 	will_return(parse_file, EINVAL);
 
 	int rc = argp_file.parser(KEY_FILES, MOCK_ARG, &Argp_state);
 	assert_int_equal(rc, EINVAL);
-	assert_true(d_list_empty(&args.list));
+	assert_true(d_list_empty(&Args.list));
 }
 
 static void
-test_parser_unknown_key_should_return_zero(void **state)
+test_KEY_UNKNOWN_fail(void **unused)
 {
-	struct dlck_args_files *args = *state;
-	Argp_state.input             = args;
-
-	int rc = argp_file.parser(9999, NULL, &Argp_state);
+	int rc = argp_file.parser(MOCK_KEY_UKNOWN, NULL, &Argp_state);
 	assert_int_equal(rc, ARGP_ERR_UNKNOWN);
 }
 
@@ -216,49 +185,48 @@ test_files_free_empty_list(void **unused)
 {
 	assert_true(d_list_empty(&Args.list));
 	dlck_args_files_free(&Args);
+	assert_true(d_list_empty(&Args.list));
 }
 
 static void
-test_free_should_cleanup_list(void **state)
+helper_files_free(int file_num)
 {
-	struct dlck_args_files *args = *state;
-
-	struct dlck_file       *file;
-	D_ALLOC_PTR(file);
-
-	d_list_add_tail(&file->link, &args->list);
-
-	dlck_args_files_free(args);
-}
-
-static void
-test_free_should_cleanup_multiple_files(void **state)
-{
-	struct dlck_args_files *args = *state;
-
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < file_num; i++) {
 		struct dlck_file *file;
 		D_ALLOC_PTR(file);
-		d_list_add_tail(&file->link, &args->list);
+		d_list_add_tail(&file->link, &Args.list);
 	}
 
-	dlck_args_files_free(args);
-	assert_true(d_list_empty(&args->list));
+	dlck_args_files_free(&Args);
+	assert_true(d_list_empty(&Args.list));
+}
+
+static void
+test_files_free_one_file(void **unused)
+{
+	helper_files_free(1);
+}
+
+static void
+test_files_free_three_files(void **state)
+{
+	helper_files_free(3);
 }
 
 static const struct CMUnitTest tests_all[] = {
-    {"DARG100: check fail", test_check_should_fail_if_no_files, setup, NULL},
-    {"DARG101: check success", test_check_should_succeed_with_file, setup, NULL},
-    {"DARG102: key init", test_parser_key_init, setup, NULL},
-    {"DARG103: key end fail", test_parser_end_without_files_triggers_failure, setup, NULL},
-    {"DARG104: key end", test_parser_end_with_files_returns_zero, setup, NULL},
-    {"DARG105: key success and fini", test_parser_success_and_fini_are_noop, setup, NULL},
-    {"DARG106: parser add", test_parser_should_add_file_to_list, setup, NULL},
-    {"DARG107: parser fail", test_key_files_parse_file_fails, setup, NULL},
-    {"DARG108: unknown key", test_parser_unknown_key_should_return_zero, setup, NULL},
-    {"DARG109: free empty", test_files_free_empty_list, setup, NULL},
-    {"DARG110: free list", test_free_should_cleanup_list, setup, NULL},
-    {"DARG111: free list multiple", test_free_should_cleanup_multiple_files, setup, NULL},
+    {"ARGFILES100: args_files_check() no files", test_check_no_files_fail, setup, NULL},
+    {"ARGFILES101: args_files_check() success", test_check_success, setup, NULL},
+    {"ARGFILES102: parser ARGP_KEY_INIT", test_parser_KEY_INIT, setup, NULL},
+    {"ARGFILES103: parser ARGP_KEY_END no files", test_parser_KEY_END_without_files_fails, setup, NULL},
+    {"ARGFILES104: parser ARGP_KEY_END success", test_parser_KEY_END_with_files_success, setup, NULL},
+	{"ARGFILES105: parser ARGP_KEY_SUCCESS noop", test_parser_KEY_SUCCESS_is_noop, setup, NULL},
+    {"ARGFILES106: parser ARGP_KEY_FINI noop", test_parser_KEY_FINI_is_noop, setup, NULL},
+	{"ARGFILES107: KEY_FILES success", test_KEY_FILE_success, setup, NULL},
+    {"ARGFILES108: KEY_FILES fail", test_KEY_FILE_fail, setup, NULL},
+    {"ARGFILES109: unknown key", test_KEY_UNKNOWN_fail, setup, NULL},
+    {"ARGFILES110: dlck_args_files_free() no files", test_files_free_empty_list, setup, NULL},
+    {"ARGFILES111: dlck_args_files_free() one file", test_files_free_one_file, setup, NULL},
+    {"ARGFILES112: dlck_args_files_free() multiple files", test_files_free_three_files, setup, NULL},
 };
 
 int
