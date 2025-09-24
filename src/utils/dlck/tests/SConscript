@@ -55,6 +55,20 @@ def build_dlck_vos_cont_recs_get_active(venv):
     venv.Install('$PREFIX/bin/', program)
 
 
+def build_dlck_args_files_ut(venv):
+    """Build dlck_args_files.c test"""
+    venv.require('cmocka')
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=argp_failure'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc'])
+    venv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_free'])
+    libs = ['cmocka', 'gurt', 'daos_common_pmem', 'uuid']
+    srcs = ['dlck_args_files_ut.c', '../dlck_args_files.c']
+    cppdefines = ['DLCK_UT_BUILD']
+
+    program = venv.d_test_program('dlck_args_files_ut', srcs, LIBS=libs, CPPDEFINES=cppdefines)
+    venv.Install('$PREFIX/bin/', program)
+
+
 def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
@@ -94,6 +108,7 @@ def scons():
     build_dlck_dtx_act_recs_recover_ut(env.Clone())
     build_dlck_vos_cont_recs_get_active(env.Clone())
     build_dlck_test_helper(env.Clone())
+    build_dlck_args_files_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":

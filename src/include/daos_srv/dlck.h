@@ -8,6 +8,7 @@
 #define __DAOS_DLCK_H__
 
 #include "d_vector.h"
+#include "dlck_debug.h"
 
 /**
  * Trace a single DTX record.
@@ -69,12 +70,6 @@ dlck_dtx_act_recs_remove(daos_handle_t coh);
  */
 int
 dlck_dtx_act_recs_set(daos_handle_t coh, d_vector_t *dv);
-
-#ifdef DLCK_UT_BUILD
-#define DLCK_STATIC
-#else
-#define DLCK_STATIC static
-#endif
 
 /**
  * \struct dlck_iter_bundle
