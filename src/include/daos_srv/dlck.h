@@ -16,6 +16,8 @@
 #define DLCK_ERROR_INFIX      "error: "
 #define DLCK_OK_SUFFIX        "ok."
 
+#define DLCK_FMT_EXP_VS_FOUND "(expected=%#x, found=%#x)"
+
 /**
  * @struct dlck_print
  *
@@ -45,6 +47,7 @@ struct dlck_print {
 		}                                                                                  \
 	} while (0)
 
+#define DLCK_PRINT_ERR(print, fmt)       DLCK_PRINT(print, DLCK_ERROR_INFIX fmt)
 #define DLCK_PRINTF_ERR(print, fmt, ...) DLCK_PRINTF(print, DLCK_ERROR_INFIX fmt, __VA_ARGS__)
 
 #define DLCK_PRINT_WO_PREFIX(print, msg)                                                           \

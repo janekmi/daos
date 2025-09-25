@@ -818,16 +818,19 @@ evt_feats_get(struct evt_root *root)
  */
 int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
 
+struct dlck_print;
+
 /** Validate the provided evt.
  *
  * Note: It is designed for catastrophic recovery. Not to perform at run-time.
  *
- * \param evt[in]
- * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ * \param[in] evt	Extent value to check.
+ * \param[in] dtx_lid	local id of the DTX entry the evt is supposed to belong to
+ * \param[in] dp	DLCK print utility.
  *
  * \return true if evt is valid.
  **/
 bool
-evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid);
+evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid, struct dlck_print *dp);
 
 #endif /* __DAOS_EV_TREE_H__ */

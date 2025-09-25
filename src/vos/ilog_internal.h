@@ -20,7 +20,8 @@
 #define ILOG_MAGIC_MASK         ((1 << ILOG_MAGIC_BITS) - 1)
 #define ILOG_VERSION_INC        (1 << ILOG_MAGIC_BITS)
 #define ILOG_VERSION_MASK       ~(ILOG_VERSION_INC - 1)
-#define ILOG_MAGIC_VALID(magic) (((magic)&ILOG_MAGIC_MASK) == ILOG_MAGIC)
+#define ILOG_MAGIC_GET(magic)   ((magic) & ILOG_MAGIC_MASK)
+#define ILOG_MAGIC_VALID(magic) (ILOG_MAGIC_GET(magic) == ILOG_MAGIC)
 
 /** The ilog is split into two parts.   If there is one entry, the ilog
  *  is embedded into the root df struct.   If not, a b+tree is used.

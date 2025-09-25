@@ -4090,11 +4090,25 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 }
 
 bool
-evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid)
+evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid, struct dlck_print *dp)
 {
-	if (evt == NULL || evt->dc_magic != EVT_DESC_MAGIC) {
+	if (evt == NULL) {
+		DLCK_PRINT_ERR(dp, "no record\n");
 		return false;
 	}
 
-	return (evt->dc_dtx == dtx_lid);
+	if (evt->dc_magic != EVT_DESC_MAGIC) {
+		DLCK_PRINTF_ERR(dp, "invalid magic " DLCK_FMT_EXP_VS_FOUND "\n", EVT_DESC_MAGIC,
+				evt->dc_magic);
+		return false;
+	}
+
+	if (evt->dc_dtx != dtx_lid) {
+		DLCK_PRINTF_ERR(dp, "invalid TX id " DLCK_FMT_EXP_VS_FOUND "\n", dtx_lid,
+				evt->dc_dtx);
+		return false;
+	}
+
+	DLCK_PRINT_OK(dp);
+	return true;
 }

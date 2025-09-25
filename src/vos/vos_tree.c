@@ -1355,11 +1355,19 @@ obj_tree_find_attr(unsigned tree_class, int flags)
 }
 
 bool
-vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid)
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid, struct dlck_print *dp)
 {
 	if (svt == NULL) {
+		DLCK_PRINT_ERR(dp, "no record\n");
 		return false;
 	}
 
-	return svt->ir_dtx == dtx_lid;
+	if (svt->ir_dtx != dtx_lid) {
+		DLCK_PRINTF_ERR(dp, "invalid TX id " DLCK_FMT_EXP_VS_FOUND "\n", dtx_lid,
+				svt->ir_dtx);
+		return false;
+	}
+
+	DLCK_PRINT_OK(dp);
+	return true;
 }

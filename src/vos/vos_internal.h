@@ -852,11 +852,12 @@ vos_dtx_post_handle(struct vos_container *cont,
  * Establish indexed active DTX table in DRAM.
  *
  * \param cont	[IN]	Pointer to the container.
+ * \param dp	[IN]	DLCK print utility.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_act_reindex(struct vos_container *cont);
+vos_dtx_act_reindex(struct vos_container *cont, struct dlck_print *dp);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -2090,13 +2091,14 @@ int vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
  *
  * Note: It is designed for catastrophic recovery. Not to perform at run-time.
  *
- * \param svt[in]
- * \param dtx_lid[in]	local id of the DTX entry the evt is supposed to belong to
+ * \param[in] svt	Single value to check.
+ * \param[in] dtx_lid	local id of the DTX entry the svt is supposed to belong to
+ * \param[in] dp	DLCK print utility.
  *
  * \return true if svt is valid.
  **/
 bool
-vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid);
+vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid, struct dlck_print *dp);
 
 enum {
 	DTX_UMOFF_ILOG = (1 << 0),

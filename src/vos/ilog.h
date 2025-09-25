@@ -332,6 +332,7 @@ ilog_is_punch(const struct ilog_entry *entry)
  * \return true if ilog is valid.
  **/
 bool
-ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch);
+ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch,
+	      struct dlck_print *dp);
 
 #endif /* __ILOG_H__ */

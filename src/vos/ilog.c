@@ -1586,33 +1586,55 @@ ilog_version_get(daos_handle_t loh)
 }
 
 bool
-ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch)
+ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid, daos_epoch_t epoch,
+	      struct dlck_print *dp)
 {
 	struct ilog_root  *root = umem_off2ptr(umm, umem_off2offset(rec));
 	struct ilog_array *array;
 	struct ilog_id    *id;
 
 	// !ILOG_ASSERT_VALID(ilog)
-	if (root == NULL || !ILOG_MAGIC_VALID(root->lr_magic)) {
+	if (root == NULL) {
+		DLCK_PRINT_ERR(dp, "no record\n");
+		return false;
+	}
+
+	if (!ILOG_MAGIC_VALID(root->lr_magic)) {
+		DLCK_PRINTF_ERR(dp, "invalid magic " DLCK_FMT_EXP_VS_FOUND "\n", ILOG_MAGIC,
+				ILOG_MAGIC_GET(root->lr_magic));
 		return false;
 	}
 
 	if (ilog_empty(root)) {
+		DLCK_PRINT_ERR(dp, "empty\n");
 		return false;
 	}
 
 	if (root->lr_tree.it_embedded) {
 		id = &root->lr_id;
-		return (id->id_tx_id == dtx_lid && id->id_epoch == epoch);
+		if (id->id_tx_id != dtx_lid) {
+			DLCK_PRINTF_ERR(dp, "invalid TX id " DLCK_FMT_EXP_VS_FOUND "\n", dtx_lid,
+					id->id_tx_id);
+			return false;
+		}
+		if (id->id_epoch != epoch) {
+			DLCK_PRINTF_ERR(dp, "invalid epoch " DLCK_FMT_EXP_VS_FOUND "\n", epoch,
+					id->id_epoch);
+			return false;
+		}
+		DLCK_PRINT_OK(dp);
+		return true;
 	}
 
 	array = umem_off2ptr(umm, root->lr_tree.it_root);
 	for (int i = 0; i < array->ia_len; ++i) {
 		id = &array->ia_id[i];
 		if (id->id_tx_id == dtx_lid && id->id_epoch == epoch) {
+			DLCK_PRINT_OK(dp);
 			return true;
 		}
 	}
 
+	DLCK_PRINTF_ERR(dp, "not found (TX id=%#x, epoch=%#x)\n", dtx_lid, epoch);
 	return false;
 }

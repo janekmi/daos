@@ -543,7 +543,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, struct dlck_print *dp, daos_han
 	 */
 	cont->vc_mod_epoch_bound = d_hlc_get();
 
-	rc = vos_dtx_act_reindex(cont);
+	rc = vos_dtx_act_reindex(cont, dp);
 	if (rc != 0) {
 		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
 		goto exit;

@@ -33,10 +33,10 @@ static const struct evt_desc valid = {.dc_magic = EVT_DESC_MAGIC, .dc_dtx = DTX_
 static void
 evt_desc_is_valid_test(void **state)
 {
-	assert_false(evt_desc_is_valid(NULL, DTX_LID_VALID));
-	assert_false(evt_desc_is_valid(&invalid_magic, DTX_LID_VALID));
-	assert_false(evt_desc_is_valid(&invalid_dtx_lid, DTX_LID_VALID));
-	assert_true(evt_desc_is_valid(&valid, DTX_LID_VALID));
+	assert_false(evt_desc_is_valid(NULL, DTX_LID_VALID, NULL));
+	assert_false(evt_desc_is_valid(&invalid_magic, DTX_LID_VALID, NULL));
+	assert_false(evt_desc_is_valid(&invalid_dtx_lid, DTX_LID_VALID, NULL));
+	assert_true(evt_desc_is_valid(&valid, DTX_LID_VALID, NULL));
 }
 
 static const struct CMUnitTest evtree_tests_all[] = {

@@ -28,9 +28,9 @@ static const struct vos_irec_df valid = {.ir_dtx = DTX_LID_VALID};
 static void
 vos_irec_is_valid_test(void **state)
 {
-	assert_false(vos_irec_is_valid(NULL, DTX_LID_VALID));
-	assert_false(vos_irec_is_valid(&invalid_dtx_lid, DTX_LID_VALID));
-	assert_true(vos_irec_is_valid(&valid, DTX_LID_VALID));
+	assert_false(vos_irec_is_valid(NULL, DTX_LID_VALID, NULL));
+	assert_false(vos_irec_is_valid(&invalid_dtx_lid, DTX_LID_VALID, NULL));
+	assert_true(vos_irec_is_valid(&valid, DTX_LID_VALID, NULL));
 }
 
 static const struct CMUnitTest tree_tests_all[] = {
