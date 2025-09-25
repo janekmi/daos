@@ -378,6 +378,7 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	struct dlck_file   *file;
 	struct dlck_engine *engine;
 	unsigned int        seed = SRAND_SEED;
+	char                uuid_str[UUID_STR_LEN];
 	int                 rc;
 
 	/** prepare pool storage directories */
@@ -398,8 +399,12 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		goto fail_engine_stop;
 	}
 
+	printf("\n");
 	for (int i = 0; i < args->engine.targets; ++i) {
 		random_uuid(bundle->co_uuids[i], &seed);
+
+		uuid_unparse(bundle->co_uuids[i], uuid_str);
+		printf("%s\n", uuid_str);
 	}
 
 	/** register DTX module key */

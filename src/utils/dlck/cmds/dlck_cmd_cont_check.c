@@ -10,6 +10,7 @@
 #include <daos_srv/mgmt_tgt_common.h>
 
 #include "../dlck_args.h"
+#include "../dlck_bitmap.h"
 #include "../dlck_engine.h"
 #include "../dlck_pool.h"
 
@@ -48,7 +49,7 @@ process_target(struct xstream_arg *xa, int idx)
 
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is excluded */
-		if ((file->targets_bitmap & (1 << idx)) == 0) {
+		if (dlck_bitmap_isclr32(file->targets_bitmap, idx)) {
 			continue;
 		}
 
@@ -103,7 +104,7 @@ exec(void *arg)
 		/** count how many files mentions this particular target */
 		file_num_per_idx = 0;
 		d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
-			if ((file->targets_bitmap & (1 << idx)) != 0) {
+			if (dlck_bitmap_isset32(file->targets_bitmap, idx)) {
 				++file_num_per_idx;
 			}
 		}

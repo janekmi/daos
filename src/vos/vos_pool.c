@@ -1761,16 +1761,6 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		D_ERROR("Container Tree open failed\n");
 		goto out;
 	}
-
-	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
-	if (IS_DLCK(dp)) {
-		rc = dlck_dbtree_check(pool->vp_cont_th);
-		if (rc != DER_SUCCESS) {
-			dlck_print_indent_dec(dp);
-			DLCK_PRINT_MSG_RC(dp, DLCK_CONT_TREE_STR, rc);
-			goto out;
-		}
-	}
 	dlck_print_indent_dec(dp);
 	DLCK_PRINT_MSG_OK(dp, DLCK_CONT_TREE_STR);
 

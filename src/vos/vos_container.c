@@ -372,6 +372,8 @@ dlck_cont_df_check(uuid_t co_uuid, struct umem_instance *umm, struct vos_cont_df
 	return DER_SUCCESS;
 }
 
+#define DLCK_OBJECT_TREE_STR "Objects' tree... "
+
 /**
  * Open a container within a VOSP
  */
@@ -433,7 +435,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, struct dlck_print *dp, daos_han
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 
-	if (unlikely(dp != NULL)) {
+	if (IS_DLCK(dp)) {
 		rc = dlck_cont_df_check(co_uuid, &pool->vp_umm, args.ca_cont_df, dp);
 		if (rc != DER_SUCCESS) {
 			goto exit;
@@ -462,13 +464,19 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, struct dlck_print *dp, daos_han
 		D_GOTO(exit, rc);
 	gc_check_cont(cont);
 
+	DLCK_PRINT(dp, DLCK_OBJECT_TREE_STR "\n");
+	dlck_print_indent_inc(dp);
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root, &pool->vp_uma,
-				    vos_cont2hdl(cont), cont->vc_pool, NULL, &cont->vc_btr_hdl);
+				    vos_cont2hdl(cont), cont->vc_pool, dp, &cont->vc_btr_hdl);
 	if (rc) {
+		dlck_print_indent_dec(dp);
+		DLCK_PRINT_MSG_RC(dp, DLCK_OBJECT_TREE_STR, rc);
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc);
 	}
+	dlck_print_indent_dec(dp);
+	DLCK_PRINT_MSG_OK(dp, DLCK_OBJECT_TREE_STR);
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;

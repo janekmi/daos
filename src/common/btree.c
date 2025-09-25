@@ -3812,6 +3812,15 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle
 	if (rc != 0)
 		return rc;
 
+	/** This check is conducted only for the DLCK's purpose. No need to do it otherwise. */
+	if (IS_DLCK(dp)) {
+		rc = dlck_dbtree_check(btr_tcx2hdl(tcx));
+		if (rc != DER_SUCCESS) {
+			btr_context_decref(tcx);
+			return rc;
+		}
+	}
+
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
 }
