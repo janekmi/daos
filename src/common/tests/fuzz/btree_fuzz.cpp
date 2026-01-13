@@ -8,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <map>
 #include <getopt.h>
 #include <kaitai/kaitaistream.h>
 
@@ -36,6 +37,7 @@ struct test_state {
 	daos_handle_t toh;
 	std::vector<uint64_t>    keys;
 	std::vector<std::string> values;
+	std::map<uint64_t, std::string> tree;
 };
 
 #define MAX_KEY_NUM   256
@@ -108,14 +110,26 @@ enum op_type_t {
 static int
 ops_exec_update(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
+	uint64_t    key;
+	const char *value;
 	d_iov_t key_iov;
 	d_iov_t val_iov;
+	int         rc;
 
 	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_UPDATE);
 
 	// printf("update %d %d\n", op->key_id(), op->value_id());
 
-	// dbtree_update(ts->toh, )
+	key = ts->keys[op->key_id() % ts->keys.size()];
+	d_iov_set(&key_iov, &key, sizeof(key));
+
+	value = ts->values[op->value_id() % ts->values.size()].c_str();
+	d_iov_set(&val_iov, (void *)value, strlen(value) + 1);
+
+	rc = dbtree_update(ts->toh, &key_iov, &val_iov);
+	D_ASSERT(rc == DER_SUCCESS);
+
+	ts->tree[key] = ts->values[op->value_id() % ts->values.size()];
 
 	return 0;
 }
@@ -123,9 +137,22 @@ ops_exec_update(btree_in_t::btree_op_t *op, struct test_state *ts)
 static int
 ops_exec_delete(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
-	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_DELETE);
+	uint64_t key;
+	d_iov_t  key_iov;
+	int      rc;
 
-	printf("delete %d\n", op->key_id());
+	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_DELETE);
+	D_ASSERT(op->_is_null_value_id());
+
+	// printf("delete %d\n", op->key_id());
+
+	key = ts->keys[op->key_id() % ts->keys.size()];
+	d_iov_set(&key_iov, &key, sizeof(key));
+
+	rc = dbtree_delete(ts->toh, BTR_PROBE_EQ, &key_iov, NULL);
+	D_ASSERT(rc == DER_SUCCESS);
+
+	ts->tree.erase(key);
 
 	return 0;
 }
@@ -133,9 +160,27 @@ ops_exec_delete(btree_in_t::btree_op_t *op, struct test_state *ts)
 static int
 ops_exec_fetch(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
-	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_FETCH);
+	uint64_t    key;
+	d_iov_t     key_iov;
+	d_iov_t     val_iov;
+	const char *value;
+	const char *value_exp;
+	int         rc;
 
-	printf("fetch %d\n", op->key_id());
+	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_FETCH);
+	D_ASSERT(op->_is_null_value_id());
+
+	// printf("fetch %d\n", op->key_id());
+
+	key = ts->keys[op->key_id() % ts->keys.size()];
+	d_iov_set(&key_iov, &key, sizeof(key));
+
+	rc = dbtree_fetch(ts->toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
+	D_ASSERT(rc == DER_SUCCESS);
+
+	value     = (const char *)val_iov.iov_buf;
+	value_exp = ts->values[op->value_id() % ts->values.size()].c_str();
+	D_ASSERT(strcmp(value, value_exp) == 0);
 
 	return 0;
 }
