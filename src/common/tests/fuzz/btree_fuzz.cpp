@@ -14,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos/debug.h>
+#include <daos/btree.h>
 
 static struct option btr_ops[] = {
     {"batch", required_argument, NULL, 'b'},
@@ -22,15 +23,39 @@ static struct option btr_ops[] = {
 
 #define BTR_SHORTOPTS "+b:"
 
+extern btr_ops_t ik_ops;
+
+#define IK_TREE_CLASS 100
+
+struct test_state {
+	daos_handle_t toh;
+};
+
 static int
-init(btree_in_t::btree_parameters_t *params)
+init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
 {
 	D_ASSERT(params != NULL);
 
-	std::cout << "tree_order = " << (int)params->tree_order() << "\n";
-	std::cout << "seed = " << (int)params->seed() << "\n";
-	std::cout << "key_num = " << (int)params->key_num() << "\n";
-	std::cout << "value_num = " << (int)params->value_num() << "\n";
+	/* BTR_FEAT_DYNAMIC_ROOT ? */
+	uint64_t     tree_class_feats = BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY;
+	uint64_t     tree_feats       = 0;
+	unsigned int tree_order       = params->tree_order();
+	umem_attr    uma              = {UMEM_CLASS_VMEM, 0};
+
+	int          rc = dbtree_class_register(IK_TREE_CLASS, tree_class_feats, &ik_ops);
+	D_ASSERT(rc == 0);
+
+	tree_feats = 0;
+
+	rc = dbtree_create(IK_TREE_CLASS, tree_feats, tree_order, &uma, NULL, &ts->toh);
+	D_ASSERT(rc == 0);
+
+	srand(params->seed());
+
+	// std::cout << "tree_order = " << (int)params->tree_order() << "\n";
+	// std::cout << "seed = " << (int)params->seed() << "\n";
+	// std::cout << "key_num = " << (int)params->key_num() << "\n";
+	// std::cout << "value_num = " << (int)params->value_num() << "\n";
 
 	return 0;
 }
@@ -114,6 +139,7 @@ batch_exec(const char *file_name)
 {
 	std::ifstream ifs(file_name, std::ifstream::binary);
 	int           rc;
+	struct test_state ts = {};
 
 	if (!ifs) {
 		D_ERROR("Cannot open file: %s\n", file_name);
@@ -124,7 +150,7 @@ batch_exec(const char *file_name)
 	kaitai::kstream ks(&ifs);
 	btree_in_t      btree_in(&ks);
 
-	rc = init(btree_in.params());
+	rc = init(btree_in.params(), &ts);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
