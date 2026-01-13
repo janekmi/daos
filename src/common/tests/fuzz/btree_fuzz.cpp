@@ -12,8 +12,6 @@
 
 #include "generated/btree_in.h"
 
-#define _Static_assert(cond, msg) static_assert(cond, msg)
-
 #include <daos/common.h>
 #include <daos/debug.h>
 

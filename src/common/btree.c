@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -670,8 +670,7 @@ btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
 }
 
 static int
-btr_rec_stat(struct btr_context *tcx, struct btr_record *rec,
-	     struct btr_rec_stat *stat)
+btr_rec_stat_(struct btr_context *tcx, struct btr_record *rec, struct btr_rec_stat *stat)
 {
 	if (!btr_ops(tcx)->to_rec_stat)
 		return -DER_NOSYS;
@@ -3402,7 +3401,7 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return rc;
 
 	if (opc == BTR_PROBE_BYPASS)
-		goto delete;
+		goto delete_;
 
 	rc = btr_probe_key(tcx, opc, DAOS_INTENT_KILL, key);
 	if (rc == PROBE_RC_INPROGRESS) {
@@ -3420,7 +3419,7 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return -DER_NONEXIST;
 	}
 
-delete:
+delete_:
 	rc = btr_tx_delete(tcx, args);
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
@@ -3457,7 +3456,7 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 		struct btr_rec_stat	 rs;
 
 		rec = btr_node_rec_at(tcx, nd_off, i);
-		rc = btr_rec_stat(tcx, rec, &rs);
+		rc  = btr_rec_stat_(tcx, rec, &rs);
 		if (rc != 0)
 			continue;
 

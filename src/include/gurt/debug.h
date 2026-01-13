@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -353,6 +353,10 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 			d_alt_assert(0, #cond, __FILE__, __LINE__);		\
 		assert(0);							\
 	} while (0)
+
+#ifdef __cplusplus
+#define _Static_assert(cond, msg) static_assert(cond, msg)
+#endif
 
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)

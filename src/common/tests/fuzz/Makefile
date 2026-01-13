@@ -1,5 +1,6 @@
 CXX = g++
-CXXFLAGS = -ggdb -O0
+# debug + hide all warnings (there are too many of them)
+CXXFLAGS = -ggdb -O0 -w
 
 # paths
 CXXFLAGS += -I../../../include -L/opt/daos/lib64
