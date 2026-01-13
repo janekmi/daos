@@ -150,9 +150,14 @@ ops_exec_delete(btree_in_t::btree_op_t *op, struct test_state *ts)
 	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_delete(ts->toh, BTR_PROBE_EQ, &key_iov, NULL);
-	D_ASSERT(rc == DER_SUCCESS);
 
-	ts->tree.erase(key);
+	if (ts->tree.find(key) != ts->tree.end()) {
+		D_ASSERT(rc == DER_SUCCESS);
+		rc = ts->tree.erase(key);
+		D_ASSERT(rc == 1);
+	} else {
+		D_ASSERT(rc == -DER_NONEXIST);
+	}
 
 	return 0;
 }
@@ -176,11 +181,15 @@ ops_exec_fetch(btree_in_t::btree_op_t *op, struct test_state *ts)
 	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_fetch(ts->toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
-	D_ASSERT(rc == DER_SUCCESS);
 
-	value     = (const char *)val_iov.iov_buf;
-	value_exp = ts->values[op->value_id() % ts->values.size()].c_str();
-	D_ASSERT(strcmp(value, value_exp) == 0);
+	if (ts->tree.find(key) != ts->tree.end()) {
+		D_ASSERT(rc == DER_SUCCESS);
+		value     = (const char *)val_iov.iov_buf;
+		value_exp = ts->tree[key].c_str();
+		D_ASSERT(strcmp(value, value_exp) == 0);
+	} else {
+		D_ASSERT(rc == -DER_NONEXIST);
+	}
 
 	return 0;
 }
