@@ -1,13 +1,70 @@
+/**
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+#define D_LOGFAC DD_FAC(tests)
+
 #include <iostream>
 #include <fstream>
-#include "generated/btree_in.h"
+#include <getopt.h>
 #include <kaitai/kaitaistream.h>
 
-int
-main()
+#include "generated/btree_in.h"
+
+#include <daos/debug.h>
+
+static struct option btr_ops[] = {
+    {"batch", required_argument, NULL, 'b'},
+    {NULL, 0, NULL, 0},
+};
+
+#define BTR_SHORTOPTS "+b:"
+
+/**
+ * XXX copy from misc.c
+ */
+char *
+daos_str_trimwhite(char *str)
 {
+	char *end = str + strlen(str);
+
+	while (isspace(*str))
+		str++;
+
+	if (str == end)
+		return NULL;
+
+	while (isspace(end[-1]))
+		end--;
+
+	*end = 0;
+	return str;
+}
+
+int
+main(int argc, char **argv)
+{
+	int   opt;
+	char *file_name = NULL;
+
+	while ((opt = getopt_long(argc, argv, BTR_SHORTOPTS, btr_ops, NULL)) != -1) {
+		if (opt == 'b') {
+			file_name = optarg;
+		} else if (opt == '?') {
+			break;
+		}
+	}
+	if (opt == '?') {
+		/* invalid option - error message printed on stderr already */
+		return -1;
+	} else if (argc != optind) {
+		D_ERROR("Cannot interpret parameter: \"%s\" at optind: %d.\n", argv[optind],
+			optind);
+	}
+
 	// Open binary file
-	std::ifstream ifs("in.bin", std::ifstream::binary);
+	std::ifstream ifs(file_name, std::ifstream::binary);
 	if (!ifs) {
 		std::cerr << "Cannot open file\n";
 		return 1;

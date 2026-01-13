@@ -1,3 +1,5 @@
+# (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 meta:
   id: btree_in
   title: btree_fuzz input file
@@ -29,7 +31,7 @@ types:
   btree_op:
     seq:
       - id: type
-        type: u1
+        type: u1 # it is not an enum to allow all possible values as valid
       - id: key_id
         type: u1
       - id: value_id
