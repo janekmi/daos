@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -257,7 +257,7 @@ DP_UUID(const void *uuid)
 	if (uuid == NULL)
 		snprintf(buf, DAOS_UUID_STR_SIZE, "?");
 	else
-		uuid_unparse_lower(uuid, buf);
+		uuid_unparse_lower((const unsigned char *)uuid, buf);
 	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % DF_UUID_MAX;
 	return buf;
 }
@@ -278,7 +278,7 @@ daos_key2str(daos_key_t *key)
 		strcpy(buf, "<NULL>");
 	} else {
 		int	len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
-		char	*akey = key->iov_buf;
+		char   *akey      = (char *)key->iov_buf;
 		bool	can_print = true;
 		bool	is_int = key->iov_len == sizeof(uint64_t);
 		int	i;
