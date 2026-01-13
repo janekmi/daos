@@ -12,6 +12,9 @@
 
 #include "generated/btree_in.h"
 
+#define _Static_assert(cond, msg) static_assert(cond, msg)
+
+#include <daos/common.h>
 #include <daos/debug.h>
 
 static struct option btr_ops[] = {
@@ -21,25 +24,116 @@ static struct option btr_ops[] = {
 
 #define BTR_SHORTOPTS "+b:"
 
-/**
- * XXX copy from misc.c
- */
-char *
-daos_str_trimwhite(char *str)
+static int
+init(btree_in_t::btree_parameters_t *params)
 {
-	char *end = str + strlen(str);
+	D_ASSERT(params != NULL);
 
-	while (isspace(*str))
-		str++;
+	std::cout << "tree_order = " << (int)params->tree_order() << "\n";
+	std::cout << "seed = " << (int)params->seed() << "\n";
+	std::cout << "key_num = " << (int)params->key_num() << "\n";
+	std::cout << "value_num = " << (int)params->value_num() << "\n";
 
-	if (str == end)
-		return NULL;
+	return 0;
+}
 
-	while (isspace(end[-1]))
-		end--;
+enum op_type_t {
+	OP_TYPE_UPDATE = 0,
+	OP_TYPE_DELETE,
+	OP_TYPE_FETCH,
+	OP_TYPE_MAX,
+};
 
-	*end = 0;
-	return str;
+static int
+ops_exec_update(btree_in_t::btree_op_t *op)
+{
+	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_UPDATE);
+
+	printf("update %d %d\n", op->key_id(), op->value_id());
+
+	return 0;
+}
+
+static int
+ops_exec_delete(btree_in_t::btree_op_t *op)
+{
+	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_DELETE);
+
+	printf("delete %d\n", op->key_id());
+
+	return 0;
+}
+
+static int
+ops_exec_fetch(btree_in_t::btree_op_t *op)
+{
+	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_FETCH);
+
+	printf("fetch %d\n", op->key_id());
+
+	return 0;
+}
+
+static int
+ops_exec_one(btree_in_t::btree_op_t *op)
+{
+	D_ASSERT(op != NULL);
+
+	enum op_type_t type = (enum op_type_t)(op->type() % OP_TYPE_MAX);
+
+	switch (type) {
+	case OP_TYPE_UPDATE:
+		return ops_exec_update(op);
+	case OP_TYPE_DELETE:
+		return ops_exec_delete(op);
+	case OP_TYPE_FETCH:
+		return ops_exec_fetch(op);
+	default:
+		D_ERROR("Unknown op type: %" PRIu8 "\n", op->type());
+		return -1;
+	}
+}
+
+static int
+ops_exec(std::vector<btree_in_t::btree_op_t *> *ops)
+{
+	int rc;
+
+	D_ASSERT(ops != NULL);
+
+	for (auto *op : *ops) {
+		rc = ops_exec_one(op);
+		if (rc != NULL) {
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+static int
+batch_exec(const char *file_name)
+{
+	std::ifstream ifs(file_name, std::ifstream::binary);
+	int           rc;
+
+	if (!ifs) {
+		D_ERROR("Cannot open file: %s\n", file_name);
+		return -1;
+	}
+
+	/* wrap file in Kaitai stream and parse */
+	kaitai::kstream ks(&ifs);
+	btree_in_t      btree_in(&ks);
+
+	rc = init(btree_in.params());
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	rc = ops_exec(btree_in.op());
+
+	return 0;
 }
 
 int
@@ -47,6 +141,15 @@ main(int argc, char **argv)
 {
 	int   opt;
 	char *file_name = NULL;
+	int   rc;
+
+	D_CASSERT((int)OP_TYPE_MAX == (int)btree_in_t::consts_t::CONSTS_OPS_NUM);
+
+	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_ERR);
+	if (rc != 0) {
+		fprintf(stderr, "daos_debug_init_ex() failed: %d\n", rc);
+		return rc;
+	}
 
 	while ((opt = getopt_long(argc, argv, BTR_SHORTOPTS, btr_ops, NULL)) != -1) {
 		if (opt == 'b') {
@@ -57,31 +160,22 @@ main(int argc, char **argv)
 	}
 	if (opt == '?') {
 		/* invalid option - error message printed on stderr already */
-		return -1;
+		goto err;
 	} else if (argc != optind) {
 		D_ERROR("Cannot interpret parameter: \"%s\" at optind: %d.\n", argv[optind],
 			optind);
+		goto err;
 	}
 
-	// Open binary file
-	std::ifstream ifs(file_name, std::ifstream::binary);
-	if (!ifs) {
-		std::cerr << "Cannot open file\n";
-		return 1;
+	if (file_name == NULL) {
+		D_ERROR("No batch file provided.\n");
+		goto err;
 	}
 
-	// Wrap file in Kaitai stream
-	kaitai::kstream                 ks(&ifs);
+	rc = batch_exec(file_name);
 
-	// Parse using generated class
-	btree_in_t                      btree_in(&ks);
-	btree_in_t::btree_parameters_t *params = btree_in.params();
+err:
+	daos_debug_fini();
 
-	// Access fields
-	std::cout << "tree_order = " << (int)params->tree_order() << "\n";
-	std::cout << "seed = " << (int)params->seed() << "\n";
-	std::cout << "key_num = " << (int)params->key_num() << "\n";
-	std::cout << "value_num = " << (int)params->value_num() << "\n";
-
-	return 0;
+	return rc;
 }
