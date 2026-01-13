@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <getopt.h>
 #include <kaitai/kaitaistream.h>
 
@@ -16,6 +17,8 @@
 #include <daos/debug.h>
 #include <daos/btree.h>
 
+/** options */
+
 static struct option btr_ops[] = {
     {"batch", required_argument, NULL, 'b'},
     {NULL, 0, NULL, 0},
@@ -23,13 +26,40 @@ static struct option btr_ops[] = {
 
 #define BTR_SHORTOPTS "+b:"
 
+/** btree test class definitions */
+
 extern btr_ops_t ik_ops;
 
 #define IK_TREE_CLASS 100
 
 struct test_state {
 	daos_handle_t toh;
+	std::vector<uint64_t>    keys;
+	std::vector<std::string> values;
 };
+
+#define MAX_KEY_NUM   256
+#define MAX_VALUE_NUM 256
+#define MAX_VALUE_LEN 32
+
+std::string
+random_string()
+{
+	static const char charset[] = "0123456789"
+				      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+				      "abcdefghijklmnopqrstuvwxyz";
+
+	std::string       s;
+	unsigned          length = random() % MAX_VALUE_LEN;
+
+	s.reserve(length);
+
+	for (int i = 0; i < length; ++i) {
+		s += charset[random() % (sizeof(charset) - 1)];
+	}
+
+	return s;
+}
 
 static int
 init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
@@ -41,6 +71,8 @@ init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
 	uint64_t     tree_feats       = 0;
 	unsigned int tree_order       = params->tree_order();
 	umem_attr    uma              = {UMEM_CLASS_VMEM, 0};
+	unsigned     key_num;
+	unsigned     value_num;
 
 	int          rc = dbtree_class_register(IK_TREE_CLASS, tree_class_feats, &ik_ops);
 	D_ASSERT(rc == 0);
@@ -52,10 +84,16 @@ init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
 
 	srand(params->seed());
 
-	// std::cout << "tree_order = " << (int)params->tree_order() << "\n";
-	// std::cout << "seed = " << (int)params->seed() << "\n";
-	// std::cout << "key_num = " << (int)params->key_num() << "\n";
-	// std::cout << "value_num = " << (int)params->value_num() << "\n";
+	key_num   = rand() % MAX_KEY_NUM;
+	value_num = rand() % MAX_VALUE_NUM;
+
+	for (int i = 0; i < key_num; ++i) {
+		ts->keys.emplace_back(rand());
+	}
+
+	for (int i = 0; i < value_num; ++i) {
+		ts->values.emplace_back(random_string());
+	}
 
 	return 0;
 }
@@ -68,17 +106,22 @@ enum op_type_t {
 };
 
 static int
-ops_exec_update(btree_in_t::btree_op_t *op)
+ops_exec_update(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
+	d_iov_t key_iov;
+	d_iov_t val_iov;
+
 	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_UPDATE);
 
-	printf("update %d %d\n", op->key_id(), op->value_id());
+	// printf("update %d %d\n", op->key_id(), op->value_id());
+
+	// dbtree_update(ts->toh, )
 
 	return 0;
 }
 
 static int
-ops_exec_delete(btree_in_t::btree_op_t *op)
+ops_exec_delete(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
 	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_DELETE);
 
@@ -88,7 +131,7 @@ ops_exec_delete(btree_in_t::btree_op_t *op)
 }
 
 static int
-ops_exec_fetch(btree_in_t::btree_op_t *op)
+ops_exec_fetch(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
 	D_ASSERT(op->type() % OP_TYPE_MAX == (int)OP_TYPE_FETCH);
 
@@ -98,7 +141,7 @@ ops_exec_fetch(btree_in_t::btree_op_t *op)
 }
 
 static int
-ops_exec_one(btree_in_t::btree_op_t *op)
+ops_exec_one(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
 	D_ASSERT(op != NULL);
 
@@ -106,11 +149,11 @@ ops_exec_one(btree_in_t::btree_op_t *op)
 
 	switch (type) {
 	case OP_TYPE_UPDATE:
-		return ops_exec_update(op);
+		return ops_exec_update(op, ts);
 	case OP_TYPE_DELETE:
-		return ops_exec_delete(op);
+		return ops_exec_delete(op, ts);
 	case OP_TYPE_FETCH:
-		return ops_exec_fetch(op);
+		return ops_exec_fetch(op, ts);
 	default:
 		D_ERROR("Unknown op type: %" PRIu8 "\n", op->type());
 		return -1;
@@ -118,14 +161,14 @@ ops_exec_one(btree_in_t::btree_op_t *op)
 }
 
 static int
-ops_exec(std::vector<btree_in_t::btree_op_t *> *ops)
+ops_exec(std::vector<btree_in_t::btree_op_t *> *ops, struct test_state *ts)
 {
 	int rc;
 
 	D_ASSERT(ops != NULL);
 
 	for (auto *op : *ops) {
-		rc = ops_exec_one(op);
+		rc = ops_exec_one(op, ts);
 		if (rc != NULL) {
 			return rc;
 		}
@@ -151,11 +194,13 @@ batch_exec(const char *file_name)
 	btree_in_t      btree_in(&ks);
 
 	rc = init(btree_in.params(), &ts);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
+	D_ASSERT(rc == DER_SUCCESS);
 
-	rc = ops_exec(btree_in.op());
+	rc = ops_exec(btree_in.op(), &ts);
+	D_ASSERT(rc == 0);
+
+	// rc = fini(&ts);
+	D_ASSERT(rc == 0);
 
 	return 0;
 }
