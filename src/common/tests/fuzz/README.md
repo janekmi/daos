@@ -26,6 +26,7 @@ flowchart TD
 # Caveats
 
 - Kaitai Struct does not provide C runtime. Executables employing Kaitai Struct has to be written in C++.
+        - C++ provides std::vector and std::map which are very useful while writing tests.
 - The DAOS source code does not follow standard C++ requirements. It requires slight adjustments here and there.
 - One still has to write a unit test type of binary which requires a little bit of understanding of the matter at hand.
 
