@@ -1,3 +1,28 @@
+# Fuzz testing life-cycle
+
+```mermaid
+flowchart TD
+    %% nodes
+    start@{ shape: start}
+    gen@{ shape: proc, label: "btree_in_gen.py"}
+    exe@{ shape: proc, label: "btree_fuzz"}
+    input@{ shape: doc, label: "input.bin"}
+    fuzzer@{ shape: diam, label: "fuzzer"}
+    fuzzed@{ shape: docs, label: "input.bin(s)"}
+    crashed@{ shape: docs, label: "crashed input.bin(s)"}
+    ctrlc@{ shape: manual-input, label: "Ctrl+C"}
+    stop@{ shape: stop}
+
+    %% connections
+    start --> gen -->|Generate| input
+    input --> fuzzer
+    fuzzer -->|Fuzz| fuzzed
+    fuzzed --> |Execute| exe
+    fuzzer --> |Monitor| exe
+    fuzzer --> |Collect| crashed
+    fuzzer --> ctrlc --> stop
+```
+
 # Caveats
 
 - Kaitai Struct does not provide C runtime. Executables employing Kaitai Struct has to be written in C++.
