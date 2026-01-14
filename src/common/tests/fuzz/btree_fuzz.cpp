@@ -57,7 +57,7 @@ random_string()
 	s.reserve(length);
 
 	for (int i = 0; i < length; ++i) {
-		s += charset[random() % (sizeof(charset) - 1)];
+		s += charset[random() % (ARRAY_SIZE(charset) - 1)];
 	}
 
 	return s;
@@ -91,10 +91,12 @@ init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
 
 	for (int i = 0; i < key_num; ++i) {
 		ts->keys.emplace_back(rand());
+		// printf("[%d] = %" PRIu64 "\n", i, ts->keys.back());
 	}
 
 	for (int i = 0; i < value_num; ++i) {
 		ts->values.emplace_back(random_string());
+		// printf("[%d] = %s\n", i, ts->values.back().c_str());
 	}
 
 	return 0;
@@ -166,9 +168,9 @@ static int
 ops_exec_fetch(btree_in_t::btree_op_t *op, struct test_state *ts)
 {
 	uint64_t    key;
+	char        value[MAX_VALUE_LEN + 1];
 	d_iov_t     key_iov;
 	d_iov_t     val_iov;
-	const char *value;
 	const char *value_exp;
 	int         rc;
 
@@ -179,12 +181,12 @@ ops_exec_fetch(btree_in_t::btree_op_t *op, struct test_state *ts)
 
 	key = ts->keys[op->key_id() % ts->keys.size()];
 	d_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&val_iov, value, ARRAY_SIZE(value));
 
 	rc = dbtree_fetch(ts->toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
 
 	if (ts->tree.find(key) != ts->tree.end()) {
 		D_ASSERT(rc == DER_SUCCESS);
-		value     = (const char *)val_iov.iov_buf;
 		value_exp = ts->tree[key].c_str();
 		D_ASSERT(strcmp(value, value_exp) == 0);
 	} else {
