@@ -102,6 +102,21 @@ init(btree_in_t::btree_parameters_t *params, struct test_state *ts)
 	return 0;
 }
 
+static int
+fini(struct test_state *ts)
+{
+	int rc;
+
+	ts->tree.clear();
+	ts->values.clear();
+	ts->keys.clear();
+
+	rc = dbtree_destroy(ts->toh, NULL);
+	D_ASSERT(rc == 0);
+
+	return 0;
+}
+
 enum op_type_t {
 	OP_TYPE_UPDATE = 0,
 	OP_TYPE_DELETE,
@@ -255,7 +270,7 @@ batch_exec(const char *file_name)
 	rc = ops_exec(btree_in.op(), &ts);
 	D_ASSERT(rc == 0);
 
-	// rc = fini(&ts);
+	rc = fini(&ts);
 	D_ASSERT(rc == 0);
 
 	return 0;

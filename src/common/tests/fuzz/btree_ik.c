@@ -85,8 +85,8 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		*rec_ret = rec->rec_off;
 		return 0;
 	}
-	// utest_free(ik_utx, irec->ir_val_off);
-	// utest_free(ik_utx, rec->rec_off);
+	umem_free(&tins->ti_umm, irec->ir_val_off);
+	umem_free(&tins->ti_umm, rec->rec_off);
 
 	return 0;
 }
