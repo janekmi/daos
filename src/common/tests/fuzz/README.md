@@ -14,13 +14,13 @@ flowchart TD
     stop@{ shape: stop}
 
     %% connections
-    start --> gen -->|Generate| input
+    start --> gen -->|"(1) Generate"| input
     input --> fuzzer
-    fuzzer -->|Fuzz| fuzzed
-    fuzzed --> |Execute| exe
-    fuzzer --> |Monitor| exe
-    fuzzer --> |Collect| crashed
-    fuzzer --> ctrlc --> stop
+    fuzzer -->|"(2) Fuzz"| fuzzed
+    fuzzed --> |"(3a) Execute"| exe
+    fuzzer --> |"(3b) Monitor"| exe
+    fuzzer --> |"(4) Collect"| crashed
+    fuzzer --> ctrlc --> |"(5) Exi"| stop
 ```
 
 # Caveats
