@@ -1,6 +1,6 @@
 # Copyright 2016-2024 Intel Corporation
 # Copyright 2025 Google LLC
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -519,6 +519,11 @@ class PreReqComponent():
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
+        opts.Add(BoolVariable('BUILD_FUZZ_TESTS_ONLY',
+                              'Suspends building the standard build targets. '
+                              'Only fuzz tests and their required dependencies are compiled. '
+                              'The setting also overrides COMPILER to configure it appropriately '
+                              'for fuzzing.', False))
 
         opts.Update(self.__env)
 
@@ -668,17 +673,23 @@ class PreReqComponent():
 
     def _setup_compiler(self):
         """Setup the compiler to use"""
-        compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
-                        'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
-                                 'CXX': '/opt/BullseyeCoverage/bin/g++',
-                                 'CVS': '/opt/BullseyeCoverage/bin/covselect',
-                                 'COV01': '/opt/BullseyeCoverage/bin/cov01'},
-                        'clang': {'CC': 'clang', 'CXX': 'clang++'}}
+        compiler_map = {
+            'gcc': {'CC': 'gcc', 'CXX': 'g++'},
+            'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
+                     'CXX': '/opt/BullseyeCoverage/bin/g++',
+                     'CVS': '/opt/BullseyeCoverage/bin/covselect',
+                     'COV01': '/opt/BullseyeCoverage/bin/cov01'},
+            'clang': {'CC': 'clang', 'CXX': 'clang++'},
+            'afl': {'CC': 'afl-gcc-fast', 'CXX': 'afl-g++-fast'},
+        }
 
         if GetOption('clean') or GetOption('help'):
             return
 
-        compiler = self.__env.get('COMPILER')
+        if self.__env.get('BUILD_FUZZ_TESTS_ONLY'):
+            compiler = 'afl'
+        else:
+            compiler = self.__env.get('COMPILER')
         if compiler == 'icc':
             compiler_map['icc'] = self._setup_intelc()
 
