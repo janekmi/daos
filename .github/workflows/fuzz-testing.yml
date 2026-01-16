@@ -1,0 +1,62 @@
+name: Fuzz testing
+
+on:
+  push:
+
+permissions: {}
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      # AFL
+      - name: Install AFL++ dependencies
+        run: |
+          sudo apt-get install gcc-13-plugin-dev
+      - name: Checkout AFL++
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        with:
+          fetch-depth: 1
+          repository: AFLplusplus/AFLplusplus
+          path: aflplusplus
+      - name: Build & install AFL++
+        working-directory: aflplusplus
+        run: |
+          make source-only NO_PYTHON=1 NO_NYX=1 NO_QEMU=1 NO_FRIDA=1 NO_UNICORN=1
+          sudo make install
+
+      # Kaitai Struct
+      - name: Install Kaitai Struct dependencies
+        run: |
+          sudo apt-get install libgtest-dev
+      - name: Checkout Kaitai Struct C++/STL runtime
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        with:
+          fetch-depth: 1
+          repository: kaitai-io/kaitai_struct_cpp_stl_runtime
+          path: kaitai_struct_cpp_stl_runtime
+      - name: Build & install Kaitai Struct C++/STL runtime
+        working-directory: kaitai_struct_cpp_stl_runtime
+        run: |
+          .build/build
+          sudo cmake --install build/
+
+      # DAOS
+      - name: Install DAOS dependencies
+        run: |
+          sudo pip install scons
+          sudo apt-get install uuid-dev valgrind libboost-dev
+      - name: Checkout daos-stack/daos
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          path: daos
+      - name: Build fuzz tests
+        working-directory: daos
+        run: |
+          scons --build-deps=no --jobs $(nproc) PREFIX=/opt/daos BUILD_TYPE=debug BUILD_FUZZ_TESTS_ONLY=yes install
+      - name: Check fuzz tests
+        working-directory: daos
+        run: |
+          find build/debug/ -name *_fuzz
