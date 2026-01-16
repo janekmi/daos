@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,9 +37,12 @@ static d_dbug_t DB_OPT10;
 
 #define DBG_ENV_MAX_LEN	(128)
 
-#define DBG_DICT_ENTRY(bit, name, longname)				\
-	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\
-	  .db_lname = longname, .db_lname_size = sizeof(longname) }
+#define DBG_DICT_ENTRY(bit, name, longname)                                                        \
+	{.db_bit        = bit,                                                                     \
+	 .db_name       = name,                                                                    \
+	 .db_lname      = longname,                                                                \
+	 .db_name_size  = sizeof(name),                                                            \
+	 .db_lname_size = sizeof(longname)}
 
 #define D_INIT_DB(bit, name, longname, mask, arg)	\
 	DBG_DICT_ENTRY(&bit, #name, #longname),
@@ -62,8 +65,7 @@ struct d_debug_bit d_dbg_bit_dict[] = {
 
 #define NUM_DBG_BIT_ENTRIES	ARRAY_SIZE(d_dbg_bit_dict)
 
-#define DBG_GRP_DICT_ENTRY()					\
-	{ .dg_mask = 0, .dg_name = NULL, .dg_name_size = 0 }
+#define DBG_GRP_DICT_ENTRY()    {.dg_name = NULL, .dg_name_size = 0, .dg_mask = 0}
 
 struct d_debug_grp d_dbg_grp_dict[] = {
 	DBG_GRP_DICT_ENTRY(),
@@ -80,8 +82,8 @@ struct d_debug_grp d_dbg_grp_dict[] = {
 
 #define NUM_DBG_GRP_ENTRIES	ARRAY_SIZE(d_dbg_grp_dict)
 
-#define PRI_DICT_ENTRY(prio, name, longname, mask, arg)	\
-	{ .dd_prio = prio, .dd_name = #name, .dd_name_size = sizeof(#name) },
+#define PRI_DICT_ENTRY(prio, name, longname, mask, arg)                                            \
+	{.dd_name = #name, .dd_prio = prio, .dd_name_size = sizeof(#name)},
 
 static struct d_debug_priority d_dbg_prio_dict[] = {
 	D_FOREACH_PRIO_MASK(PRI_DICT_ENTRY, D_NOOP)
@@ -90,14 +92,14 @@ static struct d_debug_priority d_dbg_prio_dict[] = {
 #define NUM_DBG_PRIO_ENTRIES	ARRAY_SIZE(d_dbg_prio_dict)
 
 struct d_debug_data d_dbglog_data = {
-	/* count of alloc'd debug bits */
-	.dbg_bit_cnt		= 0,
-	/* count of alloc'd debug groups */
-	.dbg_grp_cnt		= 0,
-	/* 0 means we should use the mask provided by facilities */
-	.dd_mask		= 0,
-	/* optional priority output to stderr */
-	.dd_prio_err		= 0,
+    /* 0 means we should use the mask provided by facilities */
+    .dd_mask = 0,
+    /* optional priority output to stderr */
+    .dd_prio_err = 0,
+    /* count of alloc'd debug bits */
+    .dbg_bit_cnt = 0,
+    /* count of alloc'd debug groups */
+    .dbg_grp_cnt = 0,
 };
 
 #define BIT_CNT_TO_BIT_MASK(cnt)	(1 << (DLOG_DPRISHIFT + cnt))
