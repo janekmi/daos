@@ -1,3 +1,7 @@
+# Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 """Build DAOS components"""
 
 import os
@@ -100,6 +104,11 @@ def scons():
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     libdaos_tgts = []
     Export('env', 'CART_VERSION', 'libdaos_tgts')
+
+    if env['BUILD_FUZZ_TESTS_ONLY']:
+        SConscript('gurt/SConscript')
+        SConscript('common/tests/fuzz/SConscript')
+        return
 
     # Generate common libraries used by multiple components
     SConscript('gurt/SConscript')
