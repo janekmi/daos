@@ -1,0 +1,44 @@
+"""Build daos common fuzz tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    fenv = env.Clone()
+    fenv.AppendUnique(OBJPREFIX='btree_fuzz_')
+    fenv.AppendUnique(CXXFLAGS=[
+        '-Wno-narrowing',
+        '-Wno-literal-suffix',
+        '-Wno-pointer-arith',
+        '-Wno-write-strings',
+        '-fpermissive'
+    ])
+    fenv.AppendUnique(RPATH=['$PREFIX/lib64'])
+
+    SRCS = [
+        'btree_fuzz.cpp',
+        'btree_ik.c',
+        'misc_mock.c',
+        'generated/btree_in.cpp',
+        '../../btree.c',
+        '../../mem.c',
+        '../../debug.c',
+        '../../fail_loc.c',
+    ]
+
+    LIBS = ['gurt', 'uuid', 'kaitai_struct_cpp_stl_runtime']
+
+    # Custom builder that compiles everything at once
+    multi = Builder(
+        action='$CXX -o $TARGET $CXXFLAGS $_CCCOMCOM $LINKFLAGS $__RPATH $SOURCES $_LIBDIRFLAGS '
+               '$_LIBFLAGS'
+    )
+
+    fenv.Append(BUILDERS={'MultiProgram': multi})
+
+    fenv.MultiProgram("btree_fuzz", SRCS, LIBS=LIBS)
+
+
+if __name__ == "SCons.Script":
+    scons()

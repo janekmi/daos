@@ -881,6 +881,7 @@ class PreReqComponent():
             else:
                 needed_libs = kw.get(f'{comp}_libs', comp_def.libs)
             if comp in self.__required:
+                # continue
                 if GetOption('help'):
                     continue
                 # checkout and build done previously
@@ -893,6 +894,7 @@ class PreReqComponent():
             self.__required[comp] = False
             if comp_def.is_installed(needed_libs):
                 continue
+            # continue
             try:
                 comp_def.configure()
                 if comp_def.build(env, needed_libs):
