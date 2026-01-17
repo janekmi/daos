@@ -8,50 +8,117 @@ permissions: {}
 jobs:
   Build:
     runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9.3
     steps:
+      - name: Configure & install basic prerequisites
+        run: |
+          dnf install 'dnf-command(config-manager)' -y
+          dnf config-manager --set-enabled crb
+          dnf install git python3-pip autoconf automake libtool nasm epel-release -y
+
       # AFL
       - name: Install AFL++ dependencies
         run: |
-          sudo apt-get install gcc-13-plugin-dev
+          dnf install gcc-plugin-devel gcc-c++ -y
       - name: Checkout AFL++
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
         with:
-          fetch-depth: 1
           repository: AFLplusplus/AFLplusplus
+          fetch-depth: 1
           path: aflplusplus
       - name: Build & install AFL++
         working-directory: aflplusplus
         run: |
           make source-only NO_PYTHON=1 NO_NYX=1 NO_QEMU=1 NO_FRIDA=1 NO_UNICORN=1
-          sudo make install
+          make install
 
       # Kaitai Struct
       - name: Install Kaitai Struct dependencies
         run: |
-          sudo apt-get install libgtest-dev
+          dnf install cmake gtest-devel -y
       - name: Checkout Kaitai Struct C++/STL runtime
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
         with:
-          fetch-depth: 1
           repository: kaitai-io/kaitai_struct_cpp_stl_runtime
+          ref: 0.11
           path: kaitai_struct_cpp_stl_runtime
+          fetch-depth: 1
       - name: Build & install Kaitai Struct C++/STL runtime
         working-directory: kaitai_struct_cpp_stl_runtime
         run: |
-          .build/build
-          sudo cmake --install build/
+          .build/build -D BUILD_TESTS=OFF
+          cmake --install build/
 
       # DAOS
-      - name: Install DAOS dependencies
-        run: |
-          sudo pip install scons
-          sudo apt-get install uuid-dev valgrind libboost-dev
       - name: Checkout daos-stack/daos
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
         with:
           submodules: recursive
           fetch-depth: 1
           path: daos
+      - name: Install DAOS dependencies (part 1)
+        working-directory: daos
+        run: |
+          pip install scons
+          pip install -r requirements-build.txt
+          dnf install meson libfabric-devel hwloc-devel boost-devel ucx-devel libuuid-devel \
+            openssl-devel protobuf-c-devel lz4-devel isa-l-devel libunwind-devel libcmocka-devel \
+            valgrind-devel CUnit-devel libyaml-devel libevent-devel json-c-devel libipmctl-devel \
+            libpmemobj-devel capstone-devel libaio-devel -y
+      - name: Download and install DAOS dependencies (part 2)
+        run: |
+          curl \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/mercury-2.4.0-8.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/mercury-devel-2.4.0-8.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/argobots-1.2-3.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/argobots-devel-1.2-3.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/spdk-22.01.2-6.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/spdk-devel-22.01.2-6.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/spdk-tools-22.01.2-6.el9.noarch.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/dpdk-21.11.2-2.el9.x86_64.rpm \
+            -sO https://packages.daos.io/v2.6/EL9/packages/x86_64/dpdk-devel-21.11.2-2.el9.x86_64.rpm
+          dnf install ./*.rpm -y
+        # -O https://packages.daos.io/v2.6/EL9/packages/x86_64/fuse-common-3.16.2-2.el9.x86_64.rpm \
+        # -O https://packages.daos.io/v2.6/EL9/packages/x86_64/fuse3-3.16.2-2.el9.x86_64.rpm \
+        # -O https://packages.daos.io/v2.6/EL9/packages/x86_64/fuse3-devel-3.16.2-2.el9.x86_64.rpm \
+        # -O https://packages.daos.io/v2.6/EL9/packages/x86_64/fuse3-libs-3.16.2-2.el9.x86_64.rpm
+      - name: Checkout intel/isa-l_crypto
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        with:
+          repository: intel/isa-l_crypto
+          ref: v2.25.0
+          submodules: recursive
+          fetch-depth: 1
+          path: isa-l_crypto
+      - name: Checkout daos-stack/fused
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+        with:
+          repository: daos-stack/fused
+          ref: v1.0.0
+          submodules: recursive
+          fetch-depth: 1
+          path: fused
+      - name: Build and install DAOS dependencies (isa-l_crypto) (part 3)
+        working-directory: isa-l_crypto
+        run: |
+          ./autogen.sh --no-oshmem
+          ./configure --disable-static
+          make -j $(nproc)
+          make install
+      - name: Build and install DAOS dependencies (fused) (part 4)
+        working-directory: fused/..
+        run: |
+          mkdir fused.build
+          cd fused.build
+          meson setup -Ddisable-mtab=True -Dutils=False --default-library static ../fused
+          meson setup --reconfigure ../fused
+          ninja install
+        # meson setup --prefix=$FUSED_PREFIX -Ddisable-mtab=True -Dudevrulesdir=$FUSED_PREFIX/udev -Dutils=False --default-library static ../fused
+      # - name: Build DAOS dependencies
+      #   working-directory: daos
+      #   run: |
+      #     scons --build-deps=yes --jobs $(nproc) PREFIX=/opt/daos BUILD_TYPE=debug
       - name: Build fuzz tests
         working-directory: daos
         run: |
